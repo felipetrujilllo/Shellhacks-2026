@@ -5,8 +5,9 @@ sheets with an identical field layout. Run as a script to regenerate `data/seed/
 
     python -m pipeline.parse_desc --pdf <path to the PDF> --out ../data/seed/desc_projects.csv
 
-Extraction only — locating each project's substations against OSM is a separate step, so there
-are no coordinates here.
+Extraction only — each project's endpoint substation names (`name_a`/`name_b`, see
+`pipeline.endpoints`) are split out here, but locating them against OSM is a separate step, so
+there are no coordinates here.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
+
+from pipeline.endpoints import endpoints_for
 
 UTILITY = "Dominion Energy South Carolina"
 STATE = "SC"
@@ -39,6 +42,8 @@ CSV_COLUMNS = [
     "utility",
     "state",
     "project_name",
+    "name_a",
+    "name_b",
     "project_status",
     "in_service_date",
     "in_service_date_raw",
@@ -59,6 +64,8 @@ class DescProject:
     utility: str
     state: str
     project_name: str
+    name_a: str
+    name_b: str | None
     project_status: str
     in_service_date: date | None
     in_service_date_raw: str
@@ -113,12 +120,16 @@ def parse_page(text: str, source_page: int) -> DescProject:
         raise DescParseError(f"page {source_page}: no project name")
 
     raw_date = field("Planned In-Service Date")
+    project_id = field("Project ID")
+    name_a, name_b = endpoints_for(project_id, name)
 
     return DescProject(
-        project_id=field("Project ID"),
+        project_id=project_id,
         utility=UTILITY,
         state=STATE,
         project_name=name,
+        name_a=name_a,
+        name_b=name_b,
         project_status=field("Project Status"),
         in_service_date=parse_in_service_date(raw_date),
         in_service_date_raw=raw_date,
@@ -141,10 +152,12 @@ def parse_pdf(pdf_path: Path | str) -> list[DescProject]:
 
 
 def write_csv(projects: list[DescProject], out_path: Path | str) -> None:
+    """Write the CSV with LF line endings (csv defaults to CRLF) so regenerating it on any OS
+    produces the same bytes. A single-site project's missing `name_b` is written blank."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, lineterminator="\n")
         writer.writeheader()
         for project in projects:
             row = asdict(project)

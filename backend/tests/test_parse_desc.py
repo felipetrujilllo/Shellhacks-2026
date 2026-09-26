@@ -19,6 +19,7 @@ from pipeline.parse_desc import (
     parse_in_service_date,
     parse_page,
     parse_pdf,
+    write_csv,
 )
 
 REPO_ROOT = Path(__file__).parents[2]
@@ -206,6 +207,71 @@ def test_rows_stay_in_page_order(desc_rows):
     )
 
 
+# --- endpoint names (#21) -----------------------------------------------------------
+
+# Projects at one site (substation work, taps, fold-ins) — no second endpoint to locate.
+SINGLE_SITE_IDS = {
+    "0167C-D",
+    "6805 G",
+    "05004 P",
+    "06810 G",
+    "06810 H",
+    "6853 B-F",
+    "6859",
+    "0147 C, K",
+    "0147 B, J",
+    "06371 D",
+    "06005 B",
+    "06367 A - C, H",
+    "1060A, I, L",
+}
+
+
+def test_every_row_has_a_first_endpoint(desc_rows):
+    for row in desc_rows:
+        assert row["name_a"].strip(), row["project_id"]
+
+
+def test_exactly_the_single_site_projects_have_no_second_endpoint(desc_rows):
+    assert {r["project_id"] for r in desc_rows if not r["name_b"]} == SINGLE_SITE_IDS
+
+
+def test_endpoint_columns_sit_after_the_project_name():
+    with open(DESC_CSV, newline="", encoding="utf-8") as f:
+        header = next(csv.reader(f))
+
+    assert header[3:6] == ["project_name", "name_a", "name_b"]
+
+
+def test_a_parsed_sheet_carries_its_endpoints():
+    project = parse_page(PAGE_ONE, source_page=1)
+
+    assert (project.name_a, project.name_b) == ("Queensboro", "Ft Johnson")
+
+
+def test_union_pier_tap_known_values(desc_rows):
+    row = next(r for r in desc_rows if r["project_name"].startswith("Union Pier"))
+
+    assert row["project_id"] == "0167C-D"
+    assert row["in_service_date"] == "2027-12-31"
+    assert int(row["est_cost_usd"]) == 5_300_000
+    assert (row["name_a"], row["name_b"]) == ("Union Pier", "")
+
+
+def test_committed_csv_has_lf_line_endings():
+    assert b"\r\n" not in DESC_CSV.read_bytes()
+
+
+def test_write_csv_writes_lf_line_endings(tmp_path):
+    out = tmp_path / "desc.csv"
+
+    write_csv([parse_page(PAGE_ONE, source_page=1)], out)
+
+    data = out.read_bytes()
+    assert b"\r\n" not in data
+    assert data.count(b"\n") == 2
+
+
 # --- cross-source validation --------------------------------------------------------
 
 
@@ -244,3 +310,16 @@ def test_parsing_the_real_pdf_reproduces_the_committed_csv(desc_rows):
     ]
     assert [p.in_service_date_raw for p in parsed] == [r["in_service_date_raw"] for r in desc_rows]
     assert [p.est_cost_usd for p in parsed] == [int(r["est_cost_usd"]) for r in desc_rows]
+    assert [(p.name_a, p.name_b or "") for p in parsed] == [
+        (r["name_a"], r["name_b"]) for r in desc_rows
+    ]
+
+
+@pytest.mark.skipif(not SOURCE_PDF.exists(), reason="sponsor PDF is not in the repo")
+def test_regenerating_from_the_real_pdf_is_byte_identical(tmp_path):
+    """The committed CSV is parser output, not a hand edit."""
+    out = tmp_path / "desc_projects.csv"
+
+    write_csv(parse_pdf(SOURCE_PDF), out)
+
+    assert out.read_bytes() == DESC_CSV.read_bytes()
