@@ -16,7 +16,17 @@ state (see `wrong_side_of_border`): the sponsor guide's "similarly named substat
 area" trap. Georgia Power's Atlanta-area BUZZARD ROOST otherwise lands on "Buzzard Roost Dam
 Substation" on Lake Greenwood, SC, and pairs four Atlanta projects with a DESC line 23 mi away.
 
-`build_dataset` is pure (rows and cache records in, rows out); only `main` touches files.
+Two more ways an endpoint the name matcher cannot place still gets a coordinate, both `low`:
+- a manual coordinate in `data/seed/location_overrides.csv` (`LocationOverride`), for a
+  substation OSM does not have at all (DESC's Okatie). Every row must cite its `source`.
+- the candidate nearest the line's other end, when the name fits several far-apart OSM
+  substations and one is clearly the right one (`nearest_to_other_end`; Georgia Power's
+  Savannah-area GOSHEN, whose namesake near Augusta is 80+ mi from McIntosh).
+A name OSM spells differently (THURMOND DAM vs "Thurmond Substation") is not handled here but
+in `endpoints.ENDPOINT_OVERRIDES`, like any other irregular project name.
+
+`build_dataset` is pure (rows, cache records and overrides in, rows out); only `main` touches
+files.
 """
 
 from __future__ import annotations
@@ -35,14 +45,15 @@ from typing import Literal
 from pipeline import parse_desc, parse_gpc
 from pipeline.centers import project_center
 from pipeline.endpoints import endpoints_for
-from pipeline.load import parse_project_row
-from pipeline.locate import Location, SubstationCache, locate_endpoint
+from pipeline.load import optional_coordinate, parse_project_row
+from pipeline.locate import Location, SubstationCache, locate_endpoint, normalize_name
 from pipeline.osm_fetch import TARGETS
-from pipeline.overlap import EARTH_RADIUS_MI
+from pipeline.overlap import EARTH_RADIUS_MI, haversine_miles
 
 SEED_DIR = Path(__file__).parents[2] / "data" / "seed"
 DESC_CSV = SEED_DIR / "desc_projects.csv"
 GPC_CSV = SEED_DIR / "gpc_projects.csv"
+LOCATION_OVERRIDES_CSV = SEED_DIR / "location_overrides.csv"
 OUT_CSV = SEED_DIR / "projects.csv"
 
 UTILITIES = (parse_desc.UTILITY, parse_gpc.UTILITY)
@@ -100,6 +111,23 @@ MILES_PER_DEGREE = EARTH_RADIUS_MI * math.pi / 180
 # Which side of the line each utility's own substations are on: +1 east (SC), -1 west (GA).
 HOME_SIDE = {parse_desc.UTILITY: 1, parse_gpc.UTILITY: -1}
 
+# location_overrides.csv: one hand-placed endpoint per row. `utility` is the utility whose
+# project names use `endpoint` (so DESC's Okatie never places a same-named Georgia station),
+# `endpoint` is compared after locate.normalize_name, and `source` says where lat/lon come from.
+OVERRIDE_COLUMNS = ("utility", "endpoint", "lat", "lon", "source")
+
+# When an endpoint's exact name fits several far-apart OSM substations, the one nearest the
+# line's other (located) end is used only if it is clearly the line's end:
+# - it lies within NEAREST_MAX_MILES of the other end. Lines in this dataset with both ends
+#   located run 10.7 mi at the median and 34.7 mi at the 90th percentile; a "nearest" namesake
+#   farther away than that is likelier a stand-in for a station OSM lacks than the real end;
+# - every other candidate is at least NEAREST_MIN_RATIO times as far from the other end.
+# Real cases: GOSHEN-MCINTOSH 7.4 vs 82.1 mi and GOSHEN-KRAFT 7.9 vs 94.8 mi (>10x) resolve;
+# the two Savannah-area COLEMANs, 6.7 mi apart, stay ambiguous from DEAN FOREST (2.8 vs 4.4 mi)
+# and from MELDRIM (8.9 vs 15.3 mi), both under 2x.
+NEAREST_MAX_MILES = 35.0
+NEAREST_MIN_RATIO = 3.0
+
 ProjectConfidence = Literal["confirmed", "low"]
 ExclusionReason = Literal["no_endpoints", "ambiguous", "unlocated", "wrong_state"]
 
@@ -120,6 +148,25 @@ class ExcludedProject:
 class Dataset:
     rows: list[dict[str, str]]  # OUTPUT_COLUMNS, as written to projects.csv
     excluded: list[ExcludedProject]
+
+
+@dataclass(frozen=True)
+class LocationOverride:
+    """A hand-placed endpoint, one row of location_overrides.csv (see OVERRIDE_COLUMNS)."""
+
+    utility: str
+    endpoint: str
+    lat: float
+    lon: float
+    source: str
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return self.utility, normalize_name(self.endpoint)
+
+    def location(self, endpoint: str) -> Location:
+        """Always `low`: a hand-entered point, however well sourced, is not an OSM match."""
+        return Location(endpoint, self.lat, self.lon, "low")
 
 
 def project_confidence(locations: Sequence[Location]) -> ProjectConfidence | None:
@@ -160,6 +207,92 @@ def wrong_side_of_border(location: Location, utility: str) -> bool:
         return False
     east = miles_east_of_ga_sc_border(location.lat, location.lon)
     return east is not None and east * HOME_SIDE[utility] < -BORDER_MARGIN_MI
+
+
+def parse_location_overrides(rows: Iterable[Mapping[str, str]]) -> tuple[LocationOverride, ...]:
+    """Validate location_overrides.csv rows; any bad row fails loud, naming the row.
+
+    Every column is required and non-blank (a coordinate without a `source` is not
+    reviewable), the utility must be one of UTILITIES, lat/lon must be real coordinates, one
+    endpoint may be overridden once per utility, and the point may not land where the border
+    rule would drop it (a typo, or a station of the other utility's that OSM should place).
+    """
+    overrides: list[LocationOverride] = []
+    seen: set[tuple[str, str]] = set()
+    for number, row in enumerate(rows, start=1):
+        where = f"location override row {number}"
+        missing = [c for c in OVERRIDE_COLUMNS if row.get(c) is None]
+        if missing:
+            raise DatasetError(f"{where}: missing column(s) {', '.join(missing)}")
+        values = {c: row[c].strip() for c in OVERRIDE_COLUMNS}
+        blank = [c for c, value in values.items() if not value]
+        if blank:
+            raise DatasetError(f"{where}: blank {', '.join(blank)}")
+        where = f"{where} ({values['endpoint']!r})"
+        if values["utility"] not in UTILITIES:
+            raise DatasetError(f"{where}: unknown utility {values['utility']!r}")
+        if not normalize_name(values["endpoint"]):
+            raise DatasetError(f"{where}: endpoint has no station name in it")
+        override = LocationOverride(
+            utility=values["utility"],
+            endpoint=values["endpoint"],
+            lat=optional_coordinate(values, "lat", where),
+            lon=optional_coordinate(values, "lon", where),
+            source=values["source"],
+        )
+        if wrong_side_of_border(override.location(override.endpoint), override.utility):
+            raise DatasetError(
+                f"{where}: {override.lat}, {override.lon} is more than {BORDER_MARGIN_MI:g} mi "
+                "inside the other utility's state"
+            )
+        if override.key in seen:
+            raise DatasetError(f"{where}: a second override for the same endpoint")
+        seen.add(override.key)
+        overrides.append(override)
+    return tuple(overrides)
+
+
+def unused_location_overrides(
+    rows: Iterable[Mapping[str, str]], overrides: Iterable[LocationOverride]
+) -> list[LocationOverride]:
+    """Overrides that placed no endpoint in these output rows: a typo or a renamed endpoint.
+
+    An override always places its endpoint, so it was used exactly when some row has a located
+    endpoint under its (utility, name).
+    """
+    placed = {
+        (row["utility"], normalize_name(row[f"name_{end}"]))
+        for row in rows
+        for end in ("a", "b")
+        if row[f"lat_{end}"]
+    }
+    return [override for override in overrides if override.key not in placed]
+
+
+def _distance(a: Location, lat: float, lon: float) -> float:
+    return haversine_miles(a.lat, a.lon, lat, lon)
+
+
+def nearest_to_other_end(location: Location, other: Location) -> Location:
+    """Place an endpoint with several far-apart same-named candidates by its line's other end.
+
+    Only when `location` has no coordinate because of those candidates, every candidate is an
+    exact (normalized) name match — the nearest of several fuzzy matches would stack two
+    guesses — `other` is located, and the nearest candidate is clearly the one
+    (NEAREST_MAX_MILES, NEAREST_MIN_RATIO). The result is `low`, nearest candidate first.
+    Otherwise `location` comes back unchanged, still without a coordinate.
+    """
+    if location.lat is not None or len(location.candidates) < 2 or other.lat is None:
+        return location
+    name = normalize_name(location.endpoint)
+    if any(normalize_name(c.name) != name for c in location.candidates):
+        return location
+    ranked = sorted(location.candidates, key=lambda c: _distance(other, c.lat, c.lon))
+    nearest, runner_up = (_distance(other, c.lat, c.lon) for c in ranked[:2])
+    if nearest > NEAREST_MAX_MILES or runner_up < NEAREST_MIN_RATIO * nearest:
+        return location
+    return replace(location, lat=ranked[0].lat, lon=ranked[0].lon, location_confidence="low",
+                   candidates=tuple(ranked))
 
 
 def _round(value: float | None) -> float | None:
@@ -215,25 +348,51 @@ def _exclusion(
     return ExcludedProject(row["project_id"].strip(), row["project_name"], reason, detail)
 
 
+def _unplaced(location: Location) -> Location:
+    """The endpoint stays named, with blank coordinates."""
+    return replace(location, lat=None, lon=None, location_confidence="unlocated")
+
+
+def _locate(
+    name: str,
+    utility: str,
+    caches: Sequence[SubstationCache],
+    overrides: Sequence[LocationOverride],
+) -> Location:
+    """The endpoint's manual coordinate if location_overrides.csv has one, else its OSM match."""
+    key = (utility, normalize_name(name))
+    for override in overrides:
+        if override.key == key:
+            return override.location(name)
+    return locate_endpoint(name, caches)
+
+
 def build_project(
-    row: Mapping[str, str], caches: Sequence[SubstationCache]
+    row: Mapping[str, str],
+    caches: Sequence[SubstationCache],
+    location_overrides: Sequence[LocationOverride] = (),
 ) -> dict[str, str] | ExcludedProject:
     """One located output row, or why the project cannot be placed."""
     project_id = row["project_id"].strip()
+    utility = row["utility"]
     try:
         name_a, name_b = endpoints_for(project_id, row["project_name"])
     except ValueError as exc:  # split_endpoints found no station name at all
         return ExcludedProject(project_id, row["project_name"], "no_endpoints", str(exc))
     _check_stored_endpoints(row, (name_a, name_b))
 
-    found = [locate_endpoint(name, caches) for name in (name_a, name_b) if name]
-    wrong_state = [loc for loc in found if wrong_side_of_border(loc, row["utility"])]
-    # A wrong-state match places nothing; the endpoint stays named, with blank coordinates.
-    locations = [
-        replace(loc, lat=None, lon=None, location_confidence="unlocated") if loc in wrong_state
-        else loc
-        for loc in found
+    found = [
+        _locate(name, utility, caches, location_overrides) for name in (name_a, name_b) if name
     ]
+    if len(found) == 2:
+        # An end the border rule drops cannot vouch for the other end either.
+        anchors = [_unplaced(loc) if wrong_side_of_border(loc, utility) else loc for loc in found]
+        found = [nearest_to_other_end(found[0], anchors[1]),
+                 nearest_to_other_end(found[1], anchors[0])]
+    # A nearest-candidate pick is `low`, so the border rule applies to it like any other match.
+    wrong_state = [loc for loc in found if wrong_side_of_border(loc, utility)]
+    # A wrong-state match places nothing.
+    locations = [_unplaced(loc) if loc in wrong_state else loc for loc in found]
     confidence = project_confidence(locations)
     if confidence is None:
         return _exclusion(row, found, wrong_state)
@@ -266,17 +425,20 @@ def build_project(
 
 
 def build_dataset(
-    project_rows: Iterable[Mapping[str, str]], caches: Iterable[SubstationCache]
+    project_rows: Iterable[Mapping[str, str]],
+    caches: Iterable[SubstationCache],
+    location_overrides: Iterable[LocationOverride] = (),
 ) -> Dataset:
     """Locate every project; keep the placeable ones (input order), list the rest."""
     rows = list(project_rows)
     caches = [list(cache) for cache in caches]
+    overrides = tuple(location_overrides)
     _check_inputs(rows)
 
     included: list[dict[str, str]] = []
     excluded: list[ExcludedProject] = []
     for row in rows:
-        result = build_project(row, caches)
+        result = build_project(row, caches, overrides)
         if isinstance(result, ExcludedProject):
             excluded.append(result)
         else:
@@ -299,6 +461,10 @@ def read_caches() -> list[list[dict]]:
     return [json.loads(t.cache_path.read_text(encoding="utf-8")) for t in TARGETS]
 
 
+def read_location_overrides(path: Path) -> tuple[LocationOverride, ...]:
+    return parse_location_overrides(read_csv(path))
+
+
 def write_csv(rows: Sequence[Mapping[str, str]], path: Path) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS, lineterminator="\n")
@@ -310,10 +476,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build data/seed/projects.csv.")
     parser.add_argument("--desc", type=Path, default=DESC_CSV, help="parse_desc output CSV")
     parser.add_argument("--gpc", type=Path, default=GPC_CSV, help="parse_gpc output CSV")
+    parser.add_argument("--overrides", type=Path, default=LOCATION_OVERRIDES_CSV,
+                        help="manual endpoint coordinates CSV")
     parser.add_argument("--out", type=Path, default=OUT_CSV, help="projects CSV to write")
     args = parser.parse_args()
 
-    dataset = build_dataset(read_csv(args.desc) + read_csv(args.gpc), read_caches())
+    overrides = read_location_overrides(args.overrides)
+    dataset = build_dataset(read_csv(args.desc) + read_csv(args.gpc), read_caches(), overrides)
+    unused = unused_location_overrides(dataset.rows, overrides)
+    if unused:
+        names = ", ".join(f"{o.endpoint!r} ({o.utility})" for o in unused)
+        raise DatasetError(f"{args.overrides}: override(s) match no project endpoint: {names}")
     write_csv(dataset.rows, args.out)
 
     total = len(dataset.rows) + len(dataset.excluded)

@@ -1,9 +1,10 @@
 """Tests for the full located dataset (data/seed/projects.csv).
 
-Everything runs over committed files: the two parser CSVs, the three OSM caches in
-data/interim/ and the generated projects.csv. No network, no database. The end-to-end check
-resolves the sponsor's starter table (projects_seed.csv + expected_overlaps.csv) to the real
-project IDs by name and runs the overlap engine over projects.csv.
+Everything runs over committed files: the two parser CSVs, location_overrides.csv, the three
+OSM caches in data/interim/ and the generated projects.csv. No network, no database. The
+end-to-end check resolves the sponsor's starter table (projects_seed.csv +
+expected_overlaps.csv) to the real project IDs by name and runs the overlap engine over
+projects.csv.
 """
 
 import builtins
@@ -19,39 +20,54 @@ from test_parse_desc import squashed  # names compared on lowercase letters and 
 from pipeline import build_dataset as bd
 from pipeline.build_dataset import (
     BORDER_MARGIN_MI,
+    MILES_PER_DEGREE,
+    NEAREST_MAX_MILES,
+    NEAREST_MIN_RATIO,
     DatasetError,
     ExcludedProject,
+    LocationOverride,
     build_dataset,
     build_project,
     miles_east_of_ga_sc_border,
+    nearest_to_other_end,
+    parse_location_overrides,
     project_confidence,
+    unused_location_overrides,
     wrong_side_of_border,
 )
 from pipeline.centers import project_center
 from pipeline.load import VALID_CONFIDENCE, read_project_csv, to_engine_project
-from pipeline.locate import Candidate, Location
+from pipeline.locate import Candidate, Location, locate_endpoint, normalize_name
 from pipeline.overlap import detect_overlaps, haversine_miles
 
 SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
 PROJECTS_CSV = SEED_DIR / "projects.csv"
 STARTER_CSV = SEED_DIR / "projects_seed.csv"
 EXPECTED_OVERLAPS_CSV = SEED_DIR / "expected_overlaps.csv"
+OVERRIDES_CSV = SEED_DIR / "location_overrides.csv"
 
 DESC = "Dominion Energy South Carolina"
 GPC = "Georgia Power"
 DISTANCE_TOLERANCE_MI = 0.5
+SAME_POINT_MI = 0.01  # ~50 ft: the same coordinate, allowing for six-decimal rounding
 
 # Reference pairs whose distance is not within 0.5 mi of the sponsor's, each caused by an
-# endpoint in test_locate.KNOWN_MISSES that the sponsor located and the matcher does not, so
-# the project's center falls back to its other endpoint. Measured on projects.csv. The test
-# asserts each one still misses, so this cannot go stale. (All six are still flagged < 25 mi.)
-KNOWN_PAIR_MISSES = {
-    ("DESC_2", "GPC_1"): "GPC_1 loses THURMOND DAM #5 -> center at Evans Primary; 8.18 vs 4.09",
-    ("DESC_3", "GPC_2"): "DESC_3 loses Okatie Sub -> center at Jasper; 3.03 vs 5.65",
-    ("DESC_3", "GPC_3"): "DESC_3 loses Okatie Sub, GPC_3 loses GOSHEN; 3.03 vs 7.55",
-    ("DESC_1", "GPC_1"): "GPC_1 loses THURMOND DAM #5 -> center at Evans Primary; 6.75 vs 8.01",
-    ("DESC_5", "GPC_2"): "DESC_5 loses Okatie Sub -> center at Bluffton; 20.46 vs 14.34",
-    ("DESC_5", "GPC_3"): "DESC_5 loses Okatie Sub, GPC_3 loses GOSHEN; 20.46 vs 14.81",
+# endpoint in test_locate.KNOWN_MISSES that the sponsor located and we do not, so the project's
+# center falls back to its other endpoint. Measured on projects.csv. The test asserts each one
+# still misses, so this cannot go stale. Empty since #23 placed all three KNOWN_MISSES (see
+# KNOWN_MISS_FIXES): every reference pair must now match.
+KNOWN_PAIR_MISSES: dict[tuple[str, str], str] = {}
+
+# How build_dataset now places each endpoint the name matcher misses (test_locate.KNOWN_MISSES),
+# and the location_confidence its project must carry as a result.
+KNOWN_MISS_FIXES = {
+    # location_overrides.csv, a manual coordinate: always low.
+    "Okatie Sub": "low",
+    # endpoints.ENDPOINT_OVERRIDES renames it "THURMOND", OSM's unique, operator-tagged
+    # "Thurmond Substation"; EVANS PRIMARY is confirmed too.
+    "THURMOND DAM #5": "confirmed",
+    # The Goshen nearest MCINTOSH, the line's other end (nearest_to_other_end): low.
+    "GOSHEN": "low",
 }
 
 
@@ -71,8 +87,13 @@ def caches() -> list[list[dict]]:
 
 
 @pytest.fixture(scope="module")
-def dataset(inputs, caches):
-    return build_dataset(inputs, caches)
+def overrides() -> tuple[LocationOverride, ...]:
+    return bd.read_location_overrides(OVERRIDES_CSV)
+
+
+@pytest.fixture(scope="module")
+def dataset(inputs, caches, overrides):
+    return build_dataset(inputs, caches, overrides)
 
 
 @pytest.fixture(scope="module")
@@ -350,6 +371,257 @@ def test_buzzard_roost_no_longer_makes_fake_overlaps(dataset, committed):
     assert placed_at_buzzard_roost == set()
 
 
+# --- Manual coordinates (location_overrides.csv) ------------------------------------------------
+
+def override_row(**changes) -> dict:
+    """One location_overrides.csv row as csv.DictReader yields it; None drops the column."""
+    row = {"utility": DESC, "endpoint": "Beta", "lat": "32.5", "lon": "-80.5",
+           "source": "a test"}
+    return {k: v for k, v in {**row, **changes}.items() if v is not None}
+
+
+def test_every_committed_override_row_cites_a_source_and_validates():
+    with OVERRIDES_CSV.open(encoding="utf-8", newline="") as f:
+        header = next(csv.reader(f))
+    rows = read_rows(OVERRIDES_CSV)
+    assert header == list(bd.OVERRIDE_COLUMNS)
+    assert rows
+    for row in rows:
+        assert row["source"].strip(), row
+    assert len(bd.read_location_overrides(OVERRIDES_CSV)) == len(rows)
+
+
+def test_a_valid_override_row_parses():
+    parsed = parse_location_overrides([override_row(lat=" 32.5 ", source=" sponsor table ")])
+    assert parsed == (LocationOverride(DESC, "Beta", 32.5, -80.5, "sponsor table"),)
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"source": ""}, "blank source"),
+        ({"source": "   "}, "blank source"),
+        ({"source": None}, "missing column.*source"),
+        ({"endpoint": ""}, "blank endpoint"),
+        ({"endpoint": "Substation"}, "no station name"),
+        ({"utility": "Duke Energy"}, "unknown utility"),
+        ({"lat": "abc"}, "lat is not a number"),
+        ({"lon": "nan"}, "lon must be a number"),
+        ({"lat": "91"}, "lat must be a number"),
+        ({"lat": ATLANTA_GA[0], "lon": ATLANTA_GA[1]}, "inside the other utility's state"),
+    ],
+)
+def test_a_bad_override_row_fails_loud(changes, message):
+    with pytest.raises(ValueError, match=message):
+        parse_location_overrides([override_row(**{k: v if v is None else str(v)
+                                                  for k, v in changes.items()})])
+
+
+def test_an_endpoint_is_overridden_at_most_once_per_utility():
+    with pytest.raises(DatasetError, match="row 2.*second override"):
+        parse_location_overrides([override_row(), override_row(endpoint="BETA Sub", lat="32.6")])
+    # The same name in the other utility's plan is another station, so it may have its own.
+    both = parse_location_overrides([override_row(), override_row(utility=GPC, lon="-82.5")])
+    assert [o.utility for o in both] == [DESC, GPC]
+
+
+def test_an_overridden_endpoint_takes_its_manual_coordinate_and_stays_low():
+    # Without the override both ends are unique operator-tagged exact matches: confirmed.
+    caches = [[station("Alpha", lat=32.0, lon=-81.0),
+               station("Beta", lat=33.0, lon=-80.0, osm_id="way/2")]]
+    assert build_project(raw(), caches)["location_confidence"] == "confirmed"
+
+    row = build_project(raw(), caches, parse_location_overrides([override_row()]))
+    assert (row["name_b"], row["lat_b"], row["lon_b"]) == ("Beta", "32.5", "-80.5")
+    assert (row["lat_center"], row["lon_center"]) == ("32.25", "-80.75")
+    assert row["location_confidence"] == "low"
+
+
+def test_an_override_places_an_endpoint_osm_does_not_have():
+    row = build_project(raw(), [[]], parse_location_overrides([override_row()]))
+    assert (row["lat_a"], row["lat_b"], row["lon_b"]) == ("", "32.5", "-80.5")
+    assert (row["lat_center"], row["lon_center"]) == ("32.5", "-80.5")
+    assert row["location_confidence"] == "low"
+
+
+def test_an_override_only_applies_to_its_own_utilitys_projects():
+    # Jasper, on the SC bank a few miles from the river: within the border margin for both
+    # utilities, so only the utility scoping can keep it off the Georgia project.
+    near_border = override_row(lat="32.360699", lon="-81.124152")
+    desc_beta = parse_location_overrides([near_border])
+    assert not wrong_side_of_border(desc_beta[0].location("BETA"), GPC)
+    result = build_project(gpc_raw("ALPHA - BETA 115KV REBUILD"), [[]], desc_beta)
+    assert isinstance(result, ExcludedProject)
+    assert result.reason == "unlocated"
+
+
+def test_committed_overrides_place_their_endpoints_in_projects_csv_as_low(committed, overrides):
+    for override in overrides:
+        placed = [
+            (row, end) for row in committed for end in ("a", "b")
+            if (row["utility"], normalize_name(row[f"name_{end}"])) == override.key
+        ]
+        assert placed, f"{override.endpoint!r} places nothing"
+        for row, end in placed:
+            point = (float(row[f"lat_{end}"]), float(row[f"lon_{end}"]))
+            assert point == (override.lat, override.lon), row["project_id"]
+            assert row["location_confidence"] == "low", row["project_id"]
+    okatie = {row["project_id"] for row in committed if "Okatie" in (row["name_a"], row["name_b"])}
+    assert okatie == {"06367 D - G", "6808 S"}  # Jasper - Okatie #2 and Okatie - Bluffton
+
+
+def test_unused_location_overrides_are_the_ones_that_placed_nothing(committed, overrides):
+    stale = LocationOverride(DESC, "Nowhere", 33.0, -80.5, "a typo")
+    wrong_utility = LocationOverride(GPC, "Okatie", 32.3, -81.3, "no GA Okatie")
+    assert unused_location_overrides(committed, overrides) == []
+    assert unused_location_overrides(committed, [*overrides, stale, wrong_utility]) == [
+        stale, wrong_utility,
+    ]
+
+
+def test_cli_fails_loud_on_an_override_that_matches_no_endpoint(tmp_path, monkeypatch):
+    overrides_csv = tmp_path / "location_overrides.csv"
+    overrides_csv.write_text(
+        OVERRIDES_CSV.read_text(encoding="utf-8") + f"{DESC},Nowhere,33.0,-80.5,a typo\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "projects.csv"
+    monkeypatch.setattr(sys, "argv", ["build_dataset", "--overrides", str(overrides_csv),
+                                      "--out", str(out)])
+    with pytest.raises(DatasetError, match="match no project endpoint: 'Nowhere'"):
+        bd.main()
+    assert not out.exists()
+
+
+# --- One of several same-named stations, by the line's other end (nearest_to_other_end) --------
+
+BETA_POINT = (33.5, -80.5)  # well inside SC, so the border rule never interferes
+
+
+def north_of(point, miles):
+    """The point `miles` due north (negative: south); haversine along a meridian is exact."""
+    return point[0] + miles / MILES_PER_DEGREE, point[1]
+
+
+def two_alphas(near_mi, far_mi, *, beta=True, name="Alpha Substation"):
+    """Two OSM stations called `name`, near_mi north and far_mi south of Beta."""
+    cache = [
+        station(name, lat=north_of(BETA_POINT, near_mi)[0], lon=BETA_POINT[1], osm_id="way/1"),
+        station(name, lat=north_of(BETA_POINT, -far_mi)[0], lon=BETA_POINT[1], osm_id="way/2"),
+    ]
+    if beta:
+        cache.append(station("Beta", lat=BETA_POINT[0], lon=BETA_POINT[1], osm_id="way/3"))
+    return [cache]
+
+
+def test_the_candidate_clearly_nearest_the_other_end_is_used_as_low():
+    # GOSHEN's real distances from MCINTOSH: 7.4 and 82.1 mi.
+    row = build_project(raw(), two_alphas(7.4, 82.1))
+    near = north_of(BETA_POINT, 7.4)
+    assert (row["lat_a"], row["lon_a"]) == (repr(round(near[0], 6)), repr(near[1]))
+    assert row["location_confidence"] == "low"
+
+
+def test_the_pick_keeps_every_candidate_nearest_first():
+    far = station("Alpha", lat=north_of(BETA_POINT, -82.1)[0], lon=BETA_POINT[1], osm_id="way/1")
+    near = station("Alpha", lat=north_of(BETA_POINT, 7.4)[0], lon=BETA_POINT[1], osm_id="way/2")
+    ambiguous = locate_endpoint("Alpha", [[far, near]])
+    assert ambiguous.lat is None
+    assert [c.osm_id for c in ambiguous.candidates] == ["way/1", "way/2"]  # locate's own order
+    beta = Location("Beta", *BETA_POINT, "confirmed")
+    picked = nearest_to_other_end(ambiguous, beta)
+    assert picked.location_confidence == "low"
+    assert [c.osm_id for c in picked.candidates] == ["way/2", "way/1"]
+    assert (picked.lat, picked.lon) == (near["lat"], near["lon"])
+    # Nothing to resolve: a located endpoint, or no located other end, comes back unchanged.
+    assert nearest_to_other_end(beta, picked) is beta
+    assert nearest_to_other_end(ambiguous, Location("Beta", None, None, "unlocated")) is ambiguous
+
+
+@pytest.mark.parametrize(
+    ("near_mi", "far_mi", "resolved"),
+    [
+        (2.8, 4.4, False),  # the real COLEMAN - DEAN FOREST: two Savannah Colemans, 1.6x
+        (8.9, 15.3, False),  # the real COLEMAN - MELDRIM, 1.7x
+        (10.0, 10.0 * NEAREST_MIN_RATIO - 0.5, False),  # just under the ratio
+        (10.0, 10.0 * NEAREST_MIN_RATIO + 0.5, True),  # just over it
+        # The runner-up far enough away in both, so only the nearest's own distance differs.
+        (NEAREST_MAX_MILES - 1, (NEAREST_MAX_MILES + 1) * NEAREST_MIN_RATIO + 10, True),
+        (NEAREST_MAX_MILES + 1, (NEAREST_MAX_MILES + 1) * NEAREST_MIN_RATIO + 10, False),
+        # A 50-mi "line" is longer than all but one located line in the data: no guess, even
+        # with the namesake ten times farther.
+        (50.0, 500.0, False),
+    ],
+)
+def test_nearest_is_only_used_when_it_is_clearly_closer(near_mi, far_mi, resolved):
+    row = build_project(raw(), two_alphas(near_mi, far_mi))
+    assert bool(row["lat_a"]) is resolved
+    if not resolved:  # stays ambiguous: the project sits on Beta alone
+        assert (row["lat_center"], row["lon_center"]) == ("33.5", "-80.5")
+    assert row["location_confidence"] == "low"
+
+
+@pytest.mark.parametrize(
+    "project",
+    [
+        raw(),  # the other end, Beta, is not in any cache
+        raw(name="Alpha Sub: #1 230-115kV Autobank"),  # single site: there is no other end
+    ],
+)
+def test_without_a_located_other_end_it_stays_ambiguous(project):
+    result = build_project(project, two_alphas(7.4, 82.1, beta=False))
+    assert isinstance(result, ExcludedProject)
+    assert result.reason == "ambiguous"
+    assert "'Alpha': 2 far-apart candidates" in result.detail
+
+
+def test_fuzzy_only_candidates_are_never_picked_by_distance():
+    # "Alphas" is a fuzzy match for "Alpha" (same first word); nearest-of-fuzzy stacks guesses.
+    row = build_project(raw(), two_alphas(7.4, 82.1, name="Alphas Substation"))
+    assert row["lat_a"] == ""
+    assert row["location_confidence"] == "low"
+
+
+# Just over BORDER_MARGIN_MI into SC, and just inside GA, at latitude 33.9; and far into GA.
+SC_12_MI = (33.9, -82.244)
+GA_3_MI = (33.9, -82.505)
+FAR_GA = (31.5, -84.0)
+
+
+def test_border_points_used_below_are_where_they_claim():
+    assert BORDER_MARGIN_MI < miles_east_of_ga_sc_border(*SC_12_MI) < BORDER_MARGIN_MI + 3
+    assert -BORDER_MARGIN_MI < miles_east_of_ga_sc_border(*GA_3_MI) < 0
+    # So between these two, the nearest-candidate rule on its own would pick.
+    across = haversine_miles(*SC_12_MI, *GA_3_MI)
+    assert across < NEAREST_MAX_MILES
+    for point in (SC_12_MI, GA_3_MI):
+        assert haversine_miles(*point, *FAR_GA) > NEAREST_MIN_RATIO * across
+
+
+def test_an_other_end_the_border_rule_drops_cannot_pick_a_candidate():
+    # A Georgia line whose BETA only matches an untagged (low) station 12 mi into SC: that match
+    # is dropped, so it may not choose between the two ALPHAs either, however clear the choice.
+    caches = [[station("Alpha Substation", lat=GA_3_MI[0], lon=GA_3_MI[1], operator=GPC),
+               station("Alpha Substation", lat=FAR_GA[0], lon=FAR_GA[1], osm_id="way/2",
+                       operator=GPC),
+               station("Beta", lat=SC_12_MI[0], lon=SC_12_MI[1], osm_id="way/3", operator=None)]]
+    result = build_project(gpc_raw("ALPHA - BETA 115KV REBUILD"), caches)
+    assert isinstance(result, ExcludedProject)
+    assert result.reason == "wrong_state"
+
+
+def test_a_nearest_pick_deep_in_the_other_state_is_dropped_like_any_low_match():
+    # A Georgia line: BETA confirmed just inside GA, the nearest ALPHA 12 mi into SC.
+    caches = [[station("Alpha Substation", lat=SC_12_MI[0], lon=SC_12_MI[1], operator=GPC),
+               station("Alpha Substation", lat=FAR_GA[0], lon=FAR_GA[1], osm_id="way/2",
+                       operator=GPC),
+               station("Beta", lat=GA_3_MI[0], lon=GA_3_MI[1], osm_id="way/3", operator=GPC)]]
+    row = build_project(gpc_raw("ALPHA - BETA 115KV REBUILD"), caches)
+    assert (row["lat_a"], row["lon_a"]) == ("", "")
+    assert (row["lat_center"], row["lon_center"]) == ("33.9", "-82.505")
+    assert row["location_confidence"] == "low"
+
+
 # --- Validation at the boundary -----------------------------------------------------------------
 
 def test_a_missing_input_column_fails_loud():
@@ -380,7 +652,7 @@ def test_a_row_the_loader_would_reject_fails_at_build_time():
         build_dataset([raw(in_service_date="soon")], [[station("Alpha")]])
 
 
-def test_build_dataset_is_pure(inputs, caches, dataset, monkeypatch):
+def test_build_dataset_is_pure(inputs, caches, overrides, dataset, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError("build_dataset touched a file or the network")
 
@@ -388,7 +660,7 @@ def test_build_dataset_is_pure(inputs, caches, dataset, monkeypatch):
     ids = {row["project_id"] for row in sample}
     monkeypatch.setattr(builtins, "open", forbidden)
     monkeypatch.setattr(socket, "socket", forbidden)
-    result = build_dataset(sample, caches)
+    result = build_dataset(sample, caches, overrides)
     monkeypatch.undo()
     assert result.rows == [row for row in dataset.rows if row["project_id"] in ids]
     assert result.excluded == [p for p in dataset.excluded if p.project_id in ids]
@@ -483,3 +755,73 @@ def test_known_pair_misses_are_explained_by_the_lost_endpoints_alone(
         adjusted = haversine_miles(*a, *b)
         ours = engine_pairs[frozenset(starter_to_real[sid] for sid in key)].distance_mi
         assert abs(ours - adjusted) <= DISTANCE_TOLERANCE_MI, (key, ours, adjusted)
+
+
+def test_every_known_matcher_miss_is_placed_at_the_sponsors_point(
+    starter, starter_to_real, committed
+):
+    """Each endpoint the name matcher misses (test_locate.KNOWN_MISSES) is placed in
+    projects.csv by its fix, at the sponsor's own coordinate, with the confidence it implies."""
+    assert set(KNOWN_MISS_FIXES) == set(KNOWN_MISSES)
+    by_id = {row["project_id"]: row for row in committed}
+    fixed = set()
+    for sid, sponsor in starter.items():
+        for end in ("a", "b"):
+            name = sponsor[f"name_{end}"]
+            if name not in KNOWN_MISSES:
+                continue
+            ours = by_id[starter_to_real[sid]]
+            assert ours[f"lat_{end}"], (sid, name)
+            miles = haversine_miles(float(ours[f"lat_{end}"]), float(ours[f"lon_{end}"]),
+                                    float(sponsor[f"lat_{end}"]), float(sponsor[f"lon_{end}"]))
+            assert miles < SAME_POINT_MI, (sid, name, miles)
+            assert ours["location_confidence"] == KNOWN_MISS_FIXES[name], (sid, name)
+            fixed.add(name)
+    assert fixed == set(KNOWN_MISSES)
+
+
+def test_both_thurmond_dam_circuits_end_at_the_station_desc_uses(caches, committed):
+    # The name the GPC plan uses matches nothing; the override's name is a confirmed match.
+    assert locate_endpoint("THURMOND DAM #5", caches).location_confidence == "unlocated"
+    thurmond = locate_endpoint("THURMOND", caches)
+    assert thurmond.location_confidence == "confirmed"
+    assert [c.name for c in thurmond.candidates] == ["Thurmond Substation"]
+    by_id = {row["project_id"]: row for row in committed}
+    hooks_thurmond = by_id["6810 A"]
+    assert hooks_thurmond["name_b"] == "Thurmond"
+    for project_id in ("20793", "20794"):  # EVANS PRIMARY - THURMOND DAM (USA) #5 and #6
+        row = by_id[project_id]
+        assert (row["name_a"], row["name_b"]) == ("EVANS PRIMARY", "THURMOND")
+        assert (row["lat_b"], row["lon_b"]) == (hooks_thurmond["lat_b"], hooks_thurmond["lon_b"])
+        assert row["location_confidence"] == "confirmed"
+
+
+def test_real_same_named_stations_are_resolved_only_when_one_is_clearly_the_end(
+    caches, committed, dataset
+):
+    by_id = {row["project_id"]: row for row in committed}
+    # Two Georgia Power GOSHENs 87 mi apart: the Savannah one is the end of both Savannah lines.
+    goshens = locate_endpoint("GOSHEN", caches).candidates
+    assert len(goshens) == 2
+    for project_id, other in (("20065", "MCINTOSH"), ("20785", "KRAFT")):
+        row = by_id[project_id]
+        assert (row["name_a"], row["name_b"]) == ("GOSHEN", other)
+        other_end = (float(row["lat_b"]), float(row["lon_b"]))
+        near, far = sorted(goshens, key=lambda c: haversine_miles(c.lat, c.lon, *other_end))
+        assert haversine_miles(near.lat, near.lon, *other_end) < 10
+        assert haversine_miles(far.lat, far.lon, *other_end) > 80
+        placed = (float(row["lat_a"]), float(row["lon_a"]))
+        assert haversine_miles(*placed, near.lat, near.lon) < SAME_POINT_MI, project_id
+        assert row["location_confidence"] == "low"
+    # Two Savannah-area COLEMANs 6.7 mi apart: neither is clearly the line's end, so no guess.
+    colemans = locate_endpoint("COLEMAN", caches)
+    assert colemans.lat is None
+    assert len(colemans.candidates) == 2
+    for project_id in ("20783", "20784"):  # COLEMAN - DEAN FOREST, COLEMAN - MELDRIM
+        row = by_id[project_id]
+        assert row["name_a"] == "COLEMAN"
+        assert (row["lat_a"], row["lon_a"]) == ("", "")
+        assert (row["lat_center"], row["lon_center"]) == (row["lat_b"], row["lon_b"])
+    # BURTON's other end, St Helena, is not in OSM: nothing to choose by, still excluded.
+    excluded = {p.project_id: p.reason for p in dataset.excluded}
+    assert excluded["6808 K"] == excluded["6808 L"] == "ambiguous"

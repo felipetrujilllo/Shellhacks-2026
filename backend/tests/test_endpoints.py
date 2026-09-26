@@ -11,6 +11,7 @@ from pipeline.endpoints import ENDPOINT_OVERRIDES, endpoints_for, split_endpoint
 REPO_ROOT = Path(__file__).parents[2]
 SPONSOR_CSV = REPO_ROOT / "data" / "seed" / "projects_seed.csv"
 DESC_CSV = REPO_ROOT / "data" / "seed" / "desc_projects.csv"
+GPC_CSV = REPO_ROOT / "data" / "seed" / "gpc_projects.csv"
 
 # All 10 sponsor rows match after normalization, so there is no list of accepted mismatches.
 
@@ -153,6 +154,9 @@ REQUIRED_OVERRIDES = {
     "6810 T": ("Cameron Jct", "St Matthews"),
     "0139 M,N": ("Jasper", "Yemassee"),
     "1060A, I, L": ("Williams St", None),
+    # Georgia Power, #23: THURMOND DAM #5 / #6 end at OSM's "Thurmond Substation".
+    "20793": ("EVANS PRIMARY", "THURMOND"),
+    "20794": ("EVANS PRIMARY", "THURMOND"),
 }
 
 
@@ -161,10 +165,22 @@ def test_overrides_hold_the_required_entries_exactly():
         assert ENDPOINT_OVERRIDES.get(project_id) == expected, project_id
 
 
-def test_every_override_key_is_a_real_desc_project():
-    ids = {row["project_id"] for row in read_rows(DESC_CSV)}
+def test_every_override_key_is_a_real_project():
+    # DESC or Georgia Power: build_dataset checks project_ids are unique across the two.
+    ids = {row["project_id"] for row in read_rows(DESC_CSV) + read_rows(GPC_CSV)}
 
     assert set(ENDPOINT_OVERRIDES) <= ids
+
+
+def test_thurmond_dam_is_named_as_osm_names_the_station():
+    names = {row["project_id"]: row["project_name"] for row in read_rows(GPC_CSV)}
+    for project_id, circuit in (("20793", "#5"), ("20794", "#6")):
+        name = names[project_id]
+        assert name == f"EVANS PRIMARY - THURMOND DAM (USA) {circuit} 115KV REBUILD"
+        # The rules keep the dam and circuit, which no OSM substation is called ...
+        assert split_endpoints(name) == ("EVANS PRIMARY", f"THURMOND DAM {circuit}")
+        # ... so the override names the station the way OSM does ("Thurmond Substation").
+        assert endpoints_for(project_id, name) == ("EVANS PRIMARY", "THURMOND")
 
 
 def test_endpoints_for_prefers_the_override():

@@ -7,7 +7,8 @@ become ("Okatie", "Bluffton") and "Edenwood Sub: #1 & #2 230-115kV Autobanks" mu
 Two entry points:
 - `split_endpoints(project_name)` — the rule pipeline below, name only.
 - `endpoints_for(project_id, project_name)` — consults `ENDPOINT_OVERRIDES` (irregular names
-  keyed by project_id) first and falls back to `split_endpoints`. Parsers call this one.
+  keyed by project_id, DESC or Georgia Power) first and falls back to `split_endpoints`.
+  Parsers and `pipeline.build_dataset` call this one.
 
 The rule pipeline, in order:
 1. drop a utility prefix ("SAV:", "GTC:") and parenthetical tags ("(USA)", "(1.4 miles)");
@@ -75,6 +76,11 @@ ENDPOINT_OVERRIDES: dict[str, tuple[str, str | None]] = {
     "0139 M,N": ("Jasper", "Yemassee"),
     # Williams St, AM Williams and McMeekin substation jobs, no line: the first site.
     "1060A, I, L": ("Williams St", None),
+    # Georgia Power: "EVANS PRIMARY - THURMOND DAM (USA) #5/#6 115KV REBUILD", circuits 5 and 6
+    # between the same two stations. The station at the dam is "Thurmond Substation" in OSM
+    # (DESC's Hooks - Thurmond line ends there too); "THURMOND DAM #5" matches nothing.
+    "20793": ("EVANS PRIMARY", "THURMOND"),
+    "20794": ("EVANS PRIMARY", "THURMOND"),
 }
 
 
