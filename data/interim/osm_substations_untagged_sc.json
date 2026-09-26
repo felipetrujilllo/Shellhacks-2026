@@ -1,0 +1,2564 @@
+[
+  {
+    "osm_id": "node/9695594850",
+    "name": "Vulcan Materials Substation",
+    "lat": 33.5382323,
+    "lon": -83.0702805,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/13958743",
+    "name": "Elberton Primary Substation",
+    "lat": 34.1420684,
+    "lon": -82.8119006,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14251844",
+    "name": "Jefferies Dam Substation",
+    "lat": 33.2439799,
+    "lon": -79.9875478,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14255838",
+    "name": "Jamestown Substation",
+    "lat": 33.2874139,
+    "lon": -79.6843648,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14275396",
+    "name": "Peony Solar Substation",
+    "lat": 33.4993708,
+    "lon": -81.2581317,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14275397",
+    "name": "North Substation",
+    "lat": 33.6098839,
+    "lon": -81.0897639,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14294792",
+    "name": "Graniteville Substation",
+    "lat": 33.5834366,
+    "lon": -81.804506,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14317637",
+    "name": "Urquhart Substation",
+    "lat": 33.4328703,
+    "lon": -81.9110807,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14335525",
+    "name": "Shaw Creek Solar Substation",
+    "lat": 33.6714097,
+    "lon": -81.7541389,
+    "operator": null
+  },
+  {
+    "osm_id": "relation/14355880",
+    "name": "Pine Island Substation",
+    "lat": 33.7271736,
+    "lon": -78.9528528,
+    "operator": null
+  },
+  {
+    "osm_id": "way/102449967",
+    "name": "North Charlotte Substation",
+    "lat": 35.2443692,
+    "lon": -80.8142572,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1030078689",
+    "name": "Pageland Substation",
+    "lat": 34.7778883,
+    "lon": -80.3663307,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1031367032",
+    "name": "Latta Substation",
+    "lat": 34.3346082,
+    "lon": -79.4166218,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1036975685",
+    "name": "South Marion Substation",
+    "lat": 34.156552,
+    "lon": -79.4132615,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1038143999",
+    "name": "Trio Substation",
+    "lat": 33.487191,
+    "lon": -79.7213946,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1039925458",
+    "name": "Banks Creek Substation",
+    "lat": 32.5641407,
+    "lon": -81.8714243,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1040637968",
+    "name": "Union Crossroads Substation",
+    "lat": 33.8003226,
+    "lon": -79.988175,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1041743427",
+    "name": "Saluda Substation",
+    "lat": 33.9973145,
+    "lon": -81.766219,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1041751347",
+    "name": "ECI Substation",
+    "lat": 32.5735169,
+    "lon": -82.1161915,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1042037366",
+    "name": "Rayle Substation",
+    "lat": 33.7832589,
+    "lon": -82.9103372,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1042056859",
+    "name": "Ridgecrest Substation",
+    "lat": 33.6116022,
+    "lon": -81.7265352,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1042419642",
+    "name": "Devro Substation",
+    "lat": 33.809972,
+    "lon": -80.916801,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1042419979",
+    "name": "West Thomson Substation",
+    "lat": 33.4933104,
+    "lon": -82.5660137,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1043453208",
+    "name": "Delhi Substation",
+    "lat": 33.9148336,
+    "lon": -82.6733804,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1043453218",
+    "name": "Heardmont Substation",
+    "lat": 34.0537657,
+    "lon": -82.7313975,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1044329265",
+    "name": "Buzzard Roost Dam Substation",
+    "lat": 34.16889,
+    "lon": -81.9025522,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1044493458",
+    "name": "McCormick Substation",
+    "lat": 33.9065361,
+    "lon": -82.2928038,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1046106639",
+    "name": "East Warrenton Substation",
+    "lat": 33.3872987,
+    "lon": -82.6363941,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1053709620",
+    "name": "Ararat Substation",
+    "lat": 32.0629094,
+    "lon": -83.1251044,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037669",
+    "name": "Empire Substation",
+    "lat": 32.344324,
+    "lon": -83.2763233,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037674",
+    "name": "Plainfield Substation",
+    "lat": 32.295493,
+    "lon": -83.1232611,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037676",
+    "name": "Cadwell Substation",
+    "lat": 32.3396695,
+    "lon": -83.0452993,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037681",
+    "name": "Dexter Substation",
+    "lat": 32.4188361,
+    "lon": -83.0441987,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037687",
+    "name": "Dirt Road Substation",
+    "lat": 32.5216421,
+    "lon": -82.9231016,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037690",
+    "name": "Achord Road Substation",
+    "lat": 32.5025286,
+    "lon": -82.9464836,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054037695",
+    "name": "Vinson Medical Center Substation",
+    "lat": 32.5345966,
+    "lon": -82.9440364,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054155079",
+    "name": "Danville Substation",
+    "lat": 32.5988447,
+    "lon": -83.2592878,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1054868572",
+    "name": "Lake Oconee Substation",
+    "lat": 33.4595297,
+    "lon": -83.247451,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1058180430",
+    "name": "Johnsville Substation",
+    "lat": 33.1295032,
+    "lon": -80.8072642,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1060196955",
+    "name": "Nestle Purina Substation",
+    "lat": 34.3401983,
+    "lon": -82.9544339,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1060215661",
+    "name": "Tugalo Dam Substation",
+    "lat": 34.7136075,
+    "lon": -83.3519817,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1061174282",
+    "name": "New Ellenton Substation",
+    "lat": 33.3997546,
+    "lon": -81.7011452,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1064022696",
+    "name": "Tillman Substation",
+    "lat": 32.4428589,
+    "lon": -81.1005383,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1064022704",
+    "name": "Cherry Point Wastewater Treatment Substation",
+    "lat": 32.3654957,
+    "lon": -80.8705012,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1064022711",
+    "name": "Nixville Substation",
+    "lat": 32.7429701,
+    "lon": -81.1507317,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1064274424",
+    "name": "Marine Corps Beaufort Substation",
+    "lat": 32.4626479,
+    "lon": -80.7183614,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1064949512",
+    "name": "Allendale Biomass Substation",
+    "lat": 33.0003877,
+    "lon": -81.2837946,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065036694",
+    "name": "South Walterboro Substation",
+    "lat": 32.8904006,
+    "lon": -80.6621227,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065036718",
+    "name": "Legareville Substation",
+    "lat": 32.6510409,
+    "lon": -80.0716656,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065416801",
+    "name": "Hagood Substation",
+    "lat": 32.8268457,
+    "lon": -79.9622389,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065541646",
+    "name": "Nexans High Voltage Cable Substation",
+    "lat": 32.9940916,
+    "lon": -79.9264041,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065541657",
+    "name": "Port Park Substation",
+    "lat": 32.9038413,
+    "lon": -80.0023535,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065670042",
+    "name": "Air Liquide Substation",
+    "lat": 33.0053425,
+    "lon": -79.8758304,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065670101",
+    "name": "Nucor Steel Foundry Switching",
+    "lat": 33.0059325,
+    "lon": -79.8810457,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065670102",
+    "name": "Nucor Steel Foundry Switching",
+    "lat": 33.0067672,
+    "lon": -79.8806608,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065670103",
+    "name": "Nucor Steel Foundry Switching",
+    "lat": 33.0069319,
+    "lon": -79.8812787,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065670127",
+    "name": "Nucor Steel Foundry Switching",
+    "lat": 33.0029029,
+    "lon": -79.886285,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1065939232",
+    "name": "Estill Solar Substation",
+    "lat": 32.7652063,
+    "lon": -81.2452232,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1066200873",
+    "name": "Lily Solar Substation",
+    "lat": 33.0932879,
+    "lon": -81.4317161,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069214302",
+    "name": "L Reactor Substation",
+    "lat": 33.2103938,
+    "lon": -81.6248689,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069306326",
+    "name": "C Reactor Substation #2",
+    "lat": 33.2483855,
+    "lon": -81.6736978,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069480257",
+    "name": "Saint George Switching Station",
+    "lat": 33.199388,
+    "lon": -80.5920086,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069480278",
+    "name": "Dorchester Biomass Substation",
+    "lat": 33.2395862,
+    "lon": -80.454611,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069521021",
+    "name": "The Barrows Substation",
+    "lat": 33.1390692,
+    "lon": -80.0617256,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069594372",
+    "name": "Biggins Substation",
+    "lat": 33.2204138,
+    "lon": -79.9683952,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069637481",
+    "name": "Georgetown City Substation",
+    "lat": 33.377946,
+    "lon": -79.300747,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069637482",
+    "name": "Georgetown Switching Station",
+    "lat": 33.3784541,
+    "lon": -79.3001653,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069637484",
+    "name": "Liberty Steelworks Substation",
+    "lat": 33.3689668,
+    "lon": -79.2917439,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069671185",
+    "name": "International Paper Substation #2",
+    "lat": 33.3656634,
+    "lon": -79.2998563,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069970821",
+    "name": "Russellville Substation",
+    "lat": 33.4027357,
+    "lon": -79.9897565,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1069970829",
+    "name": "Spillway Substation",
+    "lat": 33.448609,
+    "lon": -80.1624517,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1071426815",
+    "name": "Orchids Paper Products Substation",
+    "lat": 33.2554876,
+    "lon": -81.3899828,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1071641403",
+    "name": "Springfield City Substation",
+    "lat": 33.4999128,
+    "lon": -81.2725042,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1073259467",
+    "name": "Toolebeck Substation",
+    "lat": 33.5346321,
+    "lon": -81.6693272,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1073388000",
+    "name": "Beech Island Wastewater Substation",
+    "lat": 33.4731947,
+    "lon": -81.912753,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1074661994",
+    "name": "Holly Hill Substation",
+    "lat": 33.3258447,
+    "lon": -80.4214169,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1074904615",
+    "name": "GPC <-> SCG&E Compensator Station",
+    "lat": 33.6568198,
+    "lon": -82.1594784,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1074904620",
+    "name": "Modoc Substation",
+    "lat": 33.7362884,
+    "lon": -82.2015043,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1074904632",
+    "name": "Calhoun Falls Substation",
+    "lat": 34.0876215,
+    "lon": -82.5887269,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1074904635",
+    "name": "Georgia Pacific Substation #2",
+    "lat": 33.8881729,
+    "lon": -82.2766426,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1074904637",
+    "name": "Georgia Pacific Substation #1",
+    "lat": 33.8900394,
+    "lon": -82.2778811,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075179219",
+    "name": "Shaw Substation",
+    "lat": 33.6648529,
+    "lon": -81.6713848,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075509549",
+    "name": "Elloree Substation",
+    "lat": 33.5323844,
+    "lon": -80.5797245,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075548839",
+    "name": "Bull Street Substation",
+    "lat": 33.4900511,
+    "lon": -80.8702323,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075548849",
+    "name": "Berry Street Substation",
+    "lat": 33.5035735,
+    "lon": -80.8679346,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075548864",
+    "name": "Claflin University Substation",
+    "lat": 33.4993153,
+    "lon": -80.8515328,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075801494",
+    "name": "Argos Substation",
+    "lat": 33.2240975,
+    "lon": -80.4535867,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075801497",
+    "name": "DCC Metals Substation",
+    "lat": 33.284328,
+    "lon": -80.438675,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075801506",
+    "name": "Harleyville Substation",
+    "lat": 33.2099069,
+    "lon": -80.4511658,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075801508",
+    "name": "Ridgeville Substation",
+    "lat": 33.1001644,
+    "lon": -80.3099574,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075801512",
+    "name": "Branchville Substation",
+    "lat": 33.2485665,
+    "lon": -80.8200109,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1075801517",
+    "name": "Smoaks Substation",
+    "lat": 33.0895983,
+    "lon": -80.8163493,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076554771",
+    "name": "Lowndesville Substation",
+    "lat": 34.2113958,
+    "lon": -82.639977,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076554778",
+    "name": "Mohawk Substation",
+    "lat": 34.1382486,
+    "lon": -82.6136522,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076664854",
+    "name": "Carolina Pride Substation",
+    "lat": 34.1909563,
+    "lon": -82.1456709,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076664871",
+    "name": "Ninety Six Substation",
+    "lat": 34.1756165,
+    "lon": -82.0148698,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076664882",
+    "name": "Eaton Corporation Substation",
+    "lat": 34.2172653,
+    "lon": -82.1231492,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076839151",
+    "name": "Fujifilm Substation #2",
+    "lat": 34.2525922,
+    "lon": -82.0637299,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076839156",
+    "name": "Teijin Carbon Substation",
+    "lat": 34.2291722,
+    "lon": -82.0691166,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1076839164",
+    "name": "International Paper Substation",
+    "lat": 34.1874585,
+    "lon": -81.7552909,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1077428673",
+    "name": "Cameron Solar Substation",
+    "lat": 33.5729369,
+    "lon": -80.711366,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1077699958",
+    "name": "Midlands Solar Substation",
+    "lat": 33.6504533,
+    "lon": -80.9389408,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1077699987",
+    "name": "Airport Substation",
+    "lat": 33.9526182,
+    "lon": -81.1052395,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078248499",
+    "name": "Columbia Wastewater Treatment Substation",
+    "lat": 33.9399178,
+    "lon": -81.0149129,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078308089",
+    "name": "Columbia Canal Substation",
+    "lat": 33.9976836,
+    "lon": -81.049937,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078332269",
+    "name": "Jefferson Substation",
+    "lat": 34.6675242,
+    "lon": -80.3811586,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078583318",
+    "name": "International Paper Substation",
+    "lat": 33.4415135,
+    "lon": -79.4395956,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078583325",
+    "name": "Dunbar Substation",
+    "lat": 33.5102039,
+    "lon": -79.3586923,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078583330",
+    "name": "Rhems Substation",
+    "lat": 33.589741,
+    "lon": -79.4442119,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078768238",
+    "name": "Bucksville Substation",
+    "lat": 33.7185242,
+    "lon": -79.0960094,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078768295",
+    "name": "McDowell Shortcut Substation",
+    "lat": 33.5778883,
+    "lon": -79.0371114,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078768297",
+    "name": "Collins Creek Substation",
+    "lat": 33.5880725,
+    "lon": -79.0499859,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078768308",
+    "name": "Queens Harbor Substation",
+    "lat": 33.6374656,
+    "lon": -78.9953361,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078768310",
+    "name": "Azalea Lakes Substation",
+    "lat": 33.6586877,
+    "lon": -78.9946804,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078768326",
+    "name": "Watsons Riverside Substation",
+    "lat": 33.6870124,
+    "lon": -78.9789599,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078855184",
+    "name": "River Oaks Substation",
+    "lat": 33.7488929,
+    "lon": -78.8880706,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078855224",
+    "name": "Crescent Beach Substation",
+    "lat": 33.8083027,
+    "lon": -78.7143361,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078855227",
+    "name": "Nixons Crossroads Substation",
+    "lat": 33.8507186,
+    "lon": -78.6791216,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078855231",
+    "name": "Cherry Grove Substation",
+    "lat": 33.8469522,
+    "lon": -78.6267074,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1078964213",
+    "name": "East Conway Substation",
+    "lat": 33.8303557,
+    "lon": -79.0510616,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1079198696",
+    "name": "Georgia Pacific Substation",
+    "lat": 33.7960868,
+    "lon": -80.2333017,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1080557021",
+    "name": "Pamplico Substation",
+    "lat": 33.9916567,
+    "lon": -79.5536252,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1080874137",
+    "name": "Evergreen Substation",
+    "lat": 34.0597519,
+    "lon": -79.6472748,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1080984805",
+    "name": "Mayesville Substation",
+    "lat": 33.9550673,
+    "lon": -80.1672583,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1080984806",
+    "name": "Mayesville Switching Station",
+    "lat": 33.9540357,
+    "lon": -80.1655129,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1081073468",
+    "name": "Sharon Grove Switching Station",
+    "lat": 34.9760502,
+    "lon": -81.4169212,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1081590155",
+    "name": "Perkins Crossroads Substation",
+    "lat": 34.102174,
+    "lon": -79.8237773,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1081590158",
+    "name": "Honda Substation",
+    "lat": 34.1121888,
+    "lon": -79.9193926,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082130490",
+    "name": "Wateree Substation",
+    "lat": 33.8262718,
+    "lon": -80.6240763,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082130512",
+    "name": "East Marion Substation",
+    "lat": 34.1943069,
+    "lon": -79.3494035,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082130517",
+    "name": "May Hilltop Substation",
+    "lat": 34.3245069,
+    "lon": -79.2131284,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082130519",
+    "name": "Latta Switching Station",
+    "lat": 34.3582645,
+    "lon": -79.408923,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082144797",
+    "name": "Michelin Tires Substation",
+    "lat": 33.9376724,
+    "lon": -81.2841227,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082167219",
+    "name": "Blair Substation",
+    "lat": 34.39481,
+    "lon": -81.3927811,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082402199",
+    "name": "Reactor #2 Substation",
+    "lat": 34.2877697,
+    "lon": -81.3216853,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082402200",
+    "name": "Fairfield Pumped Storage Substation",
+    "lat": 34.3063987,
+    "lon": -81.330865,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1082859535",
+    "name": "Camden Substation",
+    "lat": 34.2476388,
+    "lon": -80.5944535,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083270522",
+    "name": "Centerfield Cooper Solar Substation",
+    "lat": 34.7094817,
+    "lon": -80.1183699,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083439740",
+    "name": "Brocks Mill Substation",
+    "lat": 34.756257,
+    "lon": -79.9952978,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083526007",
+    "name": "Joanna Substation",
+    "lat": 34.4069074,
+    "lon": -81.8264863,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083724015",
+    "name": "Transco Substation",
+    "lat": 34.5800505,
+    "lon": -82.432243,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083724074",
+    "name": "Hollidays Bridge Hydro Substation",
+    "lat": 34.5273826,
+    "lon": -82.3752588,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083781526",
+    "name": "Medline Industries Substation",
+    "lat": 34.4385989,
+    "lon": -82.3884815,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083866131",
+    "name": "Towers Road Substation",
+    "lat": 34.4904506,
+    "lon": -82.6516835,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1083973803",
+    "name": "Pendleton Substation",
+    "lat": 34.646463,
+    "lon": -82.7771968,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1084462509",
+    "name": "Fork Shoals Substation",
+    "lat": 34.6197979,
+    "lon": -82.3051,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1085152072",
+    "name": "Greer Substation",
+    "lat": 34.937499,
+    "lon": -82.2345374,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1085152108",
+    "name": "BMW Substation",
+    "lat": 34.8949203,
+    "lon": -82.1797184,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1085484843",
+    "name": "Ray Place Road Switching Station",
+    "lat": 33.4682585,
+    "lon": -82.8197717,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1087016075",
+    "name": "Broad River Solar Substation",
+    "lat": 35.2039394,
+    "lon": -81.7455419,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1087016076",
+    "name": "Broad River Solar Switching Station",
+    "lat": 35.203727,
+    "lon": -81.7459453,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1087703986",
+    "name": "Haile Gold Mine Substation",
+    "lat": 34.5983931,
+    "lon": -80.5313302,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1090963509",
+    "name": "Kenilworth Substation",
+    "lat": 35.1978874,
+    "lon": -80.848424,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1099781130",
+    "name": "Robeson LNG Substation",
+    "lat": 34.7970175,
+    "lon": -79.2787192,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1103796441",
+    "name": "Goodyear Substation",
+    "lat": 35.1692095,
+    "lon": -78.8585101,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1126419445",
+    "name": "McClellanville Substation",
+    "lat": 33.0978352,
+    "lon": -79.4674216,
+    "operator": null
+  },
+  {
+    "osm_id": "way/120865502",
+    "name": "Catawba 230kV Switching Station",
+    "lat": 35.051724,
+    "lon": -81.0746032,
+    "operator": null
+  },
+  {
+    "osm_id": "way/120956731",
+    "name": "Cliffside Substation",
+    "lat": 35.219813,
+    "lon": -81.7671527,
+    "operator": null
+  },
+  {
+    "osm_id": "way/121624360",
+    "name": "Blandford Substation 230",
+    "lat": 32.2790634,
+    "lon": -81.2810986,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1270183735",
+    "name": "South Wadley Substation",
+    "lat": 32.8575554,
+    "lon": -82.4075909,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1296466592",
+    "name": "Sheep Island Substation",
+    "lat": 33.0601505,
+    "lon": -80.1848655,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1415823671",
+    "name": "Mill Branch Substation",
+    "lat": 33.1605474,
+    "lon": -80.2449276,
+    "operator": null
+  },
+  {
+    "osm_id": "way/142717858",
+    "name": "Woodfield Park Substation",
+    "lat": 34.058317,
+    "lon": -80.9318539,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1458221220",
+    "name": "Hyundai Motors Substation",
+    "lat": 32.1666218,
+    "lon": -81.4609318,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1462582232",
+    "name": "Fort Argyle Substation",
+    "lat": 32.0815559,
+    "lon": -81.3504578,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1494614238",
+    "name": "Awendaw Metering Point",
+    "lat": 33.0451785,
+    "lon": -79.560482,
+    "operator": null
+  },
+  {
+    "osm_id": "way/1494615536",
+    "name": "Edisto Camp Hall Metering Point",
+    "lat": 33.1353209,
+    "lon": -80.2635502,
+    "operator": null
+  },
+  {
+    "osm_id": "way/159607187",
+    "name": "Robinson Substation",
+    "lat": 34.4015551,
+    "lon": -80.1575117,
+    "operator": null
+  },
+  {
+    "osm_id": "way/159607197",
+    "name": "Darlington Substation",
+    "lat": 34.4176449,
+    "lon": -80.1675808,
+    "operator": null
+  },
+  {
+    "osm_id": "way/159607199",
+    "name": "Rockingham 115kV Substation",
+    "lat": 34.9048383,
+    "lon": -79.7559492,
+    "operator": null
+  },
+  {
+    "osm_id": "way/160057277",
+    "name": "Warthen Substation",
+    "lat": 33.1200621,
+    "lon": -82.8594838,
+    "operator": null
+  },
+  {
+    "osm_id": "way/160308083",
+    "name": "Site B Substation",
+    "lat": 33.204123,
+    "lon": -81.739571,
+    "operator": null
+  },
+  {
+    "osm_id": "way/160308114",
+    "name": "Pump House #1 Substation",
+    "lat": 33.224315,
+    "lon": -81.7684553,
+    "operator": null
+  },
+  {
+    "osm_id": "way/162854492",
+    "name": "ThermoFisher Substation",
+    "lat": 34.2161339,
+    "lon": -79.5969398,
+    "operator": null
+  },
+  {
+    "osm_id": "way/163041615",
+    "name": "Whiteville Substation",
+    "lat": 34.3267832,
+    "lon": -78.6863037,
+    "operator": null
+  },
+  {
+    "osm_id": "way/164880657",
+    "name": "Eastman Primary Substation",
+    "lat": 32.2132993,
+    "lon": -83.1614216,
+    "operator": null
+  },
+  {
+    "osm_id": "way/167411842",
+    "name": "Fayetteville East Substation",
+    "lat": 35.098895,
+    "lon": -78.8278265,
+    "operator": null
+  },
+  {
+    "osm_id": "way/170166796",
+    "name": "Peach Orchard Switching Station",
+    "lat": 33.3275821,
+    "lon": -82.0546387,
+    "operator": null
+  },
+  {
+    "osm_id": "way/171556334",
+    "name": "Colonial Pipeline Substation",
+    "lat": 34.4213411,
+    "lon": -82.6881591,
+    "operator": null
+  },
+  {
+    "osm_id": "way/171556342",
+    "name": "John S Rainey Substation",
+    "lat": 34.3478421,
+    "lon": -82.7744968,
+    "operator": null
+  },
+  {
+    "osm_id": "way/178951280",
+    "name": "Batesburg Substation",
+    "lat": 33.9134867,
+    "lon": -81.5644353,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184789473",
+    "name": "Cross Substation",
+    "lat": 33.3666594,
+    "lon": -80.1149899,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184789484",
+    "name": "41-Siding Substation",
+    "lat": 33.346812,
+    "lon": -79.9401935,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184856180",
+    "name": "Winyah Substation",
+    "lat": 33.331955,
+    "lon": -79.3572794,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184856193",
+    "name": "Conway Substation",
+    "lat": 33.8146417,
+    "lon": -79.080565,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184856199",
+    "name": "Red Bluff Substation",
+    "lat": 33.9299564,
+    "lon": -78.8527084,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184856204",
+    "name": "Campfield Substation",
+    "lat": 33.4831508,
+    "lon": -79.2458175,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184858750",
+    "name": "Macedonia Substation",
+    "lat": 33.273276,
+    "lon": -79.8936227,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184867924",
+    "name": "Williams Substation",
+    "lat": 33.0176985,
+    "lon": -79.9321678,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184867925",
+    "name": "Nucor Steel Foundry Substation",
+    "lat": 33.0102101,
+    "lon": -79.8837546,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184867940",
+    "name": "INEOS Aromatics Substation",
+    "lat": 32.9762893,
+    "lon": -79.8726973,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184867947",
+    "name": "DAK Americas Substation",
+    "lat": 33.0584547,
+    "lon": -79.9388654,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184869177",
+    "name": "Naval Nuclear Power Training Command Substation",
+    "lat": 32.9626592,
+    "lon": -79.9681874,
+    "operator": null
+  },
+  {
+    "osm_id": "way/184966040",
+    "name": "Dalzell Substation",
+    "lat": 34.0164129,
+    "lon": -80.4219328,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185032893",
+    "name": "Sumter Substation",
+    "lat": 33.8976611,
+    "lon": -80.3239761,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185035423",
+    "name": "Mount Holly Smeltery Substation",
+    "lat": 33.0520691,
+    "lon": -80.0588022,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185039621",
+    "name": "Virgil C. Summer Nuclear #1 Substation",
+    "lat": 34.2959982,
+    "lon": -81.3149243,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185149202",
+    "name": "Lake Murray Substation",
+    "lat": 34.0548381,
+    "lon": -81.2147241,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185197506",
+    "name": "Ward Substation",
+    "lat": 33.87218,
+    "lon": -81.6977228,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185225314",
+    "name": "Cola Industrial Park Substation",
+    "lat": 33.9431729,
+    "lon": -80.9840739,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185227981",
+    "name": "Columbia Energy Center Substation",
+    "lat": 33.87131,
+    "lon": -81.0182765,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185230442",
+    "name": "CMC Steel Substation",
+    "lat": 33.9628323,
+    "lon": -81.0540622,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185330726",
+    "name": "Church Creek Substation",
+    "lat": 32.8303196,
+    "lon": -80.0702792,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185380597",
+    "name": "Jasper Substation",
+    "lat": 32.3606993,
+    "lon": -81.1241523,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185577976",
+    "name": "Husqvarna Substation",
+    "lat": 33.5037959,
+    "lon": -80.8089655,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185577977",
+    "name": "North Substation",
+    "lat": 33.4684794,
+    "lon": -80.7862825,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185577981",
+    "name": "Orangeburg East Substation",
+    "lat": 33.5021982,
+    "lon": -80.8064612,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185718913",
+    "name": "Nucor Steel Substation",
+    "lat": 34.3732668,
+    "lon": -79.8928974,
+    "operator": null
+  },
+  {
+    "osm_id": "way/185730070",
+    "name": "Olanta Substation",
+    "lat": 33.9344352,
+    "lon": -79.9161304,
+    "operator": null
+  },
+  {
+    "osm_id": "way/186840937",
+    "name": "Invista Substation",
+    "lat": 34.2328465,
+    "lon": -80.6562574,
+    "operator": null
+  },
+  {
+    "osm_id": "way/186840939",
+    "name": "Lee Substation",
+    "lat": 34.6016465,
+    "lon": -82.4343674,
+    "operator": null
+  },
+  {
+    "osm_id": "way/186840942",
+    "name": "WestRock Substation",
+    "lat": 34.1528219,
+    "lon": -79.5592384,
+    "operator": null
+  },
+  {
+    "osm_id": "way/206005320",
+    "name": "Wateree Dam Substation",
+    "lat": 34.3346578,
+    "lon": -80.7023194,
+    "operator": null
+  },
+  {
+    "osm_id": "way/217439469",
+    "name": "Folly Beach Substation",
+    "lat": 32.6562539,
+    "lon": -79.9424581,
+    "operator": null
+  },
+  {
+    "osm_id": "way/217501714",
+    "name": "Charleston International Airport Substation",
+    "lat": 32.8692869,
+    "lon": -80.0376096,
+    "operator": null
+  },
+  {
+    "osm_id": "way/217507829",
+    "name": "Faber Place Substation",
+    "lat": 32.8500798,
+    "lon": -80.0146241,
+    "operator": null
+  },
+  {
+    "osm_id": "way/229031772",
+    "name": "WestRock Substation",
+    "lat": 32.8981809,
+    "lon": -79.9684074,
+    "operator": null
+  },
+  {
+    "osm_id": "way/229031777",
+    "name": "Accabee Substation",
+    "lat": 32.8529751,
+    "lon": -79.9760575,
+    "operator": null
+  },
+  {
+    "osm_id": "way/229240192",
+    "name": "Maryville Substation",
+    "lat": 33.3477544,
+    "lon": -79.2979839,
+    "operator": null
+  },
+  {
+    "osm_id": "way/251849414",
+    "name": "North Road Substation",
+    "lat": 33.544052,
+    "lon": -80.9109544,
+    "operator": null
+  },
+  {
+    "osm_id": "way/263276273",
+    "name": "Nixonville Substation",
+    "lat": 33.8367745,
+    "lon": -78.8762343,
+    "operator": null
+  },
+  {
+    "osm_id": "way/264248055",
+    "name": "Surfside Substation",
+    "lat": 33.632145,
+    "lon": -78.96321,
+    "operator": null
+  },
+  {
+    "osm_id": "way/290264139",
+    "name": "Queensborough Substation",
+    "lat": 32.7227934,
+    "lon": -79.9673323,
+    "operator": null
+  },
+  {
+    "osm_id": "way/308481186",
+    "name": "Briarcliffe Substation",
+    "lat": 33.7918362,
+    "lon": -78.7716391,
+    "operator": null
+  },
+  {
+    "osm_id": "way/308485976",
+    "name": "Dunes Substation",
+    "lat": 33.7554132,
+    "lon": -78.8222645,
+    "operator": null
+  },
+  {
+    "osm_id": "way/310896013",
+    "name": "Maryville Substation",
+    "lat": 32.7958955,
+    "lon": -79.9937526,
+    "operator": null
+  },
+  {
+    "osm_id": "way/318318141",
+    "name": "Cameron Substation",
+    "lat": 33.5636663,
+    "lon": -80.7089959,
+    "operator": null
+  },
+  {
+    "osm_id": "way/322597396",
+    "name": "Jones Road Substation",
+    "lat": 33.6971814,
+    "lon": -79.0159655,
+    "operator": null
+  },
+  {
+    "osm_id": "way/328994842",
+    "name": "Network Substation",
+    "lat": 34.0015046,
+    "lon": -81.0389229,
+    "operator": null
+  },
+  {
+    "osm_id": "way/329065758",
+    "name": "Owens Corning Switching Station",
+    "lat": 34.4384718,
+    "lon": -82.6583827,
+    "operator": null
+  },
+  {
+    "osm_id": "way/329065759",
+    "name": "Owens Corning Substation #2",
+    "lat": 34.4360455,
+    "lon": -82.6568974,
+    "operator": null
+  },
+  {
+    "osm_id": "way/329065763",
+    "name": "Owens Corning Substation",
+    "lat": 34.437343,
+    "lon": -82.6589379,
+    "operator": null
+  },
+  {
+    "osm_id": "way/329592372",
+    "name": "Plantation Pipeline Substation",
+    "lat": 34.4834431,
+    "lon": -82.6048689,
+    "operator": null
+  },
+  {
+    "osm_id": "way/330009425",
+    "name": "Michelin Substation",
+    "lat": 34.5928862,
+    "lon": -82.7600602,
+    "operator": null
+  },
+  {
+    "osm_id": "way/334268748",
+    "name": "Iva Substation",
+    "lat": 34.3092959,
+    "lon": -82.6651083,
+    "operator": null
+  },
+  {
+    "osm_id": "way/342088844",
+    "name": "Caropines Substation",
+    "lat": 33.60842,
+    "lon": -78.9886019,
+    "operator": null
+  },
+  {
+    "osm_id": "way/342148470",
+    "name": "Garden City Beach Substation",
+    "lat": 33.5917631,
+    "lon": -79.0112583,
+    "operator": null
+  },
+  {
+    "osm_id": "way/342296525",
+    "name": "Simmonsville Substation",
+    "lat": 33.4223516,
+    "lon": -79.1821488,
+    "operator": null
+  },
+  {
+    "osm_id": "way/342296616",
+    "name": "Pawley's Island Substation",
+    "lat": 33.4296211,
+    "lon": -79.1514183,
+    "operator": null
+  },
+  {
+    "osm_id": "way/347008711",
+    "name": "Langfords Crossroads",
+    "lat": 34.2062756,
+    "lon": -80.9016712,
+    "operator": null
+  },
+  {
+    "osm_id": "way/353684182",
+    "name": "Tillery Substation",
+    "lat": 35.2074708,
+    "lon": -80.0622297,
+    "operator": null
+  },
+  {
+    "osm_id": "way/357572070",
+    "name": "Burgess Substation",
+    "lat": 33.6301197,
+    "lon": -79.0327133,
+    "operator": null
+  },
+  {
+    "osm_id": "way/357934492",
+    "name": "Great Falls Substation",
+    "lat": 34.5591288,
+    "lon": -80.8932153,
+    "operator": null
+  },
+  {
+    "osm_id": "way/357934513",
+    "name": "Richburg Substation",
+    "lat": 34.6649817,
+    "lon": -80.9777609,
+    "operator": null
+  },
+  {
+    "osm_id": "way/380872161",
+    "name": "Kimberley-Clark Substation",
+    "lat": 33.4184048,
+    "lon": -81.8990627,
+    "operator": null
+  },
+  {
+    "osm_id": "way/394517338",
+    "name": "Union Substation",
+    "lat": 34.7238639,
+    "lon": -81.6587799,
+    "operator": null
+  },
+  {
+    "osm_id": "way/395927378",
+    "name": "Market Place Substation",
+    "lat": 32.1575773,
+    "lon": -80.762072,
+    "operator": null
+  },
+  {
+    "osm_id": "way/409118587",
+    "name": "Georgia Pacific Substation",
+    "lat": 34.2180751,
+    "lon": -81.4942535,
+    "operator": null
+  },
+  {
+    "osm_id": "way/427847089",
+    "name": "Tabor City Substation",
+    "lat": 34.1573878,
+    "lon": -78.8801674,
+    "operator": null
+  },
+  {
+    "osm_id": "way/446242261",
+    "name": "Edisto Island Substation",
+    "lat": 32.5427478,
+    "lon": -80.2932907,
+    "operator": null
+  },
+  {
+    "osm_id": "way/466936022",
+    "name": "Trenton Substation",
+    "lat": 33.7506785,
+    "lon": -81.8796988,
+    "operator": null
+  },
+  {
+    "osm_id": "way/467794473",
+    "name": "Moncks Corner Substation",
+    "lat": 33.1968175,
+    "lon": -80.0024408,
+    "operator": null
+  },
+  {
+    "osm_id": "way/478709861",
+    "name": "Industrial Paper Substation",
+    "lat": 33.8875618,
+    "lon": -80.6418068,
+    "operator": null
+  },
+  {
+    "osm_id": "way/484518626",
+    "name": "Sandersville Substation #6",
+    "lat": 33.0018214,
+    "lon": -82.8327291,
+    "operator": null
+  },
+  {
+    "osm_id": "way/484518633",
+    "name": "Kaolin Substation",
+    "lat": 32.9756063,
+    "lon": -82.8254763,
+    "operator": null
+  },
+  {
+    "osm_id": "way/487069958",
+    "name": "Port of Charlston Substation",
+    "lat": 32.8476442,
+    "lon": -79.9514264,
+    "operator": null
+  },
+  {
+    "osm_id": "way/488337087",
+    "name": "Kinder Morgan Substation",
+    "lat": 32.8248043,
+    "lon": -79.9419597,
+    "operator": null
+  },
+  {
+    "osm_id": "way/489247836",
+    "name": "St. Stephen Dam",
+    "lat": 33.4264707,
+    "lon": -79.9295234,
+    "operator": null
+  },
+  {
+    "osm_id": "way/489577607",
+    "name": "McQueen Substation",
+    "lat": 33.0587773,
+    "lon": -80.2238205,
+    "operator": null
+  },
+  {
+    "osm_id": "way/490789516",
+    "name": "Riverland Terrace Substation",
+    "lat": 32.7609163,
+    "lon": -79.9894378,
+    "operator": null
+  },
+  {
+    "osm_id": "way/492762978",
+    "name": "Metter Substation",
+    "lat": 32.4051012,
+    "lon": -82.0663614,
+    "operator": null
+  },
+  {
+    "osm_id": "way/493325000",
+    "name": "Greensboro Substation",
+    "lat": 33.5731235,
+    "lon": -83.1743722,
+    "operator": null
+  },
+  {
+    "osm_id": "way/494863759",
+    "name": "Strawberry Substation",
+    "lat": 33.0897567,
+    "lon": -80.0280558,
+    "operator": null
+  },
+  {
+    "osm_id": "way/494863765",
+    "name": "Google Substation #1",
+    "lat": 33.0659869,
+    "lon": -80.0431722,
+    "operator": null
+  },
+  {
+    "osm_id": "way/495010406",
+    "name": "Giant Switching Station",
+    "lat": 33.2386573,
+    "lon": -80.4510965,
+    "operator": null
+  },
+  {
+    "osm_id": "way/495010422",
+    "name": "Lebanon Substation",
+    "lat": 33.214056,
+    "lon": -80.2537449,
+    "operator": null
+  },
+  {
+    "osm_id": "way/495306284",
+    "name": "Hanahan Water Treatment Plant Substation",
+    "lat": 32.9271609,
+    "lon": -80.0186883,
+    "operator": null
+  },
+  {
+    "osm_id": "way/495306290",
+    "name": "North Charleston Port Substation",
+    "lat": 32.9030288,
+    "lon": -79.9754427,
+    "operator": null
+  },
+  {
+    "osm_id": "way/497876658",
+    "name": "Bosch Substation",
+    "lat": 32.9059833,
+    "lon": -80.1020204,
+    "operator": null
+  },
+  {
+    "osm_id": "way/497962234",
+    "name": "Charleston International Manufacturing Center Substation",
+    "lat": 32.9842448,
+    "lon": -79.9293462,
+    "operator": null
+  },
+  {
+    "osm_id": "way/497962236",
+    "name": "Naval Support Activity Charleston Substation",
+    "lat": 32.9337503,
+    "lon": -79.9431144,
+    "operator": null
+  },
+  {
+    "osm_id": "way/497970794",
+    "name": "Summerville Wastewater Treatment Substation",
+    "lat": 32.9873703,
+    "lon": -80.2208317,
+    "operator": null
+  },
+  {
+    "osm_id": "way/498040759",
+    "name": "Dorchester Substation",
+    "lat": 33.1393553,
+    "lon": -80.365653,
+    "operator": null
+  },
+  {
+    "osm_id": "way/498040764",
+    "name": "New Hope Substation",
+    "lat": 33.0881438,
+    "lon": -80.2017229,
+    "operator": null
+  },
+  {
+    "osm_id": "way/498828320",
+    "name": "Georgia Pacific Substation",
+    "lat": 32.9952616,
+    "lon": -81.2258213,
+    "operator": null
+  },
+  {
+    "osm_id": "way/498828321",
+    "name": "Hampton Substation",
+    "lat": 32.8987661,
+    "lon": -81.1070287,
+    "operator": null
+  },
+  {
+    "osm_id": "way/499420033",
+    "name": "Allendale Substation",
+    "lat": 33.0184066,
+    "lon": -81.3167591,
+    "operator": null
+  },
+  {
+    "osm_id": "way/499570746",
+    "name": "Burnettown Substation",
+    "lat": 33.5170276,
+    "lon": -81.8474982,
+    "operator": null
+  },
+  {
+    "osm_id": "way/504932099",
+    "name": "Parr Substation",
+    "lat": 34.2640927,
+    "lon": -81.3308738,
+    "operator": null
+  },
+  {
+    "osm_id": "way/505190930",
+    "name": "Sumter Industrial Substation",
+    "lat": 33.8637523,
+    "lon": -80.3818033,
+    "operator": null
+  },
+  {
+    "osm_id": "way/510854867",
+    "name": "North Energy Facility",
+    "lat": 33.9972684,
+    "lon": -81.0325192,
+    "operator": null
+  },
+  {
+    "osm_id": "way/511177956",
+    "name": "South Energy Facility",
+    "lat": 33.9889717,
+    "lon": -81.0247631,
+    "operator": null
+  },
+  {
+    "osm_id": "way/511584982",
+    "name": "Five Points Substation",
+    "lat": 34.0002377,
+    "lon": -81.01535,
+    "operator": null
+  },
+  {
+    "osm_id": "way/52102616",
+    "name": "Stevens Creek Dam Substation",
+    "lat": 33.5616178,
+    "lon": -82.0532936,
+    "operator": null
+  },
+  {
+    "osm_id": "way/52408419",
+    "name": "Hartwell Energy Facility Substation",
+    "lat": 34.3411567,
+    "lon": -82.821173,
+    "operator": null
+  },
+  {
+    "osm_id": "way/524633669",
+    "name": "Reed Creek Substation",
+    "lat": 34.4509411,
+    "lon": -82.9234856,
+    "operator": null
+  },
+  {
+    "osm_id": "way/524633670",
+    "name": "Reed Creek Switching Station",
+    "lat": 34.450609,
+    "lon": -82.9229762,
+    "operator": null
+  },
+  {
+    "osm_id": "way/52567096",
+    "name": "Talulah Falls Substation",
+    "lat": 34.7284806,
+    "lon": -83.3783122,
+    "operator": null
+  },
+  {
+    "osm_id": "way/526941724",
+    "name": "Burke Road Substation",
+    "lat": 33.6346446,
+    "lon": -80.8818402,
+    "operator": null
+  },
+  {
+    "osm_id": "way/549805436",
+    "name": "Irmo Substation",
+    "lat": 34.0839268,
+    "lon": -81.180476,
+    "operator": null
+  },
+  {
+    "osm_id": "way/550174122",
+    "name": "Pomoria Substation",
+    "lat": 34.2242852,
+    "lon": -81.3954259,
+    "operator": null
+  },
+  {
+    "osm_id": "way/550913817",
+    "name": "Dudley Substation",
+    "lat": 32.5417949,
+    "lon": -83.0609301,
+    "operator": null
+  },
+  {
+    "osm_id": "way/550916538",
+    "name": "Dublin Primary Substation",
+    "lat": 32.5406038,
+    "lon": -82.8945494,
+    "operator": null
+  },
+  {
+    "osm_id": "way/550917439",
+    "name": "Catlin Substation",
+    "lat": 32.5103539,
+    "lon": -82.8349998,
+    "operator": null
+  },
+  {
+    "osm_id": "way/552828359",
+    "name": "Sandy Run Substation",
+    "lat": 33.8092129,
+    "lon": -81.0496661,
+    "operator": null
+  },
+  {
+    "osm_id": "way/552845047",
+    "name": "Virgil C. Summer Nuclear #2/3 Switching Station",
+    "lat": 34.2903782,
+    "lon": -81.3286149,
+    "operator": null
+  },
+  {
+    "osm_id": "way/559640218",
+    "name": "Laurens Substation",
+    "lat": 34.5106473,
+    "lon": -82.0014998,
+    "operator": null
+  },
+  {
+    "osm_id": "way/603522903",
+    "name": "Burroughs Road Substation",
+    "lat": 33.7730354,
+    "lon": -78.870619,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605077054",
+    "name": "Wampee Substation",
+    "lat": 33.8391915,
+    "lon": -78.6965704,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922392",
+    "name": "Carolina Forest Substation",
+    "lat": 33.7812511,
+    "lon": -78.8869651,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922395",
+    "name": "Island Green Substation",
+    "lat": 33.659242,
+    "lon": -79.0520606,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922396",
+    "name": "Hurl Rock Substation",
+    "lat": 33.6765167,
+    "lon": -78.9074773,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922397",
+    "name": "Withers Swash Substation",
+    "lat": 33.6923398,
+    "lon": -78.8935884,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922400",
+    "name": "Cane Patch Substation",
+    "lat": 33.7414119,
+    "lon": -78.8400956,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922401",
+    "name": "Windy Hill Substation",
+    "lat": 33.8015955,
+    "lon": -78.7391643,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922408",
+    "name": "Ocean Drive Substation",
+    "lat": 33.8385391,
+    "lon": -78.6702508,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605922410",
+    "name": "Stephens Crossroads Substation",
+    "lat": 33.873545,
+    "lon": -78.6822424,
+    "operator": null
+  },
+  {
+    "osm_id": "way/605953754",
+    "name": "Burcale Road Substation",
+    "lat": 33.721436,
+    "lon": -78.943622,
+    "operator": null
+  },
+  {
+    "osm_id": "way/606813796",
+    "name": "Novelis Substation",
+    "lat": 33.5601121,
+    "lon": -83.2026665,
+    "operator": null
+  },
+  {
+    "osm_id": "way/622705600",
+    "name": "Continental Tire Substation",
+    "lat": 33.8800511,
+    "lon": -80.3148096,
+    "operator": null
+  },
+  {
+    "osm_id": "way/622775018",
+    "name": "Bridgestone Substation #1",
+    "lat": 33.6400375,
+    "lon": -81.8357172,
+    "operator": null
+  },
+  {
+    "osm_id": "way/622775021",
+    "name": "Bridgestone Substation #2",
+    "lat": 33.6258289,
+    "lon": -81.8567156,
+    "operator": null
+  },
+  {
+    "osm_id": "way/623128255",
+    "name": "Mercedes Substation",
+    "lat": 32.9640835,
+    "lon": -80.103617,
+    "operator": null
+  },
+  {
+    "osm_id": "way/625562804",
+    "name": "Ascend Substation",
+    "lat": 34.2309882,
+    "lon": -82.050252,
+    "operator": null
+  },
+  {
+    "osm_id": "way/625597147",
+    "name": "Substation 20",
+    "lat": 33.4404007,
+    "lon": -80.8418595,
+    "operator": null
+  },
+  {
+    "osm_id": "way/648584400",
+    "name": "Phoenix Substation",
+    "lat": 33.3665893,
+    "lon": -83.2771263,
+    "operator": null
+  },
+  {
+    "osm_id": "way/648585864",
+    "name": "Smyrna Substation",
+    "lat": 33.5949136,
+    "lon": -83.3979212,
+    "operator": null
+  },
+  {
+    "osm_id": "way/658997037",
+    "name": "Hammonds Substation",
+    "lat": 33.7318414,
+    "lon": -80.8567418,
+    "operator": null
+  },
+  {
+    "osm_id": "way/662318941",
+    "name": "White Oak Solar Substation",
+    "lat": 33.0388261,
+    "lon": -82.1162379,
+    "operator": null
+  },
+  {
+    "osm_id": "way/662318943",
+    "name": "White Oak Solar Switching Station",
+    "lat": 33.0382708,
+    "lon": -82.1154907,
+    "operator": null
+  },
+  {
+    "osm_id": "way/670759533",
+    "name": "Oil Engine Substation",
+    "lat": 33.6955637,
+    "lon": -78.8849819,
+    "operator": null
+  },
+  {
+    "osm_id": "way/675048270",
+    "name": "Cochran Substation",
+    "lat": 32.396606,
+    "lon": -83.343874,
+    "operator": null
+  },
+  {
+    "osm_id": "way/686429265",
+    "name": "Homewood Substation",
+    "lat": 33.8897515,
+    "lon": -79.0498061,
+    "operator": null
+  },
+  {
+    "osm_id": "way/692638562",
+    "name": "Clinton Substation",
+    "lat": 34.4529541,
+    "lon": -81.9005628,
+    "operator": null
+  },
+  {
+    "osm_id": "way/693429442",
+    "name": "Parr Hydro Substation",
+    "lat": 34.2615997,
+    "lon": -81.3293523,
+    "operator": null
+  },
+  {
+    "osm_id": "way/697675375",
+    "name": "Adams Run Substation",
+    "lat": 32.7152773,
+    "lon": -80.3539332,
+    "operator": null
+  },
+  {
+    "osm_id": "way/722704902",
+    "name": "Poplar Spring Substation",
+    "lat": 33.4878837,
+    "lon": -80.9417682,
+    "operator": null
+  },
+  {
+    "osm_id": "way/730064630",
+    "name": "Bowman Substation",
+    "lat": 33.3514352,
+    "lon": -80.6922802,
+    "operator": null
+  },
+  {
+    "osm_id": "way/730325464",
+    "name": "Multitrade Rabun Gap Substation",
+    "lat": 34.9537685,
+    "lon": -83.3772927,
+    "operator": null
+  },
+  {
+    "osm_id": "way/730331478",
+    "name": "Lower Willow Street Substation",
+    "lat": 35.0738261,
+    "lon": -81.6399371,
+    "operator": null
+  },
+  {
+    "osm_id": "way/758452670",
+    "name": "Innovativs Solar Substation",
+    "lat": 34.8266458,
+    "lon": -79.9501193,
+    "operator": null
+  },
+  {
+    "osm_id": "way/764677803",
+    "name": "International Paper Substation",
+    "lat": 33.3689884,
+    "lon": -79.303441,
+    "operator": null
+  },
+  {
+    "osm_id": "way/767714514",
+    "name": "Rayonier Substation",
+    "lat": 32.2202907,
+    "lon": -83.2074434,
+    "operator": null
+  },
+  {
+    "osm_id": "way/778834939",
+    "name": "Norwood Substation",
+    "lat": 35.2310242,
+    "lon": -80.1346736,
+    "operator": null
+  },
+  {
+    "osm_id": "way/802750731",
+    "name": "Shaw AFB Substation",
+    "lat": 33.9685043,
+    "lon": -80.4929433,
+    "operator": null
+  },
+  {
+    "osm_id": "way/824451377",
+    "name": "Grahamville Substation",
+    "lat": 32.4708253,
+    "lon": -80.9565722,
+    "operator": null
+  },
+  {
+    "osm_id": "way/826354227",
+    "name": "Huger Substation",
+    "lat": 33.1026807,
+    "lon": -79.8029783,
+    "operator": null
+  },
+  {
+    "osm_id": "way/839712486",
+    "name": "Salley Substation",
+    "lat": 33.5661202,
+    "lon": -81.2967866,
+    "operator": null
+  },
+  {
+    "osm_id": "way/839732487",
+    "name": "Mesena Substation",
+    "lat": 33.4530458,
+    "lon": -82.5396377,
+    "operator": null
+  },
+  {
+    "osm_id": "way/839744754",
+    "name": "Southern Chips Substation",
+    "lat": 32.9605112,
+    "lon": -82.7968643,
+    "operator": null
+  },
+  {
+    "osm_id": "way/844351348",
+    "name": "Google Substation #2",
+    "lat": 33.0660096,
+    "lon": -80.0408171,
+    "operator": null
+  },
+  {
+    "osm_id": "way/845910582",
+    "name": "Willigton Substation",
+    "lat": 33.9755652,
+    "lon": -82.4659851,
+    "operator": null
+  },
+  {
+    "osm_id": "way/847030713",
+    "name": "Ruffin Substation",
+    "lat": 32.9707164,
+    "lon": -80.811151,
+    "operator": null
+  },
+  {
+    "osm_id": "way/861230365",
+    "name": "Fujifilm Substation #1",
+    "lat": 34.2441714,
+    "lon": -82.0679618,
+    "operator": null
+  },
+  {
+    "osm_id": "way/863470932",
+    "name": "Prosperity Substation",
+    "lat": 34.2086525,
+    "lon": -81.5347012,
+    "operator": null
+  },
+  {
+    "osm_id": "way/863571829",
+    "name": "McIntosh Combined Cycle Facility Substation",
+    "lat": 32.3487187,
+    "lon": -81.1815513,
+    "operator": null
+  },
+  {
+    "osm_id": "way/873324072",
+    "name": "American Zinc Recycling Substation",
+    "lat": 35.1969315,
+    "lon": -81.8459986,
+    "operator": null
+  },
+  {
+    "osm_id": "way/874466949",
+    "name": "Pittman Corner Substation",
+    "lat": 34.3685627,
+    "lon": -79.2945689,
+    "operator": null
+  },
+  {
+    "osm_id": "way/875666983",
+    "name": "Wadmalaw Substation",
+    "lat": 32.6658821,
+    "lon": -80.1715788,
+    "operator": null
+  },
+  {
+    "osm_id": "way/878912981",
+    "name": "Pump Station #3 Substation",
+    "lat": 33.2018058,
+    "lon": -81.7520815,
+    "operator": null
+  },
+  {
+    "osm_id": "way/878912985",
+    "name": "Shaw Industries Substation",
+    "lat": 34.0460379,
+    "lon": -81.1587088,
+    "operator": null
+  },
+  {
+    "osm_id": "way/878912995",
+    "name": "C Reactor Substation",
+    "lat": 33.2517442,
+    "lon": -81.6772945,
+    "operator": null
+  },
+  {
+    "osm_id": "way/917253712",
+    "name": "Pineland Substation",
+    "lat": 32.611892,
+    "lon": -81.1503133,
+    "operator": null
+  },
+  {
+    "osm_id": "way/926035499",
+    "name": "Union Point Substation",
+    "lat": 33.606521,
+    "lon": -83.0492706,
+    "operator": null
+  },
+  {
+    "osm_id": "way/927670059",
+    "name": "Clearwater Substation",
+    "lat": 33.500115,
+    "lon": -81.8859451,
+    "operator": null
+  },
+  {
+    "osm_id": "way/931897012",
+    "name": "Volvo Substation",
+    "lat": 33.1337355,
+    "lon": -80.2597704,
+    "operator": null
+  },
+  {
+    "osm_id": "way/959983424",
+    "name": "SC-28 Solar Plant Substation",
+    "lat": 33.3495497,
+    "lon": -81.2690013,
+    "operator": null
+  },
+  {
+    "osm_id": "way/976310382",
+    "name": "Seabrook Solar Switching Station",
+    "lat": 32.5613205,
+    "lon": -80.7421575,
+    "operator": null
+  },
+  {
+    "osm_id": "way/976310383",
+    "name": "Seabrook Solar Substation",
+    "lat": 32.5613238,
+    "lon": -80.7415188,
+    "operator": null
+  },
+  {
+    "osm_id": "way/984112091",
+    "name": "Allen Substation",
+    "lat": 35.188952,
+    "lon": -81.0101822,
+    "operator": null
+  },
+  {
+    "osm_id": "way/985396516",
+    "name": "Catchall Substation",
+    "lat": 34.0122629,
+    "lon": -80.4904678,
+    "operator": null
+  },
+  {
+    "osm_id": "way/988445897",
+    "name": "Bishopville Substation",
+    "lat": 34.2038592,
+    "lon": -80.2238311,
+    "operator": null
+  },
+  {
+    "osm_id": "way/993771560",
+    "name": "Hampton Solar Substation",
+    "lat": 32.882402,
+    "lon": -81.1321832,
+    "operator": null
+  },
+  {
+    "osm_id": "way/993772819",
+    "name": "Allendale Biomass Switching Station",
+    "lat": 32.9991177,
+    "lon": -81.2857015,
+    "operator": null
+  },
+  {
+    "osm_id": "way/993777014",
+    "name": "Elgin Substation",
+    "lat": 34.1802635,
+    "lon": -80.7800888,
+    "operator": null
+  },
+  {
+    "osm_id": "way/996734013",
+    "name": "Lynchburg Substation",
+    "lat": 34.0241847,
+    "lon": -80.0895439,
+    "operator": null
+  }
+]

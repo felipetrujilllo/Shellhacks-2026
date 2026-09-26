@@ -1,6 +1,6 @@
 {
   "version": 0.6,
-  "generator": "Overpass API (recorded sample, trimmed)",
+  "generator": "hand-built synthetic sample in the Overpass JSON shape (not a recorded response)",
   "elements": [
     {"type": "way", "id": 200, "center": {"lat": 32.3521162, "lon": -81.1751124},
      "tags": {"name": "McIntosh Substation", "operator": "Georgia Power", "power": "substation"}},

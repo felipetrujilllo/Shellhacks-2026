@@ -16,6 +16,7 @@ from pipeline.osm_fetch import (
     DESC,
     GPC,
     OVERPASS_ENDPOINT,
+    UNTAGGED_SC,
     UTILITIES,
     OverpassError,
     build_query,
@@ -50,7 +51,7 @@ def mock_session(status_code=200, payload=None, text=""):
 def test_build_query_matches_guide_filter_with_center_output():
     query = build_query("Georgia Power|Savannah Electric", (30.35, -85.65, 35.0, -80.75))
     assert query == (
-        "[out:json][timeout:90];\n"
+        "[out:json][timeout:240];\n"
         "(\n"
         '  nwr["power"="substation"]["operator"~"Georgia Power|Savannah Electric",i]\n'
         "    (30.35,-85.65,35.0,-80.75);\n"
@@ -67,7 +68,7 @@ def test_build_query_bbox_is_south_west_north_east():
 # --- parse_response ----------------------------------------------------------------------
 
 
-def test_parse_response_on_recorded_fixture():
+def test_parse_response_on_synthetic_fixture():
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
     records, dropped = parse_response(payload)
     assert records == [
@@ -108,6 +109,31 @@ def test_write_cache_is_stable_utf8_json(tmp_path):
     assert json.loads(text) == records
 
 
+def test_build_query_untagged_selects_named_substations_without_operator():
+    query = build_query(None, UNTAGGED_SC.bbox)
+    assert UNTAGGED_SC.bbox == DESC.bbox
+    assert 'nwr["power"="substation"][!"operator"]["name"]' in query
+    assert "(32.0,-83.4,35.25,-78.5)" in query
+    assert '"operator"~' not in query
+    assert "out tags center;" in query
+    assert query.startswith("[out:json]")
+
+
+def test_parse_response_keeps_named_element_without_operator():
+    payload = {
+        "elements": [
+            {"type": "node", "id": 7, "lat": 32.36, "lon": -81.12,
+             "tags": {"name": "Jasper Substation", "power": "substation"}},
+        ]
+    }
+    records, dropped = parse_response(payload)
+    assert records == [
+        {"osm_id": "node/7", "name": "Jasper Substation", "lat": 32.36, "lon": -81.12,
+         "operator": None}
+    ]
+    assert dropped == 0
+
+
 # --- committed caches --------------------------------------------------------------------
 
 
@@ -128,6 +154,8 @@ def test_cache_file_is_non_empty_named_and_inside_bbox(utility):
 
 
 def test_caches_exclude_third_party_operators():
+    # Operator-filtered caches only; the untagged cache has operator null by definition and is
+    # checked in test_untagged_cache_is_named_operatorless_inside_sc_bbox.
     third_party = ("santee", "duke", "georgia transmission", "meag", "municipal", "corps",
                    "university", "southern power")
     for utility in (DESC, GPC):
@@ -135,6 +163,27 @@ def test_caches_exclude_third_party_operators():
         for record in records:
             operator = (record["operator"] or "").lower()
             assert not any(t in operator for t in third_party), record
+
+
+def test_untagged_cache_is_named_operatorless_inside_sc_bbox():
+    path = UNTAGGED_SC.cache_path
+    assert path.exists(), f"missing {path}"
+    records = json.loads(path.read_text(encoding="utf-8"))
+    assert len(records) > 0
+    south, west, north, east = UNTAGGED_SC.bbox
+    for record in records:
+        assert set(record) == {"osm_id", "name", "lat", "lon", "operator"}, record
+        assert isinstance(record["name"], str) and record["name"].strip(), record
+        assert isinstance(record["lat"], float) and isinstance(record["lon"], float), record
+        assert south <= record["lat"] <= north, record
+        assert west <= record["lon"] <= east, record
+        assert record["operator"] is None, record
+    ids = [r["osm_id"] for r in records]
+    assert len(ids) == len(set(ids))
+    assert ids == sorted(ids)
+    for utility in UTILITIES:
+        tagged = json.loads(utility.cache_path.read_text(encoding="utf-8"))
+        assert not set(ids) & {r["osm_id"] for r in tagged}, utility.key
 
 
 # --- fetch -------------------------------------------------------------------------------
@@ -164,6 +213,15 @@ def test_fetch_connection_error_fails_loud():
     session.post.side_effect = requests.ConnectionError("name resolution failed")
     with pytest.raises(OverpassError, match="name resolution failed"):
         fetch("QUERY", session, endpoint="https://example.invalid/api")
+
+
+def test_fetch_non_json_200_fails_loud():
+    session = mock_session(text="<html>Too busy</html>")
+    session.post.return_value.json.side_effect = requests.exceptions.JSONDecodeError(
+        "Expecting value", "<html>", 0
+    )
+    with pytest.raises(OverpassError, match="non-JSON"):
+        fetch("QUERY", session)
 
 
 def test_fetch_server_side_timeout_remark_fails_loud():

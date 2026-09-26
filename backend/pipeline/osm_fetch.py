@@ -33,6 +33,25 @@ GPC kept 763 (dropped 548).
 Known gap for the matcher: DESC's tagging is thin. Of the starter-table DESC endpoints only
 Bluffton is in the DESC cache; Jasper, Queensborough and Stevens Creek Dam exist in OSM but
 with no operator tag (Hooks, Okatie and Ft Johnson were not found by name at all).
+
+Third target, `UNTAGGED_SC`, exists to close that gap: every named substation in the DESC
+(South Carolina) bbox with NO operator tag — filter `nwr["power"="substation"][!"operator"]
+["name"](32.0,-83.4,35.25,-78.5)`, same `out tags center;` — cached as
+`osm_substations_untagged_sc.json` with `operator: null`. Nothing ties these to DESC, so the
+matcher must treat hits from this cache as lower-confidence. It is disjoint from the two
+operator caches by construction. Kept as a third constant beside DESC/GPC so every bbox and
+filter lives in one place.
+
+Fetched 2026-09-26 from overpass.kumi.systems (overpass-api.de was returning 504): 366 named
+untagged substations, 0 dropped. The script's own runs timed out on every mirror, so the
+committed file was built by POSTing this same filter by hand (curl, same bbox and output) and
+running the response through `parse_response` + `write_cache`. The query took ~165 s, hence
+the 240 s timeout. Refresh just this cache with:
+
+    python -m pipeline.osm_fetch --only untagged_sc --endpoint <mirror>
+
+The bbox also covers the Georgia side of the Savannah River, so a few GA sites (e.g. McIntosh
+Combined Cycle) are in it; "_sc" names the bbox, not a guarantee of the state.
 """
 
 from __future__ import annotations
@@ -47,7 +66,8 @@ import requests
 OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
 # Fallback when the main instance is overloaded: https://overpass.kumi.systems/api/interpreter
 USER_AGENT = "GridWatch/0.1 (ShellHacks 2026 hackathon; one-off substation cache fetch)"
-QUERY_TIMEOUT_S = 90
+# The untagged-SC query takes ~165 s on a loaded public instance, so 90 was not enough.
+QUERY_TIMEOUT_S = 240
 # Client-side timeout is a little longer than the server-side one so Overpass reports first.
 HTTP_TIMEOUT_S = QUERY_TIMEOUT_S + 30
 
@@ -59,9 +79,14 @@ BBox = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)
-class UtilitySource:
+class FetchTarget:
+    """One cache file: substations in `bbox` whose operator matches `operator_regex`.
+
+    `operator_regex=None` selects the named substations that have no operator tag at all.
+    """
+
     key: str
-    operator_regex: str
+    operator_regex: str | None
     bbox: BBox
 
     @property
@@ -69,32 +94,42 @@ class UtilitySource:
         return INTERIM_DIR / f"osm_substations_{self.key}.json"
 
 
-DESC = UtilitySource(
+DESC = FetchTarget(
     key="desc",
     operator_regex=(
         "Dominion Energy|South Carolina (Electric|Gas) & (Gas|Electric)|SCE&G|SCANA"
     ),
     bbox=(32.0, -83.4, 35.25, -78.5),  # South Carolina
 )
-GPC = UtilitySource(
+GPC = FetchTarget(
     key="gpc",
     operator_regex="Georgia Power|Savannah Electric",
     bbox=(30.35, -85.65, 35.0, -80.75),  # Georgia
 )
+UNTAGGED_SC = FetchTarget(key="untagged_sc", operator_regex=None, bbox=DESC.bbox)
+# Operator-filtered caches only — each belongs to one utility.
 UTILITIES = (DESC, GPC)
+TARGETS = (DESC, GPC, UNTAGGED_SC)
 
 
 class OverpassError(RuntimeError):
     """Overpass could not be reached or did not answer with a usable 200 response."""
 
 
-def build_query(operator_regex: str, bbox: BBox) -> str:
-    """Overpass QL for every substation whose operator matches, case-insensitively, in bbox."""
+def build_query(operator_regex: str | None, bbox: BBox) -> str:
+    """Overpass QL for every substation in bbox whose operator matches, case-insensitively.
+
+    With `operator_regex=None`, selects named substations that have no operator tag instead.
+    """
     south, west, north, east = bbox
+    if operator_regex is None:
+        tag_filter = '[!"operator"]["name"]'
+    else:
+        tag_filter = f'["operator"~"{operator_regex}",i]'
     return (
         f"[out:json][timeout:{QUERY_TIMEOUT_S}];\n"
         "(\n"
-        f'  nwr["power"="substation"]["operator"~"{operator_regex}",i]\n'
+        f'  nwr["power"="substation"]{tag_filter}\n'
         f"    ({south},{west},{north},{east});\n"
         ");\n"
         "out tags center;\n"
@@ -117,7 +152,12 @@ def fetch(query: str, session: requests.Session, endpoint: str = OVERPASS_ENDPOI
             f"Overpass returned HTTP {response.status_code} from {endpoint}: "
             f"{response.text[:300]}"
         )
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise OverpassError(
+            f"Overpass returned a non-JSON 200 body from {endpoint}: {response.text[:300]}"
+        ) from exc
     # Overpass reports a server-side timeout inside a 200 response via `remark`.
     remark = payload.get("remark")
     if remark and "error" in remark.lower():
@@ -161,17 +201,18 @@ def write_cache(records: Iterable[dict], path: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def main(endpoint: str = OVERPASS_ENDPOINT) -> None:
+def main(endpoint: str = OVERPASS_ENDPOINT, only: str | None = None) -> None:
+    targets = [t for t in TARGETS if only is None or t.key == only]
     with requests.Session() as session:
-        for utility in UTILITIES:
-            query = build_query(utility.operator_regex, utility.bbox)
+        for target in targets:
+            query = build_query(target.operator_regex, target.bbox)
             records, dropped = parse_response(fetch(query, session, endpoint))
             if not records:
-                raise OverpassError(f"{utility.key}: Overpass returned no named substations")
-            write_cache(records, utility.cache_path)
+                raise OverpassError(f"{target.key}: Overpass returned no named substations")
+            write_cache(records, target.cache_path)
             print(
-                f"{utility.key}: kept {len(records)} named substations, "
-                f"dropped {dropped} unnamed/unlocated -> {utility.cache_path}"
+                f"{target.key}: kept {len(records)} named substations, "
+                f"dropped {dropped} unnamed/unlocated -> {target.cache_path}"
             )
 
 
@@ -180,4 +221,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--endpoint", default=OVERPASS_ENDPOINT)
-    main(parser.parse_args().endpoint)
+    parser.add_argument(
+        "--only", choices=[t.key for t in TARGETS], help="refresh one cache instead of all"
+    )
+    args = parser.parse_args()
+    main(args.endpoint, args.only)
