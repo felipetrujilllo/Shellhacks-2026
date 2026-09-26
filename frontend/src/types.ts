@@ -1,0 +1,40 @@
+// Mirrors the API contract in docs/api.md (backend models: backend/app/schemas.py).
+// Field names are identical to the backend's — keep them in sync.
+
+export type LocationConfidence = 'confirmed' | 'low'
+
+export interface Project {
+  project_id: string
+  utility: string
+  state: string
+  project_name: string
+  name_a: string | null
+  lat_a: number | null
+  lon_a: number | null
+  name_b: string | null
+  lat_b: number | null
+  lon_b: number | null
+  /** Always present — what overlap detection compares. */
+  lat_center: number
+  lon_center: number
+  /** ISO `YYYY-MM-DD`. */
+  in_service_date: string
+  /** Whole dollars; null where redacted. */
+  est_cost_usd: number | null
+  location_confidence: LocationConfidence
+}
+
+export interface Overlap {
+  overlap_id: string
+  /** 1 = best opportunity. */
+  rank: number
+  score: number
+  distance_mi: number
+  time_gap_days: number
+  project_a: Project
+  project_b: Project
+}
+
+export interface Health {
+  status: string
+}
