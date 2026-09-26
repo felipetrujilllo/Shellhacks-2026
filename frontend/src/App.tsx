@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchOverlaps, fetchProjects } from './api'
+import { utilityColor } from './colors'
 import OverlapDetail from './components/OverlapDetail'
 import ProjectMap from './components/ProjectMap'
 import UploadProjects from './components/UploadProjects'
@@ -13,7 +14,6 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'ready'; projects: Project[]; overlaps: Overlap[] }
 type Tab = 'opportunities' | 'projects' | 'imports'
-const utilityColor = (name: string) => name === 'Dominion Energy South Carolina' ? '#60a5fa' : name === 'Georgia Power' ? '#f87171' : '#a3be8c'
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })

@@ -15,44 +15,32 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import { overlapsToGeoJSON, projectsToGeoJSON } from '../geo'
 import type { Overlap, Project } from '../types'
 import BasemapToggle from './BasemapToggle'
+import MapLegend from './MapLegend'
 import { BASEMAPS, DEFAULT_BASEMAP, dataBounds, type BasemapId } from './basemaps'
+import {
+  LINE_CASING_WIDTH,
+  OVERLAP_COLOR,
+  OVERLAP_DASH,
+  OVERLAP_LINE_WIDTH,
+  PROJECT_LINES_ID,
+  PROJECT_LOW_LINES_ID,
+  PROJECT_POINTS_ID,
+  SELECTED_LINE_WIDTH,
+  SELECTED_OVERLAP_COLOR,
+  projectLayers,
+} from './mapStyle'
 
 // maplibre-gl v6 finds its worker via a runtime-built relative URL that Vite can't see, so
 // neither dev pre-bundling nor the production build ships it — the worker 404s and no tiles
 // or GeoJSON render. Bundle the worker explicitly and hand MapLibre its URL.
 setWorkerUrl(maplibreWorkerUrl)
 
-export const PROJECT_LINE_WIDTH = 5
-export const OVERLAP_LINE_WIDTH = 4
-export const SELECTED_LINE_WIDTH = 7
-export const LINE_CASING_WIDTH = 3
 const FIT_PADDING = { top: 100, right: 64, bottom: 72, left: 64 }
 
 // SC/GA border along the Savannah River.
 const INITIAL_VIEW = { longitude: -82.2, latitude: 32.9, zoom: 6.5 }
 
-// Single source of truth for utility colors: the legend and the layer styles both read this.
-const DESC = 'Dominion Energy South Carolina'
-const GPC = 'Georgia Power'
-export const UTILITY_COLORS = {
-  [DESC]: '#60a5fa', // blue
-  [GPC]: '#f87171', // red
-}
-const OTHER_UTILITY_COLOR = '#a3be8c'
-const OVERLAP_COLOR = '#f59e0b' // amber
-const SELECTED_OVERLAP_COLOR = '#c4b5fd' // violet
-
 const OVERLAP_LAYER_ID = 'overlap-lines'
-
-const utilityColor: ExpressionSpecification = [
-  'match',
-  ['get', 'utility'],
-  DESC,
-  UTILITY_COLORS[DESC],
-  GPC,
-  UTILITY_COLORS[GPC],
-  OTHER_UTILITY_COLOR,
-]
 
 interface ProjectMapProps {
   projects: Project[]
@@ -103,50 +91,24 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
 
   const selected = selectedId ?? ''
   const selectedOverlap = overlaps.find((o) => o.overlap_id === selectedId)
-  const projectOpacity: ExpressionSpecification = selectedOverlap
-    ? ['case', ['in', ['get', 'project_id'], ['literal',
-      [selectedOverlap.project_a.project_id, selectedOverlap.project_b.project_id]]], 1, 0.25]
-    : ['literal', 1]
+  const project = projectLayers(
+    selectedOverlap ? [selectedOverlap.project_a.project_id, selectedOverlap.project_b.project_id] : null,
+    haloColor,
+  )
   const overlapOpacity: ExpressionSpecification = selectedOverlap
     ? ['case', ['==', ['get', 'overlap_id'], selected], 1, 0.2]
     : ['literal', 0.9]
-  const projectLineLayer: LayerProps = {
-    id: 'project-lines',
-    type: 'line',
-    filter: ['==', ['geometry-type'], 'LineString'],
-    paint: { 'line-color': utilityColor, 'line-width': PROJECT_LINE_WIDTH, 'line-opacity': projectOpacity },
-    layout: { 'line-cap': 'round' },
-  }
-  const projectPointLayer: LayerProps = {
-    id: 'project-points',
-    type: 'circle',
-    filter: ['==', ['geometry-type'], 'Point'],
-    paint: {
-      'circle-color': utilityColor,
-      'circle-radius': 6,
-      'circle-stroke-color': '#ffffff',
-      'circle-stroke-width': 1.5,
-      'circle-opacity': projectOpacity,
-      'circle-stroke-opacity': projectOpacity,
-    },
-  }
   const overlapLayer: LayerProps = {
     id: OVERLAP_LAYER_ID,
     type: 'line',
     paint: {
       'line-color': ['case', ['==', ['get', 'overlap_id'], selected], SELECTED_OVERLAP_COLOR, OVERLAP_COLOR],
       'line-width': ['case', ['==', ['get', 'overlap_id'], selected], SELECTED_LINE_WIDTH, OVERLAP_LINE_WIDTH],
-      'line-dasharray': [2, 1.5],
+      'line-dasharray': OVERLAP_DASH,
       'line-opacity': overlapOpacity,
     },
   }
 
-  const projectCasing: LayerProps = {
-    ...projectLineLayer,
-    id: 'project-casing',
-    paint: { 'line-color': haloColor, 'line-width': PROJECT_LINE_WIDTH + LINE_CASING_WIDTH,
-      'line-opacity': projectOpacity },
-  }
   const overlapCasing: LayerProps = {
     ...overlapLayer,
     id: 'overlap-casing',
@@ -180,7 +142,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         attributionControl={false}
         onLoad={() => setLoaded(true)}
         style={{ width: '100%', height: '100%' }}
-        interactiveLayerIds={[OVERLAP_LAYER_ID, 'project-lines', 'project-points']}
+        interactiveLayerIds={[OVERLAP_LAYER_ID, PROJECT_LINES_ID, PROJECT_LOW_LINES_ID, PROJECT_POINTS_ID]}
         cursor={hoveredId ? 'pointer' : 'grab'}
         onClick={handleClick}
         onMouseMove={handleHover}
@@ -189,9 +151,10 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         <NavigationControl position="top-right" />
         <AttributionControl position="bottom-right" compact={false} />
         <Source id="projects" type="geojson" data={projectData}>
-          <Layer {...projectCasing} />
-          <Layer {...projectLineLayer} />
-          <Layer {...projectPointLayer} />
+          <Layer {...project.casing} />
+          <Layer {...project.lines} />
+          <Layer {...project.lowLines} />
+          <Layer {...project.points} />
         </Source>
         <Source id="overlaps" type="geojson" data={overlapData}>
           <Layer {...overlapCasing} />
@@ -204,7 +167,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
           className="min-h-11 rounded-xl border border-white/15 bg-slate-950/90 px-3 text-xs font-semibold text-slate-200 shadow-lg backdrop-blur-md hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 disabled:opacity-40">
           Fit to data
         </button>
-        <Legend />
+        <MapLegend />
       </div>
       {hoveredProject && (
         <div role="tooltip" className="pointer-events-none absolute bottom-12 left-4 right-4 max-w-sm rounded-xl border border-white/15 bg-slate-950/95 p-4 text-slate-100 shadow-xl backdrop-blur-md">
@@ -214,29 +177,5 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         </div>
       )}
     </div>
-  )
-}
-
-function Legend() {
-  return (
-    <details className="relative rounded-xl border border-white/15 bg-slate-950/90 text-xs text-slate-200 shadow-lg backdrop-blur-md">
-      <summary className="min-h-11 cursor-pointer px-3 py-3.5 font-semibold focus-visible:outline-2 focus-visible:outline-sky-400">Legend</summary>
-      <div className="absolute left-0 top-full mt-2 w-64 space-y-3 rounded-xl border border-white/15 bg-slate-950/95 p-4 shadow-xl">
-      {Object.entries(UTILITY_COLORS).map(([utility, color]) => (
-        <div key={utility} className="flex items-center gap-2">
-          <span className="inline-block h-1 w-5 rounded" style={{ backgroundColor: color }} />
-          {utility}
-        </div>
-      ))}
-      <div className="flex items-center gap-2">
-        <span className="inline-block w-5 border-t-2 border-dashed" style={{ borderColor: OVERLAP_COLOR }} />
-        Coordination opportunity
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="inline-block h-1 w-5 rounded" style={{ backgroundColor: SELECTED_OVERLAP_COLOR }} />
-        Selected opportunity
-      </div>
-      </div>
-    </details>
   )
 }

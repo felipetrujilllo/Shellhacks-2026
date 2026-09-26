@@ -1,11 +1,13 @@
 // Pure API-data -> GeoJSON builders for the map layers. No rendering here.
 // GeoJSON positions are [longitude, latitude].
 import type { FeatureCollection, LineString, Point, Position } from 'geojson'
-import type { Overlap, Project } from './types'
+import type { LocationConfidence, Overlap, Project } from './types'
 
 export interface ProjectFeatureProps {
   project_id: string
   utility: string
+  /** Drives the map's low-confidence styling (components/mapStyle.ts). */
+  location_confidence: LocationConfidence
 }
 
 export interface OverlapFeatureProps {
@@ -41,7 +43,7 @@ export function projectsToGeoJSON(
     features: projects.map((p) => ({
       type: 'Feature',
       geometry: projectGeometry(p),
-      properties: { project_id: p.project_id, utility: p.utility },
+      properties: { project_id: p.project_id, utility: p.utility, location_confidence: p.location_confidence },
     })),
   }
 }

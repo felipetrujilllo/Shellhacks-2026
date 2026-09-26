@@ -75,8 +75,21 @@ describe('projectsToGeoJSON', () => {
       project({ project_id: 'GPC_1', utility: 'Georgia Power', lat_b: null, lon_b: null }),
     ])
     expect(fc.features.map((f) => f.properties)).toEqual([
-      { project_id: 'DESC_1', utility: 'Dominion Energy South Carolina' },
-      { project_id: 'GPC_1', utility: 'Georgia Power' },
+      { project_id: 'DESC_1', utility: 'Dominion Energy South Carolina', location_confidence: 'confirmed' },
+      { project_id: 'GPC_1', utility: 'Georgia Power', location_confidence: 'confirmed' },
+    ])
+  })
+
+  it('carries each project\'s location_confidence onto its feature, for both geometry types', () => {
+    const fc = projectsToGeoJSON([
+      project({ project_id: 'LINE_LOW', location_confidence: 'low' }),
+      project({ project_id: 'POINT_LOW', location_confidence: 'low', lat_a: null, lon_a: null }),
+      project({ project_id: 'LINE_OK', location_confidence: 'confirmed' }),
+    ])
+    expect(fc.features.map((f) => [f.properties.project_id, f.geometry.type, f.properties.location_confidence])).toEqual([
+      ['LINE_LOW', 'LineString', 'low'],
+      ['POINT_LOW', 'Point', 'low'],
+      ['LINE_OK', 'LineString', 'confirmed'],
     ])
   })
 
@@ -134,12 +147,12 @@ describe('docs/api.md examples', () => {
             [-81.032495, 32.333758],
           ],
         },
-        properties: { project_id: 'DESC_3', utility: 'Dominion Energy South Carolina' },
+        properties: { project_id: 'DESC_3', utility: 'Dominion Energy South Carolina', location_confidence: 'confirmed' },
       },
       {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [-81.175112, 32.352116] },
-        properties: { project_id: 'GPC_2', utility: 'Georgia Power' },
+        properties: { project_id: 'GPC_2', utility: 'Georgia Power', location_confidence: 'confirmed' },
       },
     ])
   })
