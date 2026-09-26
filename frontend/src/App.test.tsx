@@ -155,4 +155,97 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /& compare/ })).not.toBeInTheDocument()
     expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
   })
+
+  describe('savings headline', () => {
+    const SANTEE = 'Santee Cooper'
+
+    // Adds a third utility so hiding one layer leaves a non-empty, non-trivial subset.
+    function withThirdUtility() {
+      const projects = projectsExample()
+      const santee = { ...projects[0], project_id: 'SC_9', utility: SANTEE, project_name: 'Santee line 9' }
+      const [a, b, c, d] = makeOverlaps(4)
+      return {
+        projects: [...projects, santee],
+        overlaps: [
+          { ...a, est_savings_usd: 1200000 }, // DESC–GPC
+          { ...b, est_savings_usd: null }, // DESC–GPC, not estimated
+          { ...c, project_b: santee, est_savings_usd: 300000 }, // DESC–Santee
+          { ...d, project_b: santee, est_savings_usd: null }, // DESC–Santee, not estimated
+        ],
+      }
+    }
+
+    async function headline() {
+      await screen.findByRole('list', { name: /coordination opportunities/i })
+      return screen.getByRole('group', { name: 'Estimated savings' })
+    }
+
+    it('shows the total of known est_savings_usd and the pair count', async () => {
+      const overlaps = makeOverlaps(3).map((o, i) => ({ ...o, est_savings_usd: [709900, 1200000, 300000][i] }))
+      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      render(<App />)
+
+      const group = await headline()
+      expect(within(group).getByText('$2.2M')).toBeInTheDocument() // 709,900 + 1,200,000 + 300,000
+      expect(group).toHaveAttribute('title', '$2,209,900 estimated across 3 pairs')
+      expect(group).toHaveTextContent('est. savings · 3 pairs shown')
+      expect(within(group).getByText('0 not estimated')).toBeInTheDocument()
+    })
+
+    it('excludes null savings from the total and counts them as not estimated', async () => {
+      const { projects, overlaps } = withThirdUtility()
+      vi.mocked(fetchProjects).mockResolvedValue(projects)
+      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      render(<App />)
+
+      const group = await headline()
+      expect(within(group).getByText('$1.5M')).toBeInTheDocument()
+      expect(group).toHaveAttribute('title', '$1,500,000 estimated across 2 pairs')
+      expect(group).toHaveTextContent('4 pairs shown')
+      expect(within(group).getByText('2 not estimated')).toBeInTheDocument()
+    })
+
+    it('recomputes the total and counts when a utility layer is hidden and shown again', async () => {
+      const { projects, overlaps } = withThirdUtility()
+      vi.mocked(fetchProjects).mockResolvedValue(projects)
+      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      render(<App />)
+      const group = await headline()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Georgia Power/ }))
+      expect(within(group).getByText('$300K')).toBeInTheDocument()
+      expect(group).toHaveTextContent('2 pairs shown')
+      expect(within(group).getByText('1 not estimated')).toBeInTheDocument()
+      expect(screen.getByTestId('project-map')).toHaveTextContent('2 overlaps')
+
+      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(SANTEE) }))
+      expect(within(group).getByText('$0')).toBeInTheDocument()
+      expect(group).toHaveTextContent('0 pairs shown')
+      expect(within(group).getByText('0 not estimated')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Georgia Power/ }))
+      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(SANTEE) }))
+      expect(within(group).getByText('$1.5M')).toBeInTheDocument()
+      expect(within(group).getByText('2 not estimated')).toBeInTheDocument()
+    })
+
+    it('counts uploaded pairs (no savings figure) as not estimated without changing the total', async () => {
+      const overlaps = makeOverlaps(6).map((o, i) => ({ ...o, est_savings_usd: i < 2 ? 500000 : null }))
+      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      const csv = 'utility,project_name,lat_center,lon_center,in_service_date\n' +
+        'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01\n'
+      render(<App />)
+      const group = await headline()
+      expect(within(group).getByText('$1M')).toBeInTheDocument()
+      expect(within(group).getByText('4 not estimated')).toBeInTheDocument()
+
+      await chooseUpload(new File([csv], 'savannah-water.csv', { type: 'text/csv' }))
+      fireEvent.click(await screen.findByRole('button', { name: /Add 1 project & compare/ }))
+
+      const after = screen.getByRole('group', { name: 'Estimated savings' })
+      expect(within(after).getByText('$1M')).toBeInTheDocument()
+      expect(after).toHaveTextContent('8 pairs shown')
+      expect(within(after).getByText('6 not estimated')).toBeInTheDocument()
+    })
+  })
 })

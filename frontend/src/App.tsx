@@ -5,7 +5,9 @@ import OverlapDetail from './components/OverlapDetail'
 import ProjectMap from './components/ProjectMap'
 import UploadProjects from './components/UploadProjects'
 import Icon from './components/Icon'
+import { formatPairs, formatUsd, formatUsdCompact } from './format'
 import { compareImports, type ImportBatch } from './importProjects'
+import { summarizeSavings } from './savings'
 import type { Overlap, Project } from './types'
 import './workspace.css'
 
@@ -38,6 +40,7 @@ function App() {
   const utilities = [...new Set(projects.map(p => p.utility))]
   const visibleProjects = useMemo(() => projects.filter(p => !hidden.includes(p.utility)), [projects, hidden])
   const visibleOverlaps = useMemo(() => overlaps.filter(o => !hidden.includes(o.project_a.utility) && !hidden.includes(o.project_b.utility)), [overlaps, hidden])
+  const savings = useMemo(() => summarizeSavings(visibleOverlaps), [visibleOverlaps])
   const selected = visibleOverlaps.find(o => o.overlap_id === selectedId)
   const search = query.toLowerCase().trim()
   const filteredProjects = visibleProjects.filter(p => `${p.project_name} ${p.utility}`.toLowerCase().includes(search))
@@ -67,6 +70,7 @@ function App() {
         <aside className="workspace-sidebar">
           <div className="sidebar-intro"><p className="eyebrow">SHARED GROUND</p><h2>Regional plans.<br />Shared opportunities.</h2><p>See where your next project meets someone else’s.</p></div>
           <div className="workspace-metrics"><div><strong>{projects.length.toString().padStart(2, '0')}</strong><span>Projects</span></div><div><strong>{utilities.length.toString().padStart(2, '0')}</strong><span>Utilities</span></div><div><strong>{overlaps.length.toString().padStart(2, '0')}</strong><span>Nearby pairs</span></div></div>
+          <div className="savings-headline" role="group" aria-label="Estimated savings" title={`${formatUsd(savings.totalUsd)} estimated across ${formatPairs(savings.estimatedCount)}`}><strong>{formatUsdCompact(savings.totalUsd)}</strong><div><span>est. savings · {formatPairs(savings.pairCount)} shown</span><small>{savings.notEstimatedCount} not estimated</small></div></div>
           <details className="utility-filters"><summary><Icon name="layers" size={15} /> Map layers <span>{utilities.length}</span></summary><div>{utilities.map(utility => <label key={utility}><input type="checkbox" checked={!hidden.includes(utility)} onChange={() => toggleUtility(utility)} /><i style={{ background: utilityColor(utility) }} /><span>{utility}</span><small>{projects.filter(p => p.utility === utility).length}</small></label>)}</div></details>
           <div className="workspace-tabs" role="tablist" aria-label="Workspace data">{(['opportunities', 'projects', 'imports'] as Tab[]).map(t => <button key={t} role="tab" id={`tab-${t}`} aria-controls="workspace-panel" aria-selected={tab === t} tabIndex={tab === t ? 0 : -1} onKeyDown={e => {
               const tabs: Tab[] = ['opportunities', 'projects', 'imports']
