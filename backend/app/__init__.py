@@ -1,0 +1,1 @@
+"""GridWatch FastAPI application package."""

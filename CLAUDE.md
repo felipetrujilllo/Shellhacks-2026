@@ -55,8 +55,8 @@ test command — an empty entry means that layer is unguarded, and the gate will
 
 | Layer | Build | Test | Lint/typecheck |
 |-------|-------|------|----------------|
-| backend | none yet | none yet (planned: `pytest`) | none yet (planned: `ruff check`) |
-| frontend | none yet (planned: `npm run build`) | none yet (planned: `vitest`) | none yet (planned: `tsc --noEmit`) |
+| backend | `cd backend && .venv/bin/python -m compileall -q app pipeline` (one-time setup: see README) | `cd backend && .venv/bin/python -m pytest` | `cd backend && .venv/bin/ruff check .` |
+| frontend | `cd frontend && npm run build` | `cd frontend && npx vitest run` | `cd frontend && npx tsc -b` (bare `tsc --noEmit` checks nothing: root tsconfig is references-only) |
 
 **Smoke test (demo path):** <one command or short script that exercises the real end-to-end
 path, e.g. start backend, hit the core endpoint, assert on the response shape — "none yet"
