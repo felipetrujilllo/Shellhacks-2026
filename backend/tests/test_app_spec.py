@@ -134,20 +134,36 @@ def test_both_components_deploy_from_the_branch_claude_md_calls_demo_safe(api, w
     assert match, "CLAUDE.md ## Branches no longer names the demo-safe branch"
     demo_branch = match.group(1)
     for component in (api, web):
-        assert component["github"]["branch"] == demo_branch, (
-            f"{component['name']} deploys from {component['github']['branch']!r}, but CLAUDE.md "
+        assert component["git"]["branch"] == demo_branch, (
+            f"{component['name']} deploys from {component['git']['branch']!r}, but CLAUDE.md "
             f"says {demo_branch!r} is the demo-safe branch"
         )
 
 
-def test_github_repo_matches_this_checkout(api, web):
+def owner_repo(url: str) -> str | None:
+    """`owner/repo` out of an https or ssh GitHub URL, with or without .git."""
+    match = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?\s*$", url.strip())
+    return match.group(1) if match else None
+
+
+def test_clone_url_matches_this_checkout(api, web):
     remote = git("remote", "get-url", "origin")
     if remote.returncode != 0:
         pytest.skip("no git remote named origin in this checkout")
-    match = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?\s*$", remote.stdout.strip())
-    assert match, f"could not read owner/repo out of {remote.stdout.strip()!r}"
+    expected = owner_repo(remote.stdout)
+    assert expected, f"could not read owner/repo out of {remote.stdout.strip()!r}"
     for component in (api, web):
-        assert component["github"]["repo"] == match.group(1)
+        assert owner_repo(component["git"]["repo_clone_url"]) == expected
+
+
+def test_clone_url_is_anonymous_https(api, web):
+    """App Platform clones this with no credentials, which only works over https against a
+    public repo. An ssh URL (git@github.com:...) would need a deploy key the spec doesn't
+    have, and the build would fail at the clone step before anything useful happens."""
+    for component in (api, web):
+        url = component["git"]["repo_clone_url"]
+        assert url.startswith("https://"), f"{component['name']} clones {url!r}, not https"
+        assert "@" not in url, f"{component['name']} clone URL carries credentials: {url!r}"
 
 
 def test_spec_holds_no_credentials():

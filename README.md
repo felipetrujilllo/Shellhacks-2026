@@ -93,8 +93,11 @@ dependency list stays in one place.
 1. Make sure `main` is current: `/test-gate full` must be APPROVE on `test-branch-1`, then
    promote it (see `CLAUDE.md` `## Branches`). App Platform builds `main`, never
    `test-branch-1`.
-2. Authorize DigitalOcean's GitHub app for `felipetrujilllo/Shellhacks-2026` (the repo is
-   private, so this cannot be skipped): **Apps → Create App → GitHub → Manage access**.
+2. The repo must be **public**. `.do/app.yaml` clones it anonymously over https (a `git:`
+   source) rather than through DigitalOcean's GitHub integration, because that integration
+   only reaches repos on the connecting user's own GitHub account — and this one lives on a
+   teammate's personal account. Nothing to authorize; if the repo ever goes private again the
+   build fails at the clone step.
 3. Create the app from the spec, not from the wizard's guesses:
    ```bash
    doctl auth init                       # paste a personal access token
@@ -127,7 +130,13 @@ dependency list stays in one place.
 
 ### Redeploying
 
-- Merging into `main` redeploys both components automatically (`deploy_on_push: true`).
+- **Redeploys are manual.** A public-clone (`git:`) source can't redeploy on push, so after
+  promoting `test-branch-1` to `main`, trigger it yourself:
+  ```bash
+  doctl apps list                         # find the app id
+  doctl apps create-deployment <app-id>   # rebuilds from the current main
+  ```
+  Upside: a stray push to `main` can never take the live demo down on its own.
 - After editing `.do/app.yaml`: `doctl apps update <app-id> --spec .do/app.yaml`.
   **This wipes `DATABASE_URL`**, because the committed spec declares the key with no value.
   Set it again in the console (step 4) and re-check `/api/overlaps`. To avoid the wipe

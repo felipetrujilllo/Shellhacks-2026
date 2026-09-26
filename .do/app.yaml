@@ -36,12 +36,17 @@ ingress:
 
 services:
   - name: api
-    github:
-      repo: felipetrujilllo/Shellhacks-2026
-      # main is the stable, demo-safe branch (CLAUDE.md ## Branches). Day-to-day work on
-      # test-branch-1 does not redeploy; a merge into main does.
+    # A public clone URL (`git:`), not the GitHub integration. That integration needs the
+    # DigitalOcean account that owns the app to have GitHub linked AND DigitalOcean's
+    # GitHub app installed on the repo's owner - and the repo belongs to a teammate's
+    # personal account, which only that teammate can install apps on. The repo is public,
+    # so App Platform clones it anonymously instead.
+    # Cost: this source type can't redeploy on push, so redeploys are manual
+    # (`doctl apps create-deployment <app-id>`) - see README "Redeploying".
+    git:
+      repo_clone_url: https://github.com/felipetrujilllo/Shellhacks-2026.git
+      # main is the stable, demo-safe branch (CLAUDE.md ## Branches).
       branch: main
-      deploy_on_push: true
     source_dir: backend
     environment_slug: python
     # No build_command: the Python buildpack runs `pip install -r requirements.txt`, and
@@ -72,10 +77,9 @@ services:
 
 static_sites:
   - name: web
-    github:
-      repo: felipetrujilllo/Shellhacks-2026
+    git:
+      repo_clone_url: https://github.com/felipetrujilllo/Shellhacks-2026.git
       branch: main
-      deploy_on_push: true
     source_dir: frontend
     build_command: npm run build
     # frontend/vite.config.ts sets no build.outDir, so Vite writes its default: dist.
