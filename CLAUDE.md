@@ -61,9 +61,14 @@ test command — an empty entry means that layer is unguarded, and the gate will
 On Windows the venv binaries live in `.venv\Scripts\` instead of `.venv/bin/` (e.g.
 `.venv\Scripts\python.exe -m pytest`, `.venv\Scripts\ruff.exe check .`).
 
-**Smoke test (demo path):** <one command or short script that exercises the real end-to-end
-path, e.g. start backend, hit the core endpoint, assert on the response shape — "none yet"
-until the slice exists>
+**Smoke test (demo path):** `backend/.venv/bin/python scripts/smoke.py` (Windows:
+`backend\.venv\Scripts\python.exe scripts\smoke.py`), from the repo root — starts the API on a
+free port against the demo DB (read-only: no load, no truncate) and checks `/health`, ranked
+`/overlaps` containing the sponsor's 6 reference pairs, and a 404 for an unknown overlap; stops
+the server it started. To check the deployed site instead, set `BASE_URL` to the **API base,
+including `/api`** — the deploy serves the frontend at `/` and the API at `/api`, so e.g.
+`BASE_URL=https://<app>.ondigitalocean.app/api` (the site root alone hits the frontend and fails).
+Needs `DATABASE_URL` in the repo-root `.env`.
 
 ## Tickets
 - Tasks are tracked as GitHub Issues (`gh issue list`). The `pm` and `plan-slice` skills
