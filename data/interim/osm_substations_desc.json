@@ -1,0 +1,373 @@
+[
+  {
+    "osm_id": "way/1062495953",
+    "name": "Pritchardville Substation",
+    "lat": 32.2385568,
+    "lon": -80.9612168,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1064274436",
+    "name": "Burton Central Substation",
+    "lat": 32.4383705,
+    "lon": -80.7192555,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1064802533",
+    "name": "Port Royal Substation",
+    "lat": 32.3970574,
+    "lon": -80.685873,
+    "operator": "South Carolina Electric & Gas"
+  },
+  {
+    "osm_id": "way/1064802545",
+    "name": "Frogmore Substation",
+    "lat": 32.3991323,
+    "lon": -80.5711266,
+    "operator": "South Carolina Electric & Gas"
+  },
+  {
+    "osm_id": "way/1065416827",
+    "name": "Hugh K. Leatherman Terminal Substation",
+    "lat": 32.8423465,
+    "lon": -79.9469778,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/1065670067",
+    "name": "Williams Gas Turbine Substation",
+    "lat": 33.0149206,
+    "lon": -79.930453,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/1065939234",
+    "name": "Estill Substation",
+    "lat": 32.7575417,
+    "lon": -81.2406874,
+    "operator": "South Carolina Electric & Gas"
+  },
+  {
+    "osm_id": "way/1065939238",
+    "name": "Brunson Substation",
+    "lat": 32.9273062,
+    "lon": -81.1925204,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/1071426792",
+    "name": "Ulmer Substation",
+    "lat": 33.1010856,
+    "lon": -81.2017346,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/1071426812",
+    "name": "Barnwell City Substation",
+    "lat": 33.2467015,
+    "lon": -81.3651292,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1075801515",
+    "name": "Bamberg Substation",
+    "lat": 33.2896829,
+    "lon": -81.0414349,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1077428651",
+    "name": "Neeses Substation",
+    "lat": 33.5351892,
+    "lon": -81.1164091,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1077742259",
+    "name": "Cayce Substation",
+    "lat": 33.972858,
+    "lon": -81.0637152,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1078487455",
+    "name": "Rosewood Substation",
+    "lat": 33.985739,
+    "lon": -80.9932556,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/1083493567",
+    "name": "Pelion Substation",
+    "lat": 33.7983577,
+    "lon": -81.2641413,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/1097237376",
+    "name": "Jack Primus Substation",
+    "lat": 32.9193841,
+    "lon": -79.9044954,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/123121680",
+    "name": "Grove Street Substation",
+    "lat": 32.8023779,
+    "lon": -79.9555492,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/1317440404",
+    "name": "Howard Street",
+    "lat": 33.9860798,
+    "lon": -81.005719,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/1363130971",
+    "name": "Charleston East Side #216",
+    "lat": 32.7792022,
+    "lon": -79.9261812,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/1385134873",
+    "name": "President Street Substation",
+    "lat": 32.7840577,
+    "lon": -79.9491613,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/184867939",
+    "name": "Pepperhill Substation",
+    "lat": 32.9380476,
+    "lon": -80.0852537,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/185032900",
+    "name": "Canadys Substation",
+    "lat": 33.0640963,
+    "lon": -80.6205999,
+    "operator": "South Carolina Electric & Gas Company"
+  },
+  {
+    "osm_id": "way/185130609",
+    "name": "Denny Terrace Substation",
+    "lat": 34.0576091,
+    "lon": -81.061561,
+    "operator": "South Carolina Electric & Gas Company"
+  },
+  {
+    "osm_id": "way/185230437",
+    "name": "Cromer Road Substation",
+    "lat": 34.0040223,
+    "lon": -81.1561185,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/185230439",
+    "name": "Springdale Substation",
+    "lat": 33.98202,
+    "lon": -81.1178417,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/185317032",
+    "name": "Yemassee Substation",
+    "lat": 32.6974259,
+    "lon": -80.8637929,
+    "operator": "South Carolina Electric & Gas Company"
+  },
+  {
+    "osm_id": "way/185362029",
+    "name": "Burton Substation",
+    "lat": 32.4364883,
+    "lon": -80.7210159,
+    "operator": "South Carolina Electric & Gas Company"
+  },
+  {
+    "osm_id": "way/185400354",
+    "name": "Dunbar Road Substation",
+    "lat": 33.9417663,
+    "lon": -81.0854957,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/197699825",
+    "name": "Bayview Substation",
+    "lat": 32.801111,
+    "lon": -79.8872234,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/229116248",
+    "name": "Mount Pleasant Substation",
+    "lat": 32.8272582,
+    "lon": -79.8489277,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/229116275",
+    "name": "Cainhoy Substation",
+    "lat": 32.941402,
+    "lon": -79.8422757,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/229116300",
+    "name": "Hobcaw Substation",
+    "lat": 32.8429796,
+    "lon": -79.8752257,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/229116306",
+    "name": "Hamlin Substation",
+    "lat": 32.859937,
+    "lon": -79.7884409,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/263443280",
+    "name": "Charlotte Street Substation",
+    "lat": 32.7906117,
+    "lon": -79.9281659,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/301007168",
+    "name": "Bee Street Substation",
+    "lat": 32.7864626,
+    "lon": -79.9510882,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/301848006",
+    "name": "St. Andrews Substation",
+    "lat": 32.7801876,
+    "lon": -79.988828,
+    "operator": "SCE&G"
+  },
+  {
+    "osm_id": "way/490789511",
+    "name": "Savage Substation",
+    "lat": 32.8023416,
+    "lon": -80.0391631,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/490789515",
+    "name": "Stono Park Substation",
+    "lat": 32.7863051,
+    "lon": -80.0243066,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/491927098",
+    "name": "Meeting Street Substation",
+    "lat": 32.8054218,
+    "lon": -79.945311,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/495084142",
+    "name": "Isle of Palms Substation",
+    "lat": 32.7886156,
+    "lon": -79.7891455,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/495306293",
+    "name": "Thomas Island Substation",
+    "lat": 32.874804,
+    "lon": -79.92664,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/498828317",
+    "name": "Baldock Substation",
+    "lat": 33.0894775,
+    "lon": -81.4232584,
+    "operator": "South Carolina Electric & Gas Company"
+  },
+  {
+    "osm_id": "way/498828323",
+    "name": "Fairfax Substation",
+    "lat": 32.9891574,
+    "lon": -81.2335961,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/498967268",
+    "name": "Bluffton Substation",
+    "lat": 32.2350272,
+    "lon": -80.8533836,
+    "operator": "South Carolina Electric & Gas"
+  },
+  {
+    "osm_id": "way/499649718",
+    "name": "Lexington Substation",
+    "lat": 33.9884855,
+    "lon": -81.2338379,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/513963984",
+    "name": "Uptown 1300 Henderson Street",
+    "lat": 34.0058054,
+    "lon": -81.0266755,
+    "operator": "Dominion Energy South Carolina"
+  },
+  {
+    "osm_id": "way/550500246",
+    "name": "West Columbia Substation",
+    "lat": 33.988231,
+    "lon": -81.0708571,
+    "operator": "Dominion Energy"
+  },
+  {
+    "osm_id": "way/653575354",
+    "name": "Platt Springs Road",
+    "lat": 33.9069458,
+    "lon": -81.2277075,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/668152069",
+    "name": "Dixiana Substation",
+    "lat": 33.9230274,
+    "lon": -81.089842,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/722704907",
+    "name": "Orangeburg Primary Substation",
+    "lat": 33.4595436,
+    "lon": -80.8889142,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/988763741",
+    "name": "Cayce Industrial Park Substation",
+    "lat": 33.9621858,
+    "lon": -81.1348532,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/993540535",
+    "name": "Wagener Substation",
+    "lat": 33.6501119,
+    "lon": -81.3605659,
+    "operator": "South Carolina Gas & Electric"
+  },
+  {
+    "osm_id": "way/993772289",
+    "name": "Fairfax Substation",
+    "lat": 32.9543755,
+    "lon": -81.2318604,
+    "operator": "South Carolina Gas & Electric"
+  }
+]

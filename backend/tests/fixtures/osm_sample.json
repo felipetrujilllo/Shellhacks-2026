@@ -1,0 +1,17 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API (recorded sample, trimmed)",
+  "elements": [
+    {"type": "way", "id": 200, "center": {"lat": 32.3521162, "lon": -81.1751124},
+     "tags": {"name": "McIntosh Substation", "operator": "Georgia Power", "power": "substation"}},
+    {"type": "node", "id": 100, "lat": 32.7801876, "lon": -79.988828,
+     "tags": {"name": "St. Andrews Substation", "operator": "SCE&G", "power": "substation"}},
+    {"type": "relation", "id": 300, "center": {"lat": 33.6601273, "lon": -82.1959307},
+     "tags": {"name": "Thurmond Substation", "operator": "Georgia Power", "power": "substation", "type": "multipolygon"}},
+    {"type": "way", "id": 400, "center": {"lat": 31.0, "lon": -84.6},
+     "tags": {"operator": "Georgia Power", "power": "substation"}},
+    {"type": "way", "id": 500, "center": {"lat": 31.1, "lon": -84.7}},
+    {"type": "way", "id": 600,
+     "tags": {"name": "Coordless Substation", "operator": "Georgia Power", "power": "substation"}}
+  ]
+}
