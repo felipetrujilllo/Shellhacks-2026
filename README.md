@@ -157,6 +157,20 @@ the bundle when it builds, so a run-time-only value would never reach the browse
 component with only a `pyproject.toml`, and `.` makes it install this project, so the
 dependency list stays in one place.
 
+### Live site
+
+**https://gridwatch-b3trj.ondigitalocean.app** — the frontend at `/`, the API at `/api`
+(App Platform app `gridwatch`, built from `main`). Check it with the smoke test against the
+**API base, including `/api`**:
+
+```bash
+BASE_URL=https://gridwatch-b3trj.ondigitalocean.app/api backend/.venv/bin/python scripts/smoke.py
+BASE_URL=https://gridwatch-b3trj.ondigitalocean.app/api backend/.venv/bin/python scripts/check_demo_data.py
+```
+
+It reads the same Tiger Data database as local dev, so reloading the demo data (above) shows
+up on the live site immediately; code changes only after a promote + manual redeploy (below).
+
 ### First deploy (once, by hand — needs a DigitalOcean account with the repo connected)
 
 1. Make sure `main` is current: `/test-gate full` must be APPROVE on `test-branch-1`, then
@@ -191,7 +205,7 @@ dependency list stays in one place.
 5. Check it, in this order (`<app>` is the assigned `*.ondigitalocean.app` host):
    ```bash
    curl https://<app>/api/health      # {"status":"ok"} — no database needed
-   curl https://<app>/api/overlaps    # 6 rows; if this 500s, the secret is wrong
+   curl https://<app>/api/overlaps    # 39 rows (6 on the sponsor sample); a 500 = bad secret
    open  https://<app>/               # the frontend, talking to /api
    ```
    `/api/health` passing while `/api/overlaps` fails means the app is up but the credential
