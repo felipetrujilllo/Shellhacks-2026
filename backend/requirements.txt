@@ -1,0 +1,7 @@
+# Exists for DigitalOcean's Python buildpack, which only recognizes a Python component if it
+# finds requirements.txt, Pipfile or setup.py in the source dir — pyproject.toml alone is not
+# enough. The single line below installs THIS project, so pyproject.toml stays the one place
+# the dependency list lives. Do not paste package names here.
+#
+# Local dev is unchanged: .venv/bin/pip install -e ".[dev]"  (see README)
+.

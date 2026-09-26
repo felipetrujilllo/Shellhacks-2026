@@ -1,0 +1,91 @@
+# DigitalOcean App Platform spec for GridWatch (#8). Version-controlled on purpose: the
+# console is not the source of truth, this file is. README "Deploying to DigitalOcean" has
+# the procedure; the DATABASE_URL secret is deliberately NOT in here.
+#
+#   doctl apps create --spec .do/app.yaml              # first time
+#   doctl apps update <app-id> --spec .do/app.yaml     # after editing this file
+#
+# One app, two components, ONE origin:
+#   web (static site) -> /       the Vite build
+#   api (FastAPI)     -> /api    uvicorn; the /api prefix is stripped before the app sees it
+#
+# Serving both from one app is what breaks the URL cycle (the backend needs the frontend's
+# origin for CORS, the frontend needs the backend's URL at build time). Same origin means
+# FRONTEND_ORIGIN is just ${APP_URL}, so neither component has to know the other's hostname
+# and nothing is hardcoded. It also means the demo makes same-origin requests, so the CORS
+# middleware never has to be right for the demo to work.
+name: gridwatch
+region: nyc
+
+ingress:
+  rules:
+    # Order matters: first matching prefix wins, so /api must come before /.
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: api
+        # false (the default) => the service receives /health, /projects, /overlaps, which
+        # is what app/routes.py serves. Flip this to true and every route 404s.
+        preserve_path_prefix: false
+    - match:
+        path:
+          prefix: /
+      component:
+        name: web
+
+services:
+  - name: api
+    github:
+      repo: felipetrujilllo/Shellhacks-2026
+      # main is the stable, demo-safe branch (CLAUDE.md ## Branches). Day-to-day work on
+      # test-branch-1 does not redeploy; a merge into main does.
+      branch: main
+      deploy_on_push: true
+    source_dir: backend
+    environment_slug: python
+    # No build_command: the Python buildpack runs `pip install -r requirements.txt`, and
+    # backend/requirements.txt is the single line `.` — this project, from pyproject.toml.
+    # Adding a build_command here would just install everything a second time.
+    run_command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    http_port: 8080 # App Platform sets $PORT to this
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      # The route app/routes.py serves; it answers without touching Postgres.
+      http_path: /health
+      initial_delay_seconds: 15
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        # No value on purpose. The Tiger Data credential is set once in the DO console (or
+        # with `doctl apps update --env`) and never committed. Until it is set,
+        # load_settings() raises ConfigError, the service fails to boot and the deploy is
+        # marked failed — loud, instead of a healthy-looking app with an empty API.
+      - key: FRONTEND_ORIGIN
+        scope: RUN_TIME
+        # The frontend is the `web` component of this same app, served at /, so the app's
+        # own URL *is* the frontend's origin. ${web.PUBLIC_URL} would be the same host with
+        # a trailing path, which CORS compares literally and would reject.
+        value: ${APP_URL}
+
+static_sites:
+  - name: web
+    github:
+      repo: felipetrujilllo/Shellhacks-2026
+      branch: main
+      deploy_on_push: true
+    source_dir: frontend
+    build_command: npm run build
+    # frontend/vite.config.ts sets no build.outDir, so Vite writes its default: dist.
+    output_dir: dist
+    envs:
+      - key: VITE_API_URL
+        # BUILD_TIME, not RUN_TIME: Vite inlines import.meta.env.VITE_* into the JS bundle
+        # when it builds. A runtime-only value would never reach the browser, and
+        # frontend/src/api.ts throws when VITE_API_URL is empty.
+        scope: BUILD_TIME
+        # The app URL plus the api component's ingress path, i.e. https://<app>/api.
+        # Derived, so renaming the app or moving the route needs no edit here.
+        value: ${api.PUBLIC_URL}
