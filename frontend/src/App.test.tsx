@@ -58,6 +58,26 @@ describe('App', () => {
     expect(screen.getByTestId('project-map')).toHaveTextContent('selected OVL_4')
   })
 
+  it('selecting an overlap in the ranked list opens its detail panel; closing hides it', async () => {
+    render(<App />)
+    expect(screen.queryByRole('region', { name: /opportunity #/i })).not.toBeInTheDocument()
+
+    fireEvent.click(await screen.findByRole('button', { name: /SC line 4/ }))
+
+    // makeOverlaps: OVL_4 is rank 4, SC/GA line 4, distance_mi 4.25, time_gap_days 40.
+    const panel = await screen.findByRole('region', { name: /opportunity #4/i })
+    expect(within(panel).getByText('SC line 4')).toBeInTheDocument()
+    expect(within(panel).getByText('GA line 4')).toBeInTheDocument()
+    expect(within(panel).getByText('4.3 mi')).toBeInTheDocument()
+    expect(within(panel).getByText('40 days')).toBeInTheDocument()
+    expect(within(panel).queryByText('SC line 3')).not.toBeInTheDocument()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('region', { name: /opportunity #/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /SC line 4/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('project-map')).toHaveTextContent('selected null')
+  })
+
   it('shows a visible error alert with the message when the API call fails', async () => {
     vi.mocked(fetchOverlaps).mockRejectedValue(new Error('GET http://api/overlaps failed with status 500'))
     render(<App />)

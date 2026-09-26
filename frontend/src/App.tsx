@@ -1,6 +1,7 @@
 // Page composition + state only: fetching lives in api.ts, rendering in components/.
 import { useEffect, useState } from 'react'
 import { fetchOverlaps, fetchProjects } from './api'
+import OverlapDetail from './components/OverlapDetail'
 import OverlapList from './components/OverlapList'
 import ProjectMap from './components/ProjectMap'
 import type { Overlap, Project } from './types'
@@ -30,6 +31,9 @@ function App() {
     }
   }, [])
 
+  const selectedOverlap =
+    state.status === 'ready' ? state.overlaps.find((o) => o.overlap_id === selectedId) : undefined
+
   return (
     <main className="flex h-screen flex-col">
       <header className="border-b border-slate-200 px-4 py-3">
@@ -58,6 +62,9 @@ function App() {
             />
           </section>
           <aside className="overflow-y-auto border-slate-200 p-4 md:w-96 md:border-l">
+            {selectedOverlap && (
+              <OverlapDetail overlap={selectedOverlap} onClose={() => setSelectedId(null)} />
+            )}
             <h2 className="mb-3 text-lg font-semibold">Top coordination opportunities</h2>
             <OverlapList overlaps={state.overlaps} selectedId={selectedId} onSelect={setSelectedId} />
           </aside>
