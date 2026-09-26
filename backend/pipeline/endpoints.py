@@ -11,16 +11,19 @@ Two entry points:
   Parsers and `pipeline.build_dataset` call this one.
 
 The rule pipeline, in order:
-1. drop a utility prefix ("SAV:", "GTC:") and parenthetical tags ("(USA)", "(1.4 miles)");
+1. drop a utility prefix ("SAV:", "GTC:"), then a Georgia Power program tag ("CC - ",
+   "GRID - "), and parenthetical tags ("(USA)", "(1.4 miles)", "(CC NETWORK IMPROVEMENTS)");
 2. cut at the first ":" — what follows is the work ("Rebuild", "Construct Tap");
-3. cut at the first voltage ("115kV", "115-13.8 kV", "230/115KV") — station names come before
-   it, equipment, circuit numbers and second lines after it;
-4. cut at a work word ("Rebuild", "Tap", "Fold-in"…), together with any dash in front of it;
+3. cut at the first voltage ("115kV", "115-13.8 kV", "230/115KV", a bare "230/25") — station
+   names come before it, equipment, circuit numbers and second lines after it;
+4. cut at a work word ("Rebuild", "Tap", "Replacement", "CC Improvements"…), together with any
+   dash in front of it;
 5. cut at a joiner ("&", "/", ",", "and") — only the first of several lines/sites is kept;
 6. split what is left on dashes (en/em dash, or a hyphen not between two digits) and keep the
    first and last pieces — for a three-station line those are the line's ends;
 7. tidy each endpoint: collapse spaces, drop trailing "Sub"/"Substation"/"Transmission"/
-   "Line"/"Tie"/"Loop". Original casing is kept.
+   "Line"/"Tie"/"Loop" and the equipment being worked on ("Relay", "Bus", "Bank D"…).
+   Original casing is kept.
 """
 
 from __future__ import annotations
@@ -30,12 +33,22 @@ import re
 # A short all-caps utility/region tag at the very start: "SAV: ", "GTC: ", "MEAG: ".
 UTILITY_PREFIX = re.compile(r"^[A-Z]{2,5}:\s*")
 
+# Georgia Power program tags that open a name, alone or after a utility prefix: "CC - " (customer
+# connection) and "GRID - ". Only at the start and only before a dash, so a station whose name
+# merely contains the letters ("CCO06", "Grider") is never touched.
+PROGRAM_PREFIX = re.compile(r"^(?:CC|GRID)\s*[-–—]\s*")
+
 # "(Queensboro-James Island Sect)", "(USA)", "(1.4 miles)".
 PARENTHETICAL = re.compile(r"\s*\([^)]*\)")
 
 # "115kV", "115 kV", "230-115kV", "115-13.8 kV", "230/115KV". The hyphen/slash here joins
-# two numbers, which is why a hyphen between digits is never an endpoint separator.
-VOLTAGE = re.compile(r"\b\d+(?:\.\d+)?(?:\s*[-/]\s*\d+(?:\.\d+)?)*\s*kV\b", re.IGNORECASE)
+# two numbers, which is why a hyphen between digits is never an endpoint separator. Two numbers
+# joined by a slash are a voltage pair even without "kV" ("CASS PINE 230/25 NEW SUB").
+VOLTAGE = re.compile(
+    r"\b\d+(?:\.\d+)?(?:\s*[-/]\s*\d+(?:\.\d+)?)*\s*kV\b"
+    r"|\b\d+(?:\.\d+)?\s*/\s*\d+(?:\.\d+)?\b",
+    re.IGNORECASE,
+)
 
 # Words that start the description of the work rather than naming a place. A dash right
 # before one of them ("115KV-Rebld", "Tap – Construct") is not a separator, so it goes too.
@@ -43,8 +56,14 @@ WORK_WORDS = (
     "Rebuilds?",
     "Rebld",
     "Construct",
-    "Replace",
-    "Upgrade",
+    "Replace(?:ment)?",
+    "Installation",
+    "Modernization",
+    "Removal",
+    "Upgrades?",
+    # "- CC IMPROVEMENTS" closes a name; the program tag goes with it so it is never an endpoint.
+    r"(?:CC\s+)?Improvements?",
+    "Needs",
     "Reconductor",
     "Tap",
     "Fold-in",
@@ -58,9 +77,13 @@ JOINER = re.compile(r"\s*(?:&|/|,|\band\b)", re.IGNORECASE)
 # "1-3" does not).
 SEPARATOR = re.compile(r"\s*(?:–|—|(?<!\d)-|-(?!\d))\s*")
 
-# Descriptors that trail a station name without being part of it.
+# Descriptors that trail a station name without being part of it: what the station is, and the
+# equipment a work word was about ("KLONDIKE RELAY MODERNIZATION", "MELDRIM BANK D REPLACEMENT").
+# Only ever stripped from the end, and never the whole name.
 TRAILING_DESCRIPTOR = re.compile(
-    r"(?:\s+(?:Sub|Substation|Transmission|Line|Tie|Loop)\b)+$", re.IGNORECASE
+    r"(?:\s+(?:Sub|Substation|Transmission|Line|Tie|Loop"
+    r"|Relay|Bus|Breaker|Equipment|(?:Capacitor\s+)?Bank(?:\s+[A-Z])?)\b)+$",
+    re.IGNORECASE,
 )
 
 # Names the rules cannot read correctly, keyed by project_id, each with its explicit result.
@@ -81,6 +104,10 @@ ENDPOINT_OVERRIDES: dict[str, tuple[str, str | None]] = {
     # (DESC's Hooks - Thurmond line ends there too); "THURMOND DAM #5" matches nothing.
     "20793": ("EVANS PRIMARY", "THURMOND"),
     "20794": ("EVANS PRIMARY", "THURMOND"),
+    # Georgia Power: "SAV: CC - HYUNDAI MOTORS SAVANNAH AKA. PROJECT EA", the customer connection
+    # for Hyundai's Metaplant near Ellabell (Bryan County, west of Savannah). The rules keep the
+    # whole alias; OSM names the plant's station "Hyundai Motors Substation".
+    "19523": ("HYUNDAI MOTORS", None),
 }
 
 
@@ -99,6 +126,7 @@ def _tidy(name: str) -> str:
 def split_endpoints(project_name: str) -> tuple[str, str | None]:
     """(name_a, name_b) for a project name; name_b is None for a single-site project."""
     text = UTILITY_PREFIX.sub("", project_name.strip())
+    text = PROGRAM_PREFIX.sub("", text)
     text = PARENTHETICAL.sub("", text)
     text = text.split(":", 1)[0]
     for pattern in (VOLTAGE, WORK_TERM, JOINER):

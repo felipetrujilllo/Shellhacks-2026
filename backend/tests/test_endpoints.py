@@ -1,4 +1,4 @@
-"""Tests for splitting project names into endpoint substation names (#21)."""
+"""Tests for splitting project names into endpoint substation names (#21, #29)."""
 
 import csv
 import re
@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from pipeline.endpoints import ENDPOINT_OVERRIDES, endpoints_for, split_endpoints
+from pipeline.load import read_project_csv, to_engine_project
+from pipeline.overlap import detect_overlaps
 
 REPO_ROOT = Path(__file__).parents[2]
 SPONSOR_CSV = REPO_ROOT / "data" / "seed" / "projects_seed.csv"
@@ -192,3 +194,131 @@ def test_endpoints_for_prefers_the_override():
 
 def test_endpoints_for_falls_back_to_the_rules():
     assert endpoints_for("6808 S", "Okatie-Bluffton 115kV: Rebuild") == ("Okatie", "Bluffton")
+
+
+# --- Georgia Power program tags and more work words (#29) ----------------------------
+
+PROJECTS_CSV = REPO_ROOT / "data" / "seed" / "projects.csv"
+PROGRAM_TAGS = {"cc", "grid"}
+
+
+def gpc_names() -> dict[str, str]:
+    return {row["project_id"]: row["project_name"] for row in read_rows(GPC_CSV)}
+
+
+def test_no_gpc_project_yields_a_program_tag_as_an_endpoint():
+    names = gpc_names()
+    tagged = {pid for pid, name in names.items() if re.match(r"(?:SAV: )?(?:CC|GRID) -", name)}
+    assert len(tagged) == 22  # the names this ticket is about, so the check below is not vacuous
+
+    for project_id, name in names.items():
+        # The rules alone, and what build_dataset actually uses (overrides first).
+        for endpoints in (split_endpoints(name), endpoints_for(project_id, name)):
+            words = {w.lower() for e in endpoints if e for w in re.findall(r"\w+", e)}
+            assert not words & PROGRAM_TAGS, (project_id, name, endpoints)
+
+
+@pytest.mark.parametrize(
+    ("project_id", "expected"),
+    [
+        # "CC - " / "GRID - " open the name like a utility prefix, also after "SAV:".
+        ("19187", ("BREMEN", "CROOKED CREEK")),  # GRID - BREMEN - CROOKED CREEK (APC) 115 KV
+        ("18573", ("ARKWRIGHT", "LLOYD SHOALS")),  # GRID - ARKWRIGHT - LLOYD SHOALS 115KV
+        ("19966", ("BIG OGEECHEE", None)),  # SAV: CC - BIG OGEECHEE 500/230KV (CC NETWORK ...)
+        ("20717", ("TOMOCHICHI", None)),  # CC - TOMOCHICHI 500/230KV SOLUTION (CC NETWORK ...)
+        ("20781", ("SUMMER LAKE", "VILLA RICA")),  # CC - SUMMER LAKE - VILLA RICA 230KV REBUILD
+        # A trailing "- CC IMPROVEMENTS" is work, not a third station.
+        ("20152", ("CASS PINE", "HILL VIEW")),  # CC - CASS PINE- HILL VIEW 230 KV LINE- CC IMPR.
+        ("20150", ("HILL VIEW", None)),  # CC - HILL VIEW & GRASSY HOLLOW SUB - CC IMPROVEMENTS
+        # "230/25" is a voltage pair even without "kV"; QCELLS is the customer.
+        ("20151", ("CASS PINE", None)),  # CC - CASS PINE 230/25 NEW SUB - QCELLS - CC IMPR.
+        # OSM names switching stations "... Switching Station", so that part is kept.
+        ("20243", ("GARRETT ROAD SWITCHING STATION", "TRAE LANE")),
+        ("20771", ("GULLATT ROAD", None)),  # CC - GULLATT ROAD TRANSMISSION IMPROVEMENTS
+        ("20774", ("VILLA RICA", None)),  # CC - VILLA RICA UPGRADES (CC NETWORK IMPROVEMENTS)
+        ("20018", ("QTS FAYETTEVILLE", None)),  # CC - QTS FAYETTEVILLE TRANSMISSION NEEDS
+        ("19706", ("GAINESVILLE #2", None)),  # GRID - GAINESVILLE #2 EQUIPMENT REPLACEMENT
+        # Installation / Modernization / Replacement / Removal, and the equipment before them.
+        ("20490", ("KLONDIKE", None)),  # KLONDIKE RELAY MODERNIZATION
+        ("18832", ("FORTSON", None)),  # MEAG: FORTSON SUBSTATION MODERNIZATION
+        ("19999", ("ROBINS SPRING", None)),  # GTC: ROBINS SPRING BUS REPLACEMENT
+        ("20001", ("ROBINS SPRING", None)),  # GTC: ROBINS SPRING CAPACITOR BANK INSTALLATION
+        ("20796", ("MELDRIM", None)),  # SAV: MELDRIM BANK D REPLACEMENT
+        ("21022", ("OHARA", None)),  # OHARA BREAKER REPLACEMENT
+        # "Reactor" is left alone: it ends real station names ("L Reactor", Savannah River Site).
+        ("18690", ("PALMYRA REACTOR", None)),  # PALMYRA REACTOR REMOVAL
+    ],
+)
+def test_real_gpc_names_split_to_their_station(project_id, expected):
+    assert endpoints_for(project_id, gpc_names()[project_id]) == expected
+
+
+def test_hyundai_is_named_as_osm_names_the_plants_station():
+    name = gpc_names()["19523"]
+    assert name == "SAV: CC - HYUNDAI MOTORS SAVANNAH AKA. PROJECT EA"
+    # Prefixes gone, but the rules keep the alias, which no OSM substation is called ...
+    assert split_endpoints(name) == ("HYUNDAI MOTORS SAVANNAH AKA. PROJECT EA", None)
+    # ... so the override names the station the way OSM does ("Hyundai Motors Substation").
+    assert endpoints_for("19523", name) == ("HYUNDAI MOTORS", None)
+
+
+@pytest.mark.parametrize(
+    ("project_name", "expected"),
+    [
+        # CC / GRID only count as a tag at the very start and before a dash.
+        ("CC ROAD - BETA 115KV REBUILD", ("CC ROAD", "BETA")),
+        ("GRIDLEY - ACCESS 115KV", ("GRIDLEY", "ACCESS")),
+        ("ALPHA - CC 115KV", ("ALPHA", "CC")),
+        # A trailing "- CC IMPROVEMENTS" never becomes the last station, voltage or not.
+        ("CC - ALPHA - BETA - CC IMPROVEMENTS", ("ALPHA", "BETA")),
+        # Equipment words are only stripped from the end, and never the whole name.
+        ("GTC: BANKS CROSSING - POND FORK 115 KV", ("BANKS CROSSING", "POND FORK")),
+        ("Bus Station Road - Relay Hill 115kV: Rebuild", ("Bus Station Road", "Relay Hill")),
+        ("Network Sub: Rebuild", ("Network", None)),
+        ("Breaker Replacement", ("Breaker", None)),
+    ],
+)
+def test_program_tags_and_equipment_words_never_eat_a_station_name(project_name, expected):
+    assert split_endpoints(project_name) == expected
+
+
+def test_every_desc_and_gpc_name_still_yields_a_station():
+    for row in read_rows(DESC_CSV) + read_rows(GPC_CSV):
+        name_a, _ = endpoints_for(row["project_id"], row["project_name"])
+        assert name_a.strip(), row["project_id"]
+
+
+# The regenerated projects.csv (test_build_dataset.py checks it is exactly what the code builds).
+
+LOCATED_BEFORE_29 = 110  # located projects in projects.csv before this ticket
+
+
+def test_the_located_count_does_not_drop():
+    assert len(read_rows(PROJECTS_CSV)) >= LOCATED_BEFORE_29 + 5
+
+
+@pytest.mark.parametrize(
+    ("project_id", "name_a", "confidence"),
+    [
+        ("20490", "KLONDIKE", "confirmed"),
+        ("19999", "ROBINS SPRING", "confirmed"),
+        ("20001", "ROBINS SPRING", "confirmed"),
+        ("20796", "MELDRIM", "confirmed"),
+        # OSM's Hyundai Motors Substation carries no operator tag, so it is only low.
+        ("19523", "HYUNDAI MOTORS", "low"),
+    ],
+)
+def test_projects_the_new_rules_locate_are_on_the_map(project_id, name_a, confidence):
+    row = {r["project_id"]: r for r in read_rows(PROJECTS_CSV)}[project_id]
+
+    assert (row["name_a"], row["location_confidence"]) == (name_a, confidence)
+    assert row["lat_a"] and row["lat_center"]
+
+
+def test_meldrim_is_a_new_savannah_border_overlap():
+    overlaps = detect_overlaps(to_engine_project(r) for r in read_project_csv(PROJECTS_CSV))
+    pairs = {frozenset((o.project_id_a, o.project_id_b)): o for o in overlaps}
+
+    # Georgia Power's Meldrim (west of Savannah) and DESC's Jasper – Okatie line.
+    overlap = pairs[frozenset(("20796", "06367 D - G"))]
+    assert overlap.distance_mi < 25
