@@ -25,7 +25,9 @@ understands without explanation why that overlap matters and roughly what it wou
         ▼
 [Tiger Data: Postgres + PostGIS]   table: projects (above + geom POINT center, geom LINESTRING a→b)
         ▼
-[Overlap detection batch job] → writes `overlaps` table
+[Overlap detection batch job] → writes `project_overlaps` table
+   (the SQL table is project_overlaps, NOT overlaps: OVERLAPS is a reserved word in
+   Postgres, so `CREATE TABLE overlaps` is a syntax error. The endpoint stays GET /overlaps.)
    every (a, b) with a.utility != b.utility AND haversine(center_a, center_b) < 25 mi
    row: overlap_id, project_id_a, project_id_b, distance_mi, time_gap_days, score
    distance must be haversine, R = 3958.8 mi (ST_DistanceSphere, not the spheroid

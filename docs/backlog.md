@@ -21,7 +21,7 @@ on an interactive map, with the sponsor's 6 real overlaps highlighted and ranked
 beside it.
 
 **End-to-end path:** `data/seed/projects_seed.csv` → Python overlap engine (haversine,
-< 25 mi, time gap, rank) → Tiger Data PostGIS `projects` / `overlaps` tables → FastAPI
+< 25 mi, time gap, rank) → Tiger Data PostGIS `projects` / `project_overlaps` tables → FastAPI
 `GET /overlaps` → React `api.ts` → GeoJSON builders → MapLibre layers + ranked list.
 
 **Out of scope for the slice:** GPC PDF parsing, OSM location matching, detail panel,
