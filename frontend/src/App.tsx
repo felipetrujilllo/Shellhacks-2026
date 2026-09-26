@@ -8,6 +8,7 @@ import Icon from './components/Icon'
 import { formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
 import { SUBMITTED_OVERLAP_PREFIX, SUBMITTED_PROJECT_PREFIX, type ImportBatch } from './importProjects'
 import { summarizeSavings } from './savings'
+import { DEFAULT_SORT_KEY, SORT_OPTIONS, sortOverlaps, type SortKey } from './sortOverlaps'
 import type { Overlap, Project } from './types'
 import './workspace.css'
 
@@ -26,6 +27,7 @@ function App() {
   const [focusedProject, setFocusedProject] = useState<Project | null>(null)
   const [tab, setTab] = useState<Tab>('opportunities')
   const [query, setQuery] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY)
   const [uploadOpen, setUploadOpen] = useState(false)
   // This tab's uploads, kept only to show which rows were flagged and left out.
   const [batches, setBatches] = useState<ImportBatch[]>([])
@@ -52,6 +54,7 @@ function App() {
   const search = query.toLowerCase().trim()
   const filteredProjects = visibleProjects.filter(p => `${p.project_name} ${p.utility}`.toLowerCase().includes(search))
   const filteredOverlaps = visibleOverlaps.filter(o => `${o.project_a.project_name} ${o.project_b.project_name} ${o.project_a.utility} ${o.project_b.utility}`.toLowerCase().includes(search))
+  const sortedOverlaps = sortOverlaps(filteredOverlaps, sortKey)
   function select(id: string) { setSelectedId(id); setFocusedProject(null) }
   function toggleUtility(utility: string) {
     setHidden(current => current.includes(utility) ? current.filter(u => u !== utility) : [...current, utility])
@@ -95,10 +98,10 @@ function App() {
             }} onClick={() => { setTab(t); setQuery('') }}>{t === 'opportunities' ? 'Opportunities' : t === 'projects' ? 'Projects' : 'Uploads'}{t === 'imports' && submitted.length > 0 && <span>{submitted.length}</span>}</button>)}</div>
           {tab !== 'imports' && <label className="workspace-search"><Icon name="search" size={16} /><input placeholder={tab === 'projects' ? 'Find a project or utility' : 'Find an opportunity'} aria-label="Search workspace" value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><Icon name="close" size={14} /></button>}</label>}
           <div className="sidebar-content" id="workspace-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-            {tab === 'opportunities' && <><div className="list-caption"><span>{filteredOverlaps.length} nearby pairs</span><span>Ranked by proximity & timing</span></div><ol className="opportunity-list" aria-label="Top coordination opportunities">{filteredOverlaps.map(o => <li key={o.overlap_id}><button className={`opportunity-card ${selectedId === o.overlap_id ? 'selected' : ''}`} aria-pressed={selectedId === o.overlap_id} onClick={() => select(o.overlap_id)}>
+            {tab === 'opportunities' && <><div className="list-caption"><span>{filteredOverlaps.length} nearby pairs</span><label className="list-sort"><span aria-hidden="true">Sort:</span><select aria-label="Sort by" value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}>{SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></label></div><ol className="opportunity-list" aria-label="Top coordination opportunities">{sortedOverlaps.map(o => <li key={o.overlap_id}><button className={`opportunity-card ${selectedId === o.overlap_id ? 'selected' : ''}`} aria-pressed={selectedId === o.overlap_id} onClick={() => select(o.overlap_id)}>
               <div className="opportunity-top"><span>#{o.rank.toString().padStart(2, '0')} · {formatScorePct(o.score)} match</span><span>{o.distance_mi.toFixed(1)} mi apart <Icon name="arrow" size={14} /></span></div>
               <div className="project-pair">{[o.project_a, o.project_b].map(p => <div key={p.project_id}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small></div></div>)}</div>
-              <div className="opportunity-bottom"><span>{o.time_gap_days} days apart in service</span>{o.overlap_id.startsWith(SUBMITTED_OVERLAP_PREFIX) && <span className="new-tag">Uploaded</span>}</div>
+              <div className="opportunity-bottom"><span>{o.time_gap_days} days apart in service</span>{o.est_savings_usd === null ? <span>No estimate</span> : <span title={`${formatUsd(o.est_savings_usd)} est. savings`}>{formatUsdCompact(o.est_savings_usd)} est. savings</span>}{o.overlap_id.startsWith(SUBMITTED_OVERLAP_PREFIX) && <span className="new-tag">Uploaded</span>}</div>
             </button></li>)}</ol>{!filteredOverlaps.length && <div className="empty-state"><Icon name="search" size={24} /><strong>No matching pairs</strong><p>Try another search or turn on more utility layers. Projects must be within 25 miles to appear here.</p></div>}</>}
             {tab === 'projects' && <><div className="list-caption"><span>{filteredProjects.length} projects</span><span>All participating utilities</span></div>{filteredProjects.map(p => <button className={`project-row ${focusedProject?.project_id === p.project_id ? 'active' : ''}`} key={p.project_id} onClick={() => { setFocusedProject(p); setSelectedId(null) }}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small><span>In service {p.in_service_date}</span></div><Icon name="arrow" size={14} /></button>)}{!filteredProjects.length && <p className="empty-state">No projects match your search.</p>}</>}
             {tab === 'imports' && <>{!batches.length && !submitted.length ? <div className="empty-state upload-empty"><Icon name="upload" size={30} /><strong>Your plans belong here.</strong><p>Add a project spreadsheet to find nearby work across utilities.</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>Upload your first file <Icon name="arrow" size={16} /></button><small>CSV spreadsheets · shared with everyone</small></div> : <>{batches.map(b => <div className="batch-card" key={b.id}><Icon name="file" /><strong>{b.filename}</strong><p>{b.rows.filter(r => r.project).length} mapped · {b.rows.filter(r => !r.project).length} flagged</p>{b.rows.filter(r => !r.project).map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}</div>)}{submittedUtilities.map(utility => <div className="batch-card" key={utility}><i style={{ background: utilityColor(utility) }} /><strong>{utility}</strong><p>{submitted.filter(p => p.utility === utility).length} uploaded projects</p></div>)}</>}<p className="session-note">Uploads are saved for everyone and stay after a refresh. Published utility plans are unchanged.</p></>}

@@ -296,6 +296,121 @@ describe('App', () => {
     expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
   })
 
+  describe('opportunity sort', () => {
+    // OVL_n has rank n. Every sort key orders these differently from rank order.
+    //                  rank:   1        2       3        4        5
+    const SCORES = [0.9, 0.8, 0.6, 0.5, 0.3]
+    const DISTANCES = [9.5, 2.25, 14.0, 0.5, 6.75]
+    const GAPS = [400, 20, 90, 700, 5]
+    const SAVINGS = [null, 120000, 1500000, null, 709900]
+
+    function sortFixture() {
+      return makeOverlaps(5).map((o, i) => ({
+        ...o, score: SCORES[i], distance_mi: DISTANCES[i], time_gap_days: GAPS[i], est_savings_usd: SAVINGS[i],
+      }))
+    }
+
+    async function cards() {
+      return within(await screen.findByRole('list', { name: /coordination opportunities/i })).getAllByRole('button')
+    }
+    const cardNames = (items: HTMLElement[]) => items.map(item => within(item).getByText(/^SC line \d$/).textContent)
+    const sortSelect = () => screen.getByRole('combobox', { name: 'Sort by' })
+
+    beforeEach(() => { vi.mocked(fetchOverlaps).mockResolvedValue(sortFixture()) })
+
+    it('renders a "Sort by" control with exactly the four options, defaulting to Score', async () => {
+      await renderApp()
+      await cards()
+      const select = sortSelect()
+      expect(within(select).getAllByRole('option').map(o => o.textContent)).toEqual([
+        'Score % (best first)', 'Distance (closest first)', 'Time gap (shortest first)', 'Est. savings (highest first)',
+      ])
+      expect(select).toHaveValue('score')
+      expect(select).toHaveDisplayValue('Score % (best first)')
+      // It takes the old caption's place; the pair count stays.
+      expect(screen.queryByText('Ranked by proximity & timing')).not.toBeInTheDocument()
+      expect(screen.getByText('5 nearby pairs')).toBeInTheDocument()
+      expect(cardNames(await cards())).toEqual(['SC line 1', 'SC line 2', 'SC line 3', 'SC line 4', 'SC line 5'])
+    })
+
+    it('reorders the cards closest first when Distance is chosen, and shows the choice', async () => {
+      await renderApp()
+      await cards()
+      fireEvent.change(sortSelect(), { target: { value: 'distance' } })
+      expect(sortSelect()).toHaveDisplayValue('Distance (closest first)')
+      // 0.5 (4), 2.25 (2), 6.75 (5), 9.5 (1), 14.0 (3)
+      const items = await cards()
+      expect(cardNames(items)).toEqual(['SC line 4', 'SC line 2', 'SC line 5', 'SC line 1', 'SC line 3'])
+      // The badge keeps the score rank, so #01 is still identifiable.
+      expect(items[3]).toHaveTextContent('#01 ·')
+    })
+
+    it('reorders the cards by savings, highest first, with no-estimate pairs last', async () => {
+      await renderApp()
+      await cards()
+      fireEvent.change(sortSelect(), { target: { value: 'savings' } })
+      expect(sortSelect()).toHaveDisplayValue('Est. savings (highest first)')
+      const items = await cards()
+      expect(cardNames(items)).toEqual(['SC line 3', 'SC line 5', 'SC line 2', 'SC line 1', 'SC line 4'])
+      expect(within(items[3]).getByText('No estimate')).toBeInTheDocument()
+      expect(within(items[4]).getByText('No estimate')).toBeInTheDocument()
+    })
+
+    it('reorders the cards shortest gap first when Time gap is chosen', async () => {
+      await renderApp()
+      await cards()
+      fireEvent.change(sortSelect(), { target: { value: 'time_gap' } })
+      // 5 (5), 20 (2), 90 (3), 400 (1), 700 (4)
+      expect(cardNames(await cards())).toEqual(['SC line 5', 'SC line 2', 'SC line 3', 'SC line 1', 'SC line 4'])
+    })
+
+    it('composes with the search filter: only matching cards, in the chosen order', async () => {
+      const overlaps = sortFixture().map((o, i) => ({
+        ...o, project_b: { ...o.project_b, project_name: i % 2 === 0 ? `Match line ${i + 1}` : `Other line ${i + 1}` },
+      }))
+      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      await renderApp()
+      await cards()
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search workspace' }), { target: { value: 'Match' } })
+      fireEvent.change(sortSelect(), { target: { value: 'distance' } })
+      // Matches are ranks 1, 3, 5 -> by distance: 6.75 (5), 9.5 (1), 14.0 (3)
+      expect(cardNames(await cards())).toEqual(['SC line 5', 'SC line 1', 'SC line 3'])
+      expect(screen.getByText('3 nearby pairs')).toBeInTheDocument()
+    })
+
+    it('shows distance, time gap, score % and est. savings (or "No estimate") on each card', async () => {
+      await renderApp()
+      const items = await cards()
+      // Rank 3: 14.0 mi, 90 days, 60%, $1.5M
+      expect(items[2]).toHaveTextContent('14.0 mi apart')
+      expect(items[2]).toHaveTextContent('90 days apart in service')
+      expect(items[2]).toHaveTextContent('· 60% match')
+      expect(within(items[2]).getByText('$1.5M est. savings')).toHaveAttribute('title', '$1,500,000 est. savings')
+      expect(within(items[2]).queryByText('No estimate')).not.toBeInTheDocument()
+      // Rank 1: no savings estimate
+      expect(items[0]).toHaveTextContent('9.5 mi apart')
+      expect(items[0]).toHaveTextContent('400 days apart in service')
+      expect(items[0]).toHaveTextContent('· 90% match')
+      expect(within(items[0]).getByText('No estimate')).toBeInTheDocument()
+      expect(items[0]).not.toHaveTextContent('est. savings')
+    })
+
+    it('still selects a clicked card (aria-pressed) under every sort order', async () => {
+      await renderApp()
+      await cards()
+      for (const key of ['score', 'distance', 'time_gap', 'savings']) {
+        fireEvent.change(sortSelect(), { target: { value: key } })
+        const items = await cards()
+        const target = items[1] // a different pair per order
+        fireEvent.click(target)
+        expect(target).toHaveAttribute('aria-pressed', 'true')
+        expect(items.filter(item => item.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
+        const rank = Number(target.textContent!.match(/#(\d+)/)![1])
+        expect(screen.getByTestId('project-map')).toHaveTextContent(`selected OVL_${rank}`)
+      }
+    })
+  })
+
   describe('savings headline', () => {
     const SANTEE = 'Santee Cooper'
 
