@@ -64,15 +64,59 @@ for any change to `backend/db/` or `pipeline/load.py`.
 
 ### Loading seed data
 
+The demo database serves `data/seed/projects.csv`: the full located dataset (every DESC and
+Georgia Power project `pipeline.build_dataset` could place). `data/seed/projects_seed.csv` is
+the sponsor's 10-project starter table; it is the golden test fixture and the rollback, not
+what the demo serves.
+
+**The load replaces what the live site shows.** `DATABASE_URL` in the repo-root `.env` is the
+shared demo database the deployed site reads, and the load truncates and refills both tables
+(`projects`, `project_overlaps`) in one transaction. Tell the team before you run it. To
+rehearse first, point `--database-url` at the throwaway PostGIS above instead.
+
+1. If the parser CSVs, the OSM caches or `location_overrides.csv` changed, regenerate the
+   dataset first (and commit it) so the demo matches the repo:
+
+   ```bash
+   cd backend
+   .venv/bin/python -m pipeline.build_dataset
+   ```
+
+2. Load it (from `backend/`; reads `--database-url`, else `$DATABASE_URL`, else `.env`):
+
+   ```bash
+   .venv/bin/python -m pipeline.load --csv ../data/seed/projects.csv
+   ```
+
+   It applies `db/schema.sql`, runs the overlap engine over the CSV and prints
+   `loaded N projects and M overlaps`. On any bad row it fails before writing anything.
+
+3. Verify, from the repo root (both are read-only: they start the API against `.env` on a free
+   port and only make GET requests):
+
+   ```bash
+   backend/.venv/bin/python scripts/smoke.py            # the sponsor's 6 pairs are served
+   backend/.venv/bin/python scripts/check_demo_data.py  # /projects and /overlaps == the CSV
+   ```
+
+   `check_demo_data.py` passes only if `GET /projects` serves exactly the CSV's projects and
+   `GET /overlaps` exactly the pairs the engine flags on it. Both take `BASE_URL` to check the
+   deployed API instead (the API base, including `/api`; see `## Checks` in `CLAUDE.md`).
+
+**Roll back** to the sponsor's 10-project sample the same way:
+
 ```bash
 cd backend
-.venv/bin/python -m pipeline.load --csv tests/fixtures/starter_projects.csv
+.venv/bin/python -m pipeline.load --csv ../data/seed/projects_seed.csv
+cd .. && backend/.venv/bin/python scripts/check_demo_data.py --csv data/seed/projects_seed.csv
 ```
 
-Reads `--database-url` or `$DATABASE_URL`, applies `db/schema.sql`, then replaces both tables
-in one transaction. Re-running it is the supported way to refresh. The real seed CSV
-(`data/seed/projects_seed.csv`) is issue #2's deliverable and does not exist yet; until it
-lands, the ten-row sponsor starter table above is the only CSV that loads end to end.
+On Windows use `.venv\Scripts\python.exe` and `backend\.venv\Scripts\python.exe` in the
+commands above.
+
+`tests/test_demo_data.py` checks all of this without touching the demo: offline, that smoke's
+6 pairs are in what `projects.csv` would serve; with `TEST_DATABASE_URL` set, a full load of
+`projects.csv` into the throwaway database and the real API over it.
 
 `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so **editing it does nothing to a database
 that already has the tables** — drop them first (`DROP TABLE project_overlaps, projects;`) and
