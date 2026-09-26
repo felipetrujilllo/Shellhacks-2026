@@ -19,6 +19,15 @@ vi.mock('./components/ProjectMap', () => ({
   ),
 }))
 
+// jsdom has no modal dialogs: open the upload <dialog> in place so its contents are accessible.
+HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) { this.open = true }
+
+async function chooseUpload(file: File) {
+  await screen.findByRole('list', { name: /coordination opportunities/i })
+  fireEvent.click(screen.getByRole('button', { name: 'Upload projects' }))
+  fireEvent.change(screen.getByLabelText('Project CSV'), { target: { files: [file] } })
+}
+
 function projectsExample() {
   const projects = apiExample('projects')
   if (!Array.isArray(projects)) throw new Error('projects example is not an array')
@@ -86,6 +95,64 @@ describe('App', () => {
     expect(alert).toBeVisible()
     expect(alert).toHaveTextContent('GET http://api/overlaps failed with status 500')
     expect(screen.queryByTestId('project-map')).not.toBeInTheDocument()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Upload projects' })).toBeDisabled()
+    expect(screen.queryByRole('list', { name: /coordination opportunities/i })).not.toBeInTheDocument()
+  })
+
+  it('searches opportunities and resets search when changing data tabs', async () => {
+    render(<App />)
+    await screen.findByRole('list', { name: /coordination opportunities/i })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search workspace' }), { target: { value: 'SC line 4' } })
+    expect(within(screen.getByRole('list')).getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('tab', { name: 'Projects' }))
+    expect(screen.getByRole('textbox', { name: 'Search workspace' })).toHaveValue('')
+    expect(screen.getByRole('tab', { name: 'Projects' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('toggles utility layers in the map and opportunity list', async () => {
+    render(<App />)
+    await screen.findByRole('list', { name: /coordination opportunities/i })
+    fireEvent.click(screen.getByRole('checkbox', { name: /Georgia Power/ }))
+    expect(screen.getByTestId('project-map')).toHaveTextContent('1 projects, 0 overlaps')
+    expect(screen.getByText('No matching pairs')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: /Georgia Power/ }))
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+  })
+
+  it('uploads a CSV, flags bad rows, ranks the new nearby pairs first, and removes them again', async () => {
+    // One valid row placed on GPC_2 (0 mi from it, 5.65 mi from DESC_3) and one row with a bad latitude.
+    const csv = 'utility,project_name,lat_center,lon_center,in_service_date\n' +
+      'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01\n' +
+      'Savannah Water,Bad row,abc,-81.1,2026-06-01\n'
+    render(<App />)
+    await chooseUpload(new File([csv], 'savannah-water.csv', { type: 'text/csv' }))
+
+    const add = await screen.findByRole('button', { name: /Add 1 project & compare/ })
+    expect(screen.getByText('lat_center is invalid')).toBeInTheDocument()
+    fireEvent.click(add)
+
+    expect(screen.getByRole('status')).toHaveTextContent('1 proposal added from savannah-water.csv. Comparisons updated.')
+    expect(screen.getByTestId('project-map')).toHaveTextContent('3 projects, 8 overlaps')
+    const items = within(screen.getByRole('list', { name: /coordination opportunities/i })).getAllByRole('button')
+    expect(items).toHaveLength(8)
+    expect(items[0]).toHaveTextContent('Water main replacement')
+    expect(items[0]).toHaveTextContent('0.0 mi apart')
+    expect(items.filter(item => within(item).queryByText('New'))).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    expect(screen.getByText('1 mapped · 1 flagged')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove upload' }))
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+    fireEvent.click(screen.getByRole('tab', { name: 'Opportunities' }))
+    expect(screen.queryByText('New')).not.toBeInTheDocument()
+  })
+
+  it('rejects a non-CSV upload with an alert and adds nothing', async () => {
+    render(<App />)
+    await chooseUpload(new File(['%PDF'], 'plan.pdf', { type: 'application/pdf' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Choose a CSV spreadsheet')
+    expect(screen.queryByRole('button', { name: /& compare/ })).not.toBeInTheDocument()
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
   })
 })
