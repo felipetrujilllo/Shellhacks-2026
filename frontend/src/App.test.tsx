@@ -28,6 +28,15 @@ async function chooseUpload(file: File) {
   fireEvent.change(screen.getByLabelText('Project CSV'), { target: { files: [file] } })
 }
 
+// The sidebar starts closed (map full screen); most tests exercise its contents, so open it.
+const renderClosedApp = () => render(<App />)
+// The menu button floats on the map, which appears once the data has loaded.
+async function renderApp() {
+  const result = renderClosedApp()
+  fireEvent.click(await screen.findByRole('button', { name: 'Open menu' }))
+  return result
+}
+
 function projectsExample() {
   const projects = apiExample('projects')
   if (!Array.isArray(projects)) throw new Error('projects example is not an array')
@@ -41,13 +50,79 @@ describe('App', () => {
     vi.mocked(fetchOverlaps).mockReset().mockResolvedValue(makeOverlaps(6))
   })
 
-  it('renders the GridWatch heading', () => {
-    render(<App />)
-    expect(screen.getByRole('heading', { level: 1, name: 'GridWatch' })).toBeInTheDocument()
+  describe('sidebar toggle', () => {
+    it('starts closed, so the map is the only thing on screen', async () => {
+      renderClosedApp()
+      expect(await screen.findByTestId('project-map')).toBeInTheDocument()
+      expect(screen.queryByRole('complementary', { name: 'Workspace sidebar' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: /coordination opportunities/i })).not.toBeInTheDocument()
+      const toggle = screen.getByRole('button', { name: 'Open menu' })
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('region', { name: 'Project map' }).parentElement).toHaveClass('sidebar-closed')
+    })
+
+    it('keeps the sidebar mounted so it can slide, but hides it from keyboard and screen readers while closed', async () => {
+      const { container } = renderClosedApp()
+      await screen.findByTestId('project-map')
+      const sidebar = container.querySelector('#workspace-sidebar')!
+      expect(sidebar).toHaveAttribute('aria-hidden', 'true')
+      expect(sidebar).toHaveAttribute('inert')
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+      expect(sidebar).toHaveAttribute('aria-hidden', 'false')
+      expect(sidebar).not.toHaveAttribute('inert')
+      expect(screen.getByRole('complementary', { name: 'Workspace sidebar' })).toBe(sidebar)
+    })
+
+    it('floats the menu button on the map, not in the header', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      const toggle = screen.getByRole('button', { name: 'Open menu' })
+      expect(within(screen.getByRole('region', { name: 'Project map' })).getByRole('button', { name: 'Open menu' })).toBe(toggle)
+      expect(within(screen.getByRole('banner')).queryByRole('button', { name: /menu/i })).not.toBeInTheDocument()
+      expect(toggle).toHaveTextContent('Open menu')
+    })
+
+    it('opens from the floating menu button and stays open until closed again', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+      const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
+      expect(within(sidebar).getByText('SHARED GROUND')).toBeInTheDocument()
+      expect(screen.getByRole('list', { name: /coordination opportunities/i })).toBeInTheDocument()
+      const toggle = screen.getByRole('button', { name: 'Close menu' })
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      expect(toggle).toHaveAttribute('aria-controls', sidebar.id)
+      expect(screen.getByRole('region', { name: 'Project map' }).parentElement).not.toHaveClass('sidebar-closed')
+
+      // Using the sidebar doesn't close it.
+      fireEvent.click(screen.getByRole('tab', { name: 'Projects' }))
+      expect(screen.getByRole('complementary', { name: 'Workspace sidebar' })).toBeInTheDocument()
+
+      fireEvent.click(toggle)
+      expect(screen.queryByRole('complementary', { name: 'Workspace sidebar' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Open menu' })).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('region', { name: 'Project map' }).parentElement).toHaveClass('sidebar-closed')
+    })
+
+    it('keeps the sidebar state (tab, search) when it is closed and reopened', async () => {
+      await renderApp()
+      await screen.findByRole('list', { name: /coordination opportunities/i })
+      fireEvent.click(screen.getByRole('tab', { name: 'Projects' }))
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search workspace' }), { target: { value: 'GA' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Close menu' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+      expect(screen.getByRole('tab', { name: 'Projects' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('textbox', { name: 'Search workspace' })).toHaveValue('GA')
+    })
+  })
+
+  it('renders the Relay heading', () => {
+    renderClosedApp()
+    expect(screen.getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
   })
 
   it('renders one list item per overlap (6) from the API, rank 1 first, next to the map', async () => {
-    render(<App />)
+    await renderApp()
 
     const list = await screen.findByRole('list', { name: /coordination opportunities/i })
     const items = within(list).getAllByRole('button')
@@ -59,7 +134,7 @@ describe('App', () => {
   })
 
   it('selecting a list item marks it and passes the selection to the map', async () => {
-    render(<App />)
+    await renderApp()
 
     const item = await screen.findByRole('button', { name: /SC line 4/ })
     fireEvent.click(item)
@@ -68,7 +143,7 @@ describe('App', () => {
   })
 
   it('selecting an overlap in the ranked list opens its detail panel; closing hides it', async () => {
-    render(<App />)
+    await renderApp()
     expect(screen.queryByRole('region', { name: /opportunity #/i })).not.toBeInTheDocument()
 
     fireEvent.click(await screen.findByRole('button', { name: /SC line 4/ }))
@@ -89,7 +164,7 @@ describe('App', () => {
 
   it('shows a visible error alert with the message when the API call fails', async () => {
     vi.mocked(fetchOverlaps).mockRejectedValue(new Error('GET http://api/overlaps failed with status 500'))
-    render(<App />)
+    renderClosedApp() // no data, so no map and no menu button to open
 
     const alert = await screen.findByRole('alert')
     expect(alert).toBeVisible()
@@ -100,7 +175,7 @@ describe('App', () => {
   })
 
   it('searches opportunities and resets search when changing data tabs', async () => {
-    render(<App />)
+    await renderApp()
     await screen.findByRole('list', { name: /coordination opportunities/i })
     fireEvent.change(screen.getByRole('textbox', { name: 'Search workspace' }), { target: { value: 'SC line 4' } })
     expect(within(screen.getByRole('list')).getAllByRole('button')).toHaveLength(1)
@@ -110,7 +185,7 @@ describe('App', () => {
   })
 
   it('toggles utility layers in the map and opportunity list', async () => {
-    render(<App />)
+    await renderApp()
     await screen.findByRole('list', { name: /coordination opportunities/i })
     fireEvent.click(screen.getByRole('checkbox', { name: /Georgia Power/ }))
     expect(screen.getByTestId('project-map')).toHaveTextContent('1 projects, 0 overlaps')
@@ -124,7 +199,7 @@ describe('App', () => {
     const csv = 'utility,project_name,lat_center,lon_center,in_service_date\n' +
       'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01\n' +
       'Savannah Water,Bad row,abc,-81.1,2026-06-01\n'
-    render(<App />)
+    await renderApp()
     await chooseUpload(new File([csv], 'savannah-water.csv', { type: 'text/csv' }))
 
     const add = await screen.findByRole('button', { name: /Add 1 project & compare/ })
@@ -148,7 +223,7 @@ describe('App', () => {
   })
 
   it('rejects a non-CSV upload with an alert and adds nothing', async () => {
-    render(<App />)
+    await renderApp()
     await chooseUpload(new File(['%PDF'], 'plan.pdf', { type: 'application/pdf' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Choose a CSV spreadsheet')
@@ -183,7 +258,7 @@ describe('App', () => {
     it('shows the total of known est_savings_usd and the pair count', async () => {
       const overlaps = makeOverlaps(3).map((o, i) => ({ ...o, est_savings_usd: [709900, 1200000, 300000][i] }))
       vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
-      render(<App />)
+      await renderApp()
 
       const group = await headline()
       expect(within(group).getByText('$2.2M')).toBeInTheDocument() // 709,900 + 1,200,000 + 300,000
@@ -196,7 +271,7 @@ describe('App', () => {
       const { projects, overlaps } = withThirdUtility()
       vi.mocked(fetchProjects).mockResolvedValue(projects)
       vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
-      render(<App />)
+      await renderApp()
 
       const group = await headline()
       expect(within(group).getByText('$1.5M')).toBeInTheDocument()
@@ -209,7 +284,7 @@ describe('App', () => {
       const { projects, overlaps } = withThirdUtility()
       vi.mocked(fetchProjects).mockResolvedValue(projects)
       vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
-      render(<App />)
+      await renderApp()
       const group = await headline()
 
       fireEvent.click(screen.getByRole('checkbox', { name: /Georgia Power/ }))
@@ -234,7 +309,7 @@ describe('App', () => {
       vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
       const csv = 'utility,project_name,lat_center,lon_center,in_service_date\n' +
         'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01\n'
-      render(<App />)
+      await renderApp()
       const group = await headline()
       expect(within(group).getByText('$1M')).toBeInTheDocument()
       expect(within(group).getByText('4 not estimated')).toBeInTheDocument()

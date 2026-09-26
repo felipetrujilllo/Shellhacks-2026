@@ -11,6 +11,7 @@ const paths = {
   grid: 'M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z',
   download: 'M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4',
   back: 'M20 12H4m6-6-6 6 6 6',
+  menu: 'M4 6h16M4 12h16M4 18h16',
 } as const
 export default function Icon({ name, size = 18, style }: { name: keyof typeof paths; size?: number; style?: CSSProperties }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={style}><path d={paths[name]} /></svg>

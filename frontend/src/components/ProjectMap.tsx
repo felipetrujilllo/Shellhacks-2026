@@ -170,7 +170,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         <MapLegend />
       </div>
       {hoveredProject && (
-        <div role="tooltip" className="pointer-events-none absolute bottom-12 left-4 right-4 max-w-sm rounded-xl border border-white/15 bg-slate-950/95 p-4 text-slate-100 shadow-xl backdrop-blur-md">
+        <div role="tooltip" className="pointer-events-none absolute bottom-24 left-4 right-4 max-w-sm rounded-xl border border-white/15 bg-slate-950/95 p-4 text-slate-100 shadow-xl backdrop-blur-md">
           <p className="mb-1 text-xs text-sky-300">{hoveredProject.utility}</p>
           <p className="text-sm font-semibold">{hoveredProject.project_name}</p>
           <p className="mt-2 text-xs text-slate-400">In service: <time dateTime={hoveredProject.in_service_date}>{hoveredProject.in_service_date}</time></p>

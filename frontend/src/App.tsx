@@ -27,6 +27,8 @@ function App() {
   const [batches, setBatches] = useState<ImportBatch[]>([])
   const [hidden, setHidden] = useState<string[]>([])
   const [notice, setNotice] = useState('')
+  // The sidebar starts closed so the map fills the screen; the floating menu button toggles it.
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   useEffect(() => {
     let cancelled = false
     Promise.all([fetchProjects(), fetchOverlaps()])
@@ -59,15 +61,16 @@ function App() {
   return (
     <main className="workspace">
       <header className="workspace-header">
-        <div className="brand"><span className="brand-symbol"><Icon name="grid" size={19} /></span><h1>GridWatch</h1></div>
+        <div className="brand"><span className="brand-symbol"><Icon name="grid" size={19} /></span><h1>Relay</h1></div>
         <span className="header-divider" />
         <div className="workspace-title"><span>Planning workspace</span><small>Regional coordination</small></div>
         <div className="header-actions"><span className="local-badge"><i /> Local session</span><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> Upload projects</button></div>
       </header>
       {state.status === 'loading' && <p className="workspace-message">Loading projects…</p>}
       {state.status === 'error' && <div role="alert" className="workspace-message">Could not load project data: {state.message}</div>}
-      {state.status === 'ready' && <div className="workspace-body">
-        <aside className="workspace-sidebar">
+      {state.status === 'ready' && <div className={`workspace-body${sidebarOpen ? '' : ' sidebar-closed'}`}>
+        {/* Always mounted so it can slide: closed = zero width, and inert + aria-hidden so nothing inside is focusable or announced. */}
+        <aside className="workspace-sidebar" id="workspace-sidebar" aria-label="Workspace sidebar" aria-hidden={!sidebarOpen} inert={!sidebarOpen}><div className="sidebar-panel">
           <div className="sidebar-intro"><p className="eyebrow">SHARED GROUND</p><h2>Regional plans.<br />Shared opportunities.</h2><p>See where your next project meets someone else’s.</p></div>
           <div className="workspace-metrics"><div><strong>{projects.length.toString().padStart(2, '0')}</strong><span>Projects</span></div><div><strong>{utilities.length.toString().padStart(2, '0')}</strong><span>Utilities</span></div><div><strong>{overlaps.length.toString().padStart(2, '0')}</strong><span>Nearby pairs</span></div></div>
           <div className="savings-headline" role="group" aria-label="Estimated savings" title={`${formatUsd(savings.totalUsd)} estimated across ${formatPairs(savings.estimatedCount)}`}><strong>{formatUsdCompact(savings.totalUsd)}</strong><div><span>est. savings · {formatPairs(savings.pairCount)} shown</span><small>{savings.notEstimatedCount} not estimated</small></div></div>
@@ -91,10 +94,13 @@ function App() {
             {tab === 'imports' && <>{!batches.length ? <div className="empty-state upload-empty"><Icon name="upload" size={30} /><strong>Your plans belong here.</strong><p>Add a project spreadsheet to find nearby work across utilities.</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>Upload your first file <Icon name="arrow" size={16} /></button><small>CSV spreadsheets · local to this tab</small></div> : batches.map(b => <div className="batch-card" key={b.id}><Icon name="file" /><strong>{b.filename}</strong><p>{b.rows.filter(r => r.project).length} mapped · {b.rows.filter(r => !r.project).length} flagged</p>{b.rows.filter(r => !r.project).map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}<button className="text-link" onClick={() => { setBatches(current => current.filter(x => x.id !== b.id)); setSelectedId(null); setFocusedProject(null); setNotice('Upload removed from this session.') }}>Remove upload</button></div>)}<p className="session-note">Uploads stay in this tab and clear on refresh. Original project data is unchanged.</p></>}
           </div>
           <footer className="sidebar-footer"><span className="source-dot" /> {batches.length ? 'Published plans + your proposals' : 'Published utility plans'}<span>{batches.length ? 'LOCAL' : 'SC / GA'}</span></footer>
-        </aside>
+        </div></aside>
         <section className="workspace-map" aria-label="Project map">
           <ProjectMap projects={visibleProjects} overlaps={visibleOverlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focusedProject} />
-          <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{visibleProjects.length} mapped projects</span></div>
+          <div className="map-corner">
+            <button className="sidebar-toggle" aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => setSidebarOpen(open => !open)}><Icon name={sidebarOpen ? 'close' : 'menu'} size={18} /><span>{sidebarOpen ? 'Close menu' : 'Open menu'}</span></button>
+            <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{visibleProjects.length} mapped projects</span></div>
+          </div>
           {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}
           {selected && <div className="selection-panel"><OverlapDetail overlap={selected} onClose={() => setSelectedId(null)} /></div>}
           {!selected && focusedProject && <div className="selection-panel"><div className="selection-heading"><span>PROJECT DETAILS</span><button className="icon-button" aria-label="Close details" onClick={() => setFocusedProject(null)}><Icon name="close" size={16} /></button></div>
