@@ -1,0 +1,7 @@
+overlap_id,project_id_a,project_id_b,distance_mi,time_gap_days
+OVL_1,DESC_2,GPC_1,4.09,3074
+OVL_2,DESC_3,GPC_2,5.65,152
+OVL_3,DESC_3,GPC_3,7.55,517
+OVL_4,DESC_1,GPC_1,8.01,3074
+OVL_5,DESC_5,GPC_2,14.34,365
+OVL_6,DESC_5,GPC_3,14.81,730
