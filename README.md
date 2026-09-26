@@ -169,7 +169,7 @@ BASE_URL=https://gridwatch-b3trj.ondigitalocean.app/api backend/.venv/bin/python
 ```
 
 It reads the same Tiger Data database as local dev, so reloading the demo data (above) shows
-up on the live site immediately; code changes only after a promote + manual redeploy (below).
+up on the live site immediately; code changes after a promote, which CI/CD redeploys (below).
 
 ### First deploy (once, by hand — needs a DigitalOcean account with the repo connected)
 
@@ -213,13 +213,23 @@ up on the live site immediately; code changes only after a promote + manual rede
 
 ### Redeploying
 
-- **Redeploys are manual.** A public-clone (`git:`) source can't redeploy on push, so after
-  promoting `test-branch-1` to `main`, trigger it yourself:
+- **Redeploys are automatic after CI passes on `main`.** A public-clone (`git:`) source
+  can't redeploy on push by itself, so `.github/workflows/ci.yml` does it: on every push to
+  `main` (i.e. a promote), once the backend and frontend jobs pass, the `deploy` job runs
+  `doctl apps create-deployment --wait`, fails unless the deployment ends `ACTIVE`, then runs
+  `scripts/smoke.py` against the live `/api`. If CI fails, nothing deploys. If the deploy
+  fails, App Platform keeps the previous deployment serving and the job goes red. To redeploy
+  without a new commit, use **Actions → CI/CD → Run workflow** on `main`.
+- **One-time setup:** the repo needs a `DIGITALOCEAN_ACCESS_TOKEN` Actions secret (repo
+  **Settings → Secrets and variables → Actions**, which only the repo owner can open). Make it
+  in the DigitalOcean account that owns the app (**API → Generate New Token**): custom scopes,
+  `app` read + update, with an expiry past the event. Without it the deploy job fails loudly at
+  its first step and nothing is deployed.
+- Manual fallback (e.g. Actions is down), from a laptop with `doctl auth init` done:
   ```bash
   doctl apps list                         # find the app id
   doctl apps create-deployment <app-id>   # rebuilds from the current main
   ```
-  Upside: a stray push to `main` can never take the live demo down on its own.
 - After editing `.do/app.yaml`: `doctl apps update <app-id> --spec .do/app.yaml`.
   **This wipes `DATABASE_URL`**, because the committed spec declares the key with no value.
   Set it again in the console (step 4) and re-check `/api/overlaps`. To avoid the wipe

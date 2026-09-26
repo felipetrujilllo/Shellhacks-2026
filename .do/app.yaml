@@ -41,8 +41,9 @@ services:
     # GitHub app installed on the repo's owner - and the repo belongs to a teammate's
     # personal account, which only that teammate can install apps on. The repo is public,
     # so App Platform clones it anonymously instead.
-    # Cost: this source type can't redeploy on push, so redeploys are manual
-    # (`doctl apps create-deployment <app-id>`) - see README "Redeploying".
+    # Cost: this source type can't redeploy on push by itself, so the `deploy` job in
+    # .github/workflows/ci.yml runs `doctl apps create-deployment` after CI passes on main -
+    # see README "Redeploying".
     git:
       repo_clone_url: https://github.com/felipetrujilllo/Shellhacks-2026.git
       # main is the stable, demo-safe branch (CLAUDE.md ## Branches).

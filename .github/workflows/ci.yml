@@ -2,22 +2,32 @@
 # The commands below are the Checks table's commands verbatim - if that table changes, change
 # this file in the same commit.
 #
-# CI only, no CD: deploys stay manual (`doctl apps create-deployment`, README "Redeploying"),
-# because .do/app.yaml uses a public-clone source that can't redeploy on push.
+# CD: after both CI jobs pass on a push to main (or a manual "Run workflow" on main), the
+# `deploy` job redeploys the DigitalOcean app and smoke-tests the live API. .do/app.yaml uses a
+# public-clone source, which can't redeploy on push by itself, so this job does what
+# README "Redeploying" used to do by hand: `doctl apps create-deployment`. It only rebuilds
+# from main; spec changes still need a manual `doctl apps update` (README).
 #
-# No secrets needed. The shared demo DATABASE_URL is never used here: the DB tests run against
-# a throwaway PostGIS service container, same image and URL as the README's local one.
-name: CI
+# The one secret is DIGITALOCEAN_ACCESS_TOKEN, used only by `deploy`. The shared demo
+# DATABASE_URL is never used here: the DB tests run against a throwaway PostGIS service
+# container, same image and URL as the README's local one.
+name: CI/CD
 
 on:
   push:
     branches: [test-branch-1, main]
   pull_request:
     branches: [test-branch-1, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push supersedes an older CI run, except on main: cancelling there would abandon
+  # a deploy halfway through its wait and skip its smoke check.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -79,3 +89,59 @@ jobs:
         run: npx vitest run
       - name: Build
         run: npm run build
+
+  deploy:
+    needs: [backend, frontend]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the DigitalOcean token is set
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$DIGITALOCEAN_ACCESS_TOKEN" ]; then
+            echo "::error::DIGITALOCEAN_ACCESS_TOKEN repo secret is not set (README \"Redeploying\")"
+            exit 1
+          fi
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Find the app
+        id: app
+        run: |
+          # The app name comes from the spec, so renaming the app needs no edit here.
+          name=$(sed -n 's/^name: *//p' .do/app.yaml)
+          ids=$(doctl apps list --format ID,Spec.Name --no-header | awk -v n="$name" '$2 == n {print $1}')
+          if [ "$(echo "$ids" | grep -c .)" -ne 1 ]; then
+            echo "::error::expected exactly one DigitalOcean app named '$name', found: ${ids:-none}"
+            exit 1
+          fi
+          echo "id=$ids" >> "$GITHUB_OUTPUT"
+          echo "url=$(doctl apps get "$ids" --format DefaultIngress --no-header)" >> "$GITHUB_OUTPUT"
+      - name: Deploy main
+        run: |
+          # App Platform clones main itself; this just tells it to rebuild now.
+          deployment=$(doctl apps create-deployment "${{ steps.app.outputs.id }}" --wait \
+            --format ID --no-header)
+          phase=$(doctl apps get-deployment "${{ steps.app.outputs.id }}" "$deployment" \
+            --format Phase --no-header)
+          echo "deployment $deployment finished in phase $phase"
+          # A failed deploy leaves the previous one serving, so the live site is still up,
+          # but it is running old code: fail loud.
+          if [ "$phase" != "ACTIVE" ]; then
+            echo "::error::deployment $deployment ended in $phase, not ACTIVE (check the DO console build/deploy logs)"
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Smoke test the live API
+        env:
+          # The API base including /api (CLAUDE.md "Smoke test").
+          BASE_URL: ${{ steps.app.outputs.url }}/api
+        run: |
+          pip install httpx
+          python scripts/smoke.py

@@ -62,7 +62,9 @@ test command — an empty entry means that layer is unguarded, and the gate will
 **CI:** `.github/workflows/ci.yml` runs these same commands (the backend job with
 `TEST_DATABASE_URL` set against a PostGIS service container, so the DB row runs too) on every
 push and PR to `test-branch-1` and `main`. If you change a command in this table, change it
-there in the same commit.
+there in the same commit. On a push to `main` it also deploys: once both jobs pass, it
+redeploys the DigitalOcean app and runs the smoke test against the live API (README
+"Redeploying").
 
 On Windows the venv binaries live in `.venv\Scripts\` instead of `.venv/bin/` (e.g.
 `.venv\Scripts\python.exe -m pytest`, `.venv\Scripts\ruff.exe check .`).
