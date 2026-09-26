@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDays, formatMiles, formatPairs, formatUsd, formatUsdCompact } from './format'
+import { formatDays, formatMiles, formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
 
 describe('format', () => {
   it('keeps the existing exact formats', () => {
@@ -21,5 +21,18 @@ describe('format', () => {
     expect(formatPairs(0)).toBe('0 pairs')
     expect(formatPairs(1)).toBe('1 pair')
     expect(formatPairs(6)).toBe('6 pairs')
+  })
+
+  it('formats a 0-1 score as a whole-number percentage', () => {
+    expect(formatScorePct(0.8311)).toBe('83%')
+    expect(formatScorePct(0.7055)).toBe('71%')
+    expect(formatScorePct(0)).toBe('0%')
+    expect(formatScorePct(1)).toBe('100%')
+  })
+
+  it('throws a RangeError for scores outside 0-1 or non-finite', () => {
+    for (const bad of [-0.01, 1.01, 83, NaN, Infinity, -Infinity]) {
+      expect(() => formatScorePct(bad)).toThrow(RangeError)
+    }
   })
 })

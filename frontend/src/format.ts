@@ -28,3 +28,11 @@ export function formatUsdCompact(amount: number): string {
 export function formatPairs(count: number): string {
   return `${count} ${count === 1 ? 'pair' : 'pairs'}`
 }
+
+/** `0.8311` -> `"83%"` (whole-number percent of a 0–1 score). Throws RangeError outside 0–1 or non-finite. */
+export function formatScorePct(score: number): string {
+  if (!Number.isFinite(score) || score < 0 || score > 1) {
+    throw new RangeError(`score must be a finite number between 0 and 1, got ${score}`)
+  }
+  return `${Math.round(score * 100)}%`
+}

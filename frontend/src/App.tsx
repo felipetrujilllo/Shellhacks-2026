@@ -5,7 +5,7 @@ import OverlapDetail from './components/OverlapDetail'
 import ProjectMap from './components/ProjectMap'
 import UploadProjects from './components/UploadProjects'
 import Icon from './components/Icon'
-import { formatPairs, formatUsd, formatUsdCompact } from './format'
+import { formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
 import { SUBMITTED_OVERLAP_PREFIX, SUBMITTED_PROJECT_PREFIX, type ImportBatch } from './importProjects'
 import { summarizeSavings } from './savings'
 import type { Overlap, Project } from './types'
@@ -96,7 +96,7 @@ function App() {
           {tab !== 'imports' && <label className="workspace-search"><Icon name="search" size={16} /><input placeholder={tab === 'projects' ? 'Find a project or utility' : 'Find an opportunity'} aria-label="Search workspace" value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')} aria-label="Clear search"><Icon name="close" size={14} /></button>}</label>}
           <div className="sidebar-content" id="workspace-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
             {tab === 'opportunities' && <><div className="list-caption"><span>{filteredOverlaps.length} nearby pairs</span><span>Ranked by proximity & timing</span></div><ol className="opportunity-list" aria-label="Top coordination opportunities">{filteredOverlaps.map(o => <li key={o.overlap_id}><button className={`opportunity-card ${selectedId === o.overlap_id ? 'selected' : ''}`} aria-pressed={selectedId === o.overlap_id} onClick={() => select(o.overlap_id)}>
-              <div className="opportunity-top"><span>#{o.rank.toString().padStart(2, '0')}</span><span>{o.distance_mi.toFixed(1)} mi apart <Icon name="arrow" size={14} /></span></div>
+              <div className="opportunity-top"><span>#{o.rank.toString().padStart(2, '0')} · {formatScorePct(o.score)} match</span><span>{o.distance_mi.toFixed(1)} mi apart <Icon name="arrow" size={14} /></span></div>
               <div className="project-pair">{[o.project_a, o.project_b].map(p => <div key={p.project_id}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small></div></div>)}</div>
               <div className="opportunity-bottom"><span>{o.time_gap_days} days apart in service</span>{o.overlap_id.startsWith(SUBMITTED_OVERLAP_PREFIX) && <span className="new-tag">Uploaded</span>}</div>
             </button></li>)}</ol>{!filteredOverlaps.length && <div className="empty-state"><Icon name="search" size={24} /><strong>No matching pairs</strong><p>Try another search or turn on more utility layers. Projects must be within 25 miles to appear here.</p></div>}</>}

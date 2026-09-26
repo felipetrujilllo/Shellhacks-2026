@@ -20,7 +20,7 @@ from app.routes import router
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
 
-    app = FastAPI(title="GridWatch API")
+    app = FastAPI(title="Relay API")
     app.state.repository = PostgresRepository(settings.database_url)
     app.add_middleware(
         CORSMiddleware,

@@ -35,8 +35,19 @@ describe('OverlapDetail', () => {
     expect(screen.getByText('152 days')).toBeInTheDocument()
     const heading = screen.getByRole('heading', { name: /opportunity #1/i })
     expect(heading).toHaveTextContent('Opportunity #1')
-    expect(heading).toHaveTextContent('score 0.83')
+    expect(heading).toHaveTextContent('83% match') // score 0.8311
     expect(screen.getByRole('region', { name: /opportunity #1/i })).toBeInTheDocument()
+  })
+
+  it('shows the score as a whole-number percentage, not the raw 0-1 decimal', () => {
+    render(<OverlapDetail overlap={{ ...overlapExample(), score: 0.7055 }} onClose={() => {}} />)
+
+    const heading = screen.getByRole('heading', { name: /opportunity #1/i })
+    expect(heading).toHaveTextContent('71% match')
+    expect(heading).not.toHaveTextContent('0.71')
+    const panel = screen.getByRole('region', { name: /opportunity #1/i })
+    expect(panel).not.toHaveTextContent('0.7055')
+    expect(panel).not.toHaveTextContent('0.71')
   })
 
   it('shows the savings figure formatted as USD, with its basis, when present', () => {

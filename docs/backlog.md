@@ -1,7 +1,7 @@
 # Backlog
 
 ## Goal
-GridWatch compares Dominion Energy South Carolina's and Georgia Power's public transmission
+Relay compares Dominion Energy South Carolina's and Georgia Power's public transmission
 construction plans. It flags cross-utility project pairs whose centers are within 25 miles,
 using the in-service time gap as a secondary signal, and presents them on an interactive map
 with a ranked list of coordination opportunities (Sperry Tech — Gridlock; full spec in

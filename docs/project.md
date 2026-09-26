@@ -1,4 +1,7 @@
-# GridWatch — project plan
+# Relay — project plan
+
+> Formerly "GridWatch" (working name). Infrastructure names — the live URL
+> `gridwatch-b3trj.ondigitalocean.app` and the App Platform app `gridwatch` — keep the old name.
 
 **One-liner:** "Waze for utility construction — before the digging starts."
 

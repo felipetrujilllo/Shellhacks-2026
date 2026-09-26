@@ -21,7 +21,10 @@ Full prompt and judging criteria live in `docs/prompt.md` (`plan-slice` reads it
 - **Golden test:** the sponsor's 10-project starter table must yield exactly its 6 overlaps
   (`docs/prompt.md`).
 
-Working name: **GridWatch** (plan in `docs/project.md`).
+Project name: **Relay** (the UI brand; plan in `docs/project.md`). It was called GridWatch
+earlier — infrastructure names keep that on purpose: the live URL
+`gridwatch-b3trj.ondigitalocean.app`, the App Platform app `gridwatch`, and the local test DB
+`gridwatch_test` / container `gridwatch-pg`. Renaming those would break the deploy and CI.
 
 ## Team
 - **A — Data/Backend:** @Eveliox — PDF parsing, OSM matching, DB schema, overlap engine

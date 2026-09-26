@@ -151,6 +151,20 @@ describe('App', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('shows each opportunity card\'s score as a whole-number percentage', async () => {
+    // Descending, as the API ranks them (the list re-sorts by score, so rank order = score order).
+    const scores = [1, 0.8311, 0.7055, 0.5, 0.25, 0]
+    vi.mocked(fetchOverlaps).mockResolvedValue(makeOverlaps(6).map((o, i) => ({ ...o, score: scores[i] })))
+    await renderApp()
+
+    const items = within(await screen.findByRole('list', { name: /coordination opportunities/i })).getAllByRole('button')
+    expect(items).toHaveLength(6)
+    // Anchored on the separator so "0%" can't pass by matching inside "100%".
+    const expected = ['100%', '83%', '71%', '50%', '25%', '0%']
+    items.forEach((item, i) => expect(item).toHaveTextContent(`· ${expected[i]} match`))
+    expect(items[1]).not.toHaveTextContent('0.83')
+  })
+
   it('selecting a list item marks it and passes the selection to the map', async () => {
     await renderApp()
 

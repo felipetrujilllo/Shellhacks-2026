@@ -1,5 +1,7 @@
-# Shellhacks-2026
-Gridlock
+# Relay
+
+ShellHacks 2026 — Sperry Tech "Gridlock" challenge. (Formerly "GridWatch"; the live URL,
+App Platform app and local test-DB names below still use `gridwatch` on purpose.)
 
 ## Running locally
 

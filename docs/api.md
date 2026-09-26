@@ -1,4 +1,4 @@
-# GridWatch API contract
+# Relay API contract
 
 The shapes every layer builds against. Models live in `backend/app/schemas.py`; field names
 match the `projects` / `project_overlaps` tables in `backend/db/schema.sql` and the seed CSV columns

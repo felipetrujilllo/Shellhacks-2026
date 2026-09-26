@@ -1,6 +1,6 @@
 // Detail panel for one coordination opportunity. Presentational only: the parent owns selection.
 import { utilityColor } from '../colors'
-import { formatDays, formatMiles, formatUsd } from '../format'
+import { formatDays, formatMiles, formatScorePct, formatUsd } from '../format'
 import type { Overlap, Project } from '../types'
 import Icon from './Icon'
 
@@ -32,7 +32,7 @@ export default function OverlapDetail({ overlap, onClose }: OverlapDetailProps) 
       <div className="overlap-detail-top">
         <h2 id="overlap-detail-heading" className="overlap-detail-title">
           Opportunity #{overlap.rank}
-          <span className="overlap-detail-score">score {overlap.score.toFixed(2)}</span>
+          <span className="overlap-detail-score">{formatScorePct(overlap.score)} match</span>
         </h2>
         <button type="button" onClick={onClose} aria-label="Close" className="icon-button">
           <Icon name="close" size={16} />
