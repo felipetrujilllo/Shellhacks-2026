@@ -40,7 +40,7 @@ STARTER_OVERLAPS_CSV = Path(__file__).parent / "fixtures" / "starter_overlaps.cs
 
 def expected_overlap_rows() -> list[dict]:
     """The sponsor's six reference pairs (docs/prompt.md), shared with test_overlap.py."""
-    with open(STARTER_OVERLAPS_CSV, newline="") as f:
+    with open(STARTER_OVERLAPS_CSV, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
@@ -253,10 +253,10 @@ def test_the_starter_seed_reads_cleanly():
 
 
 def test_a_duplicate_project_id_is_rejected(tmp_path):
-    with open(STARTER_CSV, newline="") as f:
+    with open(STARTER_CSV, newline="", encoding="utf-8") as f:
         original = list(csv.DictReader(f))
     doubled = tmp_path / "doubled.csv"
-    with open(doubled, "w", newline="") as f:
+    with open(doubled, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=original[0].keys())
         writer.writeheader()
         writer.writerows(original + original[:1])
@@ -270,10 +270,10 @@ def test_a_seed_with_no_rows_is_refused_rather_than_wiping_the_tables(tmp_path, 
     """This used to TRUNCATE both tables, insert nothing, and print "loaded 0 projects and
     0 overlaps" with exit 0 - so pointing the loader at a truncated or wrong file emptied
     the demo database and reported success."""
-    with open(STARTER_CSV, newline="") as f:
+    with open(STARTER_CSV, newline="", encoding="utf-8") as f:
         fieldnames = csv.DictReader(f).fieldnames
     empty = tmp_path / "empty.csv"
-    with open(empty, "w", newline="") as f:
+    with open(empty, "w", newline="", encoding="utf-8") as f:
         if write_header:
             csv.DictWriter(f, fieldnames=fieldnames).writeheader()
 
@@ -426,7 +426,7 @@ def test_reloading_truncates_rather_than_accumulating():
 
 
 def test_schema_creates_both_tables_and_postgis():
-    sql = SCHEMA_PATH.read_text()
+    sql = SCHEMA_PATH.read_text(encoding="utf-8")
 
     assert "CREATE EXTENSION IF NOT EXISTS postgis" in sql
     assert "CREATE TABLE IF NOT EXISTS projects" in sql
@@ -435,7 +435,7 @@ def test_schema_creates_both_tables_and_postgis():
 
 def schema_distance_bound() -> tuple[str, float]:
     """The upper bound the `project_overlaps` CHECK constraint puts on distance_mi."""
-    match = re.search(r"distance_mi\s*(<=?)\s*([\d.]+)", SCHEMA_PATH.read_text())
+    match = re.search(r"distance_mi\s*(<=?)\s*([\d.]+)", SCHEMA_PATH.read_text(encoding="utf-8"))
     return match.group(1), float(match.group(2))
 
 
@@ -468,7 +468,7 @@ def test_the_schema_accepts_every_distance_the_engine_can_produce():
 
 
 def test_schema_allows_redacted_costs_but_not_missing_centers():
-    sql = SCHEMA_PATH.read_text()
+    sql = SCHEMA_PATH.read_text(encoding="utf-8")
 
     assert "est_cost_usd        BIGINT," in sql
     assert "lat_center          DOUBLE PRECISION NOT NULL" in sql

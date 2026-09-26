@@ -16,7 +16,7 @@ SKIP_FILES = {"package-lock.json"}
 
 def _parse_env(path: Path) -> dict[str, str]:
     env = {}
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue

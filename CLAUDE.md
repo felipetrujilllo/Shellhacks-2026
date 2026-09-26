@@ -58,6 +58,9 @@ test command — an empty entry means that layer is unguarded, and the gate will
 | backend | `cd backend && .venv/bin/python -m compileall -q app pipeline` (one-time setup: see README) | `cd backend && .venv/bin/python -m pytest` | `cd backend && .venv/bin/ruff check .` |
 | frontend | `cd frontend && npm run build` | `cd frontend && npx vitest run` | `cd frontend && npx tsc -b` (bare `tsc --noEmit` checks nothing: root tsconfig is references-only) |
 
+On Windows the venv binaries live in `.venv\Scripts\` instead of `.venv/bin/` (e.g.
+`.venv\Scripts\python.exe -m pytest`, `.venv\Scripts\ruff.exe check .`).
+
 **Smoke test (demo path):** <one command or short script that exercises the real end-to-end
 path, e.g. start backend, hit the core endpoint, assert on the response shape — "none yet"
 until the slice exists>
@@ -90,6 +93,11 @@ cost:
 - **Validate at boundaries** — check/sanitize input where it enters the system; trust your
   own internal code elsewhere.
 - **Consistent naming** — use the same term for the same concept across frontend and backend.
+- **Always pass `encoding="utf-8"`** to `open()`, `read_text()` and `write_text()` for text
+  files. One teammate is on Windows, where Python doesn't default to UTF-8, so omitting it
+  garbles characters like the en dash in project names ("Jasper – Yemassee"). For the same
+  reason, don't assume `\n` line endings when parsing repo files: Git on Windows checks them
+  out with `\r\n`, so match `\r?\n` (or split with `splitlines()`).
 - **Small, focused commits** — easier to merge across 4 people and easier to revert one thing
   if it breaks the demo.
 - **Tests guard the demo, not coverage numbers** — test each acceptance criterion and the

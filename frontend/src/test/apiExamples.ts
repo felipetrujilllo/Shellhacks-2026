@@ -16,7 +16,7 @@ const apiDoc = readFileSync(
 )
 
 export function apiExample(tag: string): unknown {
-  const match = apiDoc.match(new RegExp(`<!-- example: ${tag} -->\\s*\`\`\`json\\n([\\s\\S]*?)\`\`\``))
+  const match = apiDoc.match(new RegExp(`<!-- example: ${tag} -->\\s*\`\`\`json\\r?\\n([\\s\\S]*?)\`\`\``))
   if (!match) throw new Error(`docs/api.md has no example tagged "${tag}"`)
   return JSON.parse(match[1])
 }

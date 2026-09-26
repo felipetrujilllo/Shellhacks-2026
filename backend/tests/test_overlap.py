@@ -30,7 +30,7 @@ MILES_PER_DEGREE = SPEC_EARTH_RADIUS_MI * math.pi / 180
 
 
 def load_starter_projects() -> list[Project]:
-    with open(FIXTURES / "starter_projects.csv", newline="") as f:
+    with open(FIXTURES / "starter_projects.csv", newline="", encoding="utf-8") as f:
         return [
             Project(
                 project_id=row["project_id"],
@@ -44,7 +44,7 @@ def load_starter_projects() -> list[Project]:
 
 
 def load_expected_overlaps() -> list[dict]:
-    with open(FIXTURES / "starter_overlaps.csv", newline="") as f:
+    with open(FIXTURES / "starter_overlaps.csv", newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 

@@ -143,7 +143,7 @@ def parse_pdf(pdf_path: Path | str) -> list[DescProject]:
 def write_csv(projects: list[DescProject], out_path: Path | str) -> None:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", newline="") as f:
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
         writer.writeheader()
         for project in projects:

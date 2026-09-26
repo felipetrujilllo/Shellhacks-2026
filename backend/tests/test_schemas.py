@@ -30,17 +30,18 @@ EXAMPLE_BLOCK = re.compile(r"<!-- example: (\w+) -->\s*```json\n(.*?)```", re.DO
 
 def seed_rows() -> list[dict]:
     """Raw rows exactly as csv.DictReader yields them — blanks are empty strings."""
-    with open(FIXTURES / "starter_projects.csv", newline="") as f:
+    with open(FIXTURES / "starter_projects.csv", newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
 def seed_columns() -> list[str]:
-    with open(FIXTURES / "starter_projects.csv", newline="") as f:
+    with open(FIXTURES / "starter_projects.csv", newline="", encoding="utf-8") as f:
         return next(csv.reader(f))
 
 
 def doc_examples() -> dict[str, object]:
-    return {tag: json.loads(body) for tag, body in EXAMPLE_BLOCK.findall(API_DOC.read_text())}
+    doc = API_DOC.read_text(encoding="utf-8")
+    return {tag: json.loads(body) for tag, body in EXAMPLE_BLOCK.findall(doc)}
 
 
 # --- Project ------------------------------------------------------------------------------
@@ -142,7 +143,7 @@ def test_overlap_rejects_values_the_engine_cannot_produce(field, value):
 
 
 def test_doc_has_one_example_per_response():
-    tags = [tag for tag, _ in EXAMPLE_BLOCK.findall(API_DOC.read_text())]
+    tags = [tag for tag, _ in EXAMPLE_BLOCK.findall(API_DOC.read_text(encoding="utf-8"))]
     assert sorted(tags) == sorted(EXAMPLE_MODELS)  # none missing, none duplicated
 
 
@@ -186,4 +187,4 @@ def test_overlap_examples_agree_with_the_engine(tag):
     ],
 )
 def test_doc_covers_every_endpoint_and_repository_signature(text):
-    assert text in API_DOC.read_text()
+    assert text in API_DOC.read_text(encoding="utf-8")

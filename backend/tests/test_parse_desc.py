@@ -70,7 +70,7 @@ def squashed(name: str) -> str:
 
 @pytest.fixture(scope="module")
 def desc_rows() -> list[dict]:
-    with open(DESC_CSV, newline="") as f:
+    with open(DESC_CSV, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
@@ -211,7 +211,7 @@ def test_rows_stay_in_page_order(desc_rows):
 
 def test_dates_agree_with_the_sponsors_starter_table(desc_rows):
     """Five sheets also appear in Projects_Overlaps.xlsx — the two sources must not disagree."""
-    with open(STARTER_CSV, newline="") as f:
+    with open(STARTER_CSV, newline="", encoding="utf-8") as f:
         starter = [r for r in csv.DictReader(f) if r["project_id"].startswith("DESC_")]
     assert len(starter) == 5
 
