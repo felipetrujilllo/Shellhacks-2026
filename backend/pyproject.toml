@@ -7,21 +7,26 @@ name = "gridwatch-backend"
 version = "0.1.0"
 description = "GridWatch backend: ingestion pipeline, overlap detection, and REST API"
 requires-python = ">=3.11"
+# Direct dependencies are pinned exactly (==) to the versions the suite was last run against, so
+# a DigitalOcean rebuild or CI run can't pull in a breaking release with no code change.
+# Transitive deps (starlette, pydantic_core, ...) are left to the resolver. To upgrade: bump a
+# pin here, `pip install -e ".[dev]"`, run the Checks. tests/test_dependencies_pinned.py
+# enforces the pins and that the venv running the tests matches them.
 dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
-    "pydantic",
-    "psycopg[binary]",
-    "httpx",
-    "pdfplumber",
-    "python-dotenv",
-    "requests",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.54.0",
+    "pydantic==2.13.5",
+    "psycopg[binary]==3.3.6",
+    "httpx==0.28.1",
+    "pdfplumber==0.11.10",
+    "python-dotenv==1.2.3",
+    "requests==2.34.2",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "ruff",
+    "pytest==9.1.1",
+    "ruff==0.16.9",
 ]
 
 [tool.setuptools]
