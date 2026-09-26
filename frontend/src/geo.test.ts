@@ -95,6 +95,8 @@ describe('overlapsToGeoJSON', () => {
       time_gap_days: 30,
       project_a: project({ project_id: 'A', lat_center: 32.0, lon_center: -81.0 }),
       project_b: project({ project_id: 'B', lat_center: 33.0, lon_center: -82.0 }),
+      est_savings_usd: null,
+      savings_basis: 'No estimate: neither project has a known cost.',
     }
     const fc = overlapsToGeoJSON([overlap])
     expect(fc).toEqual({

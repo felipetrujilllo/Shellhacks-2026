@@ -12,6 +12,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.schemas import ErrorDetail, Health, Overlap, Project
 from pipeline.load import REQUIRED_COLUMNS
 from pipeline.overlap import haversine_miles, opportunity_score, time_gap_days
+from pipeline.savings import estimate_savings
 
 FIXTURES = Path(__file__).parent / "fixtures"
 API_DOC = Path(__file__).parents[2] / "docs" / "api.md"
@@ -124,6 +125,8 @@ def test_overlap_has_exactly_the_contract_fields():
         "time_gap_days",
         "project_a",
         "project_b",
+        "est_savings_usd",
+        "savings_basis",
     ]
     assert Overlap.model_fields["project_a"].annotation is Project
     assert Overlap.model_fields["project_b"].annotation is Project
@@ -171,6 +174,20 @@ def test_overlap_examples_agree_with_the_engine(tag):
         assert round(distance, 2) == overlap.distance_mi
         assert time_gap_days(a.in_service_date, b.in_service_date) == overlap.time_gap_days
         assert opportunity_score(overlap.distance_mi, overlap.time_gap_days) == overlap.score
+
+
+@pytest.mark.parametrize("tag", ["overlaps", "overlap"])
+def test_overlap_example_savings_agree_with_the_estimator(tag):
+    examples = doc_examples()[tag]
+    for overlap in TypeAdapter(list[Overlap]).validate_python(
+        examples if isinstance(examples, list) else [examples]
+    ):
+        a, b = overlap.project_a, overlap.project_b
+        expected = estimate_savings(
+            overlap, a.est_cost_usd, b.est_cost_usd, utility_a=a.utility, utility_b=b.utility
+        )
+        assert overlap.est_savings_usd == expected.est_savings_usd
+        assert overlap.savings_basis == expected.savings_basis
 
 
 @pytest.mark.parametrize(

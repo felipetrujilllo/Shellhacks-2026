@@ -5,15 +5,21 @@ Routes depend on the `Repository` protocol, never on psycopg, so tests can swap 
 
 from __future__ import annotations
 
+from dataclasses import fields
 from typing import Protocol
 
 import psycopg
 from psycopg.rows import dict_row
 
 from app.schemas import Overlap, Project
+from pipeline.overlap import Overlap as EngineOverlap
+from pipeline.savings import estimate_savings
 
 # Column names are the model's field names (schema.sql uses the same vocabulary).
 PROJECT_COLUMNS = ", ".join(Project.model_fields)
+
+# A project_overlaps row carries exactly the engine Overlap's fields (plus the computed rank).
+ENGINE_OVERLAP_FIELDS = [f.name for f in fields(EngineOverlap)]
 
 # Fail fast instead of hanging a request when the database is unreachable.
 CONNECT_TIMEOUT_S = 5
@@ -82,12 +88,32 @@ def _projects_by_id(conn: psycopg.Connection, ids: list[str] | None = None) -> d
 
 
 def _to_overlap(row: dict, projects: dict[str, Project]) -> Overlap:
+    engine_overlap = EngineOverlap(**{field: row[field] for field in ENGINE_OVERLAP_FIELDS})
+    return build_overlap(engine_overlap, row["rank"], projects)
+
+
+def build_overlap(overlap: EngineOverlap, rank: int, projects: dict[str, Project]) -> Overlap:
+    """An engine overlap plus its rank and two projects, as the API serves it.
+
+    The savings estimate is derived here from the projects' costs, never stored.
+    """
+    project_a = projects[overlap.project_id_a]
+    project_b = projects[overlap.project_id_b]
+    savings = estimate_savings(
+        overlap,
+        project_a.est_cost_usd,
+        project_b.est_cost_usd,
+        utility_a=project_a.utility,
+        utility_b=project_b.utility,
+    )
     return Overlap(
-        overlap_id=row["overlap_id"],
-        rank=row["rank"],
-        score=row["score"],
-        distance_mi=row["distance_mi"],
-        time_gap_days=row["time_gap_days"],
-        project_a=projects[row["project_id_a"]],
-        project_b=projects[row["project_id_b"]],
+        overlap_id=overlap.overlap_id,
+        rank=rank,
+        score=overlap.score,
+        distance_mi=overlap.distance_mi,
+        time_gap_days=overlap.time_gap_days,
+        project_a=project_a,
+        project_b=project_b,
+        est_savings_usd=savings.est_savings_usd,
+        savings_basis=savings.savings_basis,
     )

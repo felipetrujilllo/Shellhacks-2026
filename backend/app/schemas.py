@@ -73,6 +73,7 @@ class Overlap(BaseModel):
 
     `score`, `distance_mi` and `time_gap_days` mean exactly what the overlap engine
     (pipeline/overlap.py) computes; `rank` is the 1-based position by descending score.
+    `est_savings_usd` / `savings_basis` are derived by pipeline/savings.py (not stored).
     """
 
     overlap_id: str = Field(min_length=1)
@@ -82,6 +83,10 @@ class Overlap(BaseModel):
     time_gap_days: int = Field(ge=0)
     project_a: Project
     project_b: Project
+    # Whole dollars; null when neither project's cost is known (never an invented number).
+    est_savings_usd: int | None = Field(ge=0)
+    # Plain-English explanation of the figure, or of why there is none.
+    savings_basis: str = Field(min_length=1)
 
 
 class Health(BaseModel):

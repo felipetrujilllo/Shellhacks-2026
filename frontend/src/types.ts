@@ -33,6 +33,10 @@ export interface Overlap {
   time_gap_days: number
   project_a: Project
   project_b: Project
+  /** Rough shared-mobilization savings, whole dollars; null when no cost is known. */
+  est_savings_usd: number | null
+  /** Plain-English explanation of the estimate (or why there is none); show verbatim. */
+  savings_basis: string
 }
 
 export interface Health {

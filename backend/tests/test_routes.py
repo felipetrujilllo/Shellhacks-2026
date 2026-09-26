@@ -9,6 +9,7 @@ from pydantic import TypeAdapter
 
 from app.config import Settings
 from app.main import create_app
+from app.repository import build_overlap
 from app.routes import get_repository
 from app.schemas import ErrorDetail, Health, Overlap, Project
 from pipeline.overlap import Overlap as EngineOverlap
@@ -30,9 +31,12 @@ def fixture_projects() -> list[Project]:
     return [Project.model_validate(row) for row in read_csv("starter_projects.csv")]
 
 
-def fixture_overlaps() -> list[Overlap]:
-    """The sponsor's six pairs, ranked by the engine's rule — as the real repository would."""
-    projects = {p.project_id: p for p in fixture_projects()}
+def fixture_overlaps(projects: list[Project] | None = None) -> list[Overlap]:
+    """The sponsor's six pairs, ranked by the engine's rule — as the real repository would.
+
+    Built with the repository's own `build_overlap`, so savings come from the real estimator.
+    """
+    by_id = {p.project_id: p for p in (projects or fixture_projects())}
     engine_rows = [
         EngineOverlap(
             overlap_id=row["overlap_id"],
@@ -45,15 +49,7 @@ def fixture_overlaps() -> list[Overlap]:
         for row in read_csv("starter_overlaps.csv")
     ]
     return [
-        Overlap(
-            overlap_id=o.overlap_id,
-            rank=rank,
-            score=o.score,
-            distance_mi=o.distance_mi,
-            time_gap_days=o.time_gap_days,
-            project_a=projects[o.project_id_a],
-            project_b=projects[o.project_id_b],
-        )
+        build_overlap(o, rank, by_id)
         for rank, o in enumerate(rank_by_score(engine_rows), start=1)
     ]
 
@@ -61,9 +57,12 @@ def fixture_overlaps() -> list[Overlap]:
 class FixtureRepository:
     """Serves fixture data, deliberately NOT in rank order, so the route must sort."""
 
-    def __init__(self) -> None:
-        self.projects = fixture_projects()
-        self.overlaps = list(reversed(fixture_overlaps()))
+    def __init__(self, costs: dict[str, int] | None = None) -> None:
+        self.projects = [
+            p.model_copy(update={"est_cost_usd": (costs or {}).get(p.project_id)})
+            for p in fixture_projects()
+        ]
+        self.overlaps = list(reversed(fixture_overlaps(self.projects)))
 
     def list_projects(self) -> list[Project]:
         return self.projects
@@ -166,6 +165,67 @@ def test_get_unknown_overlap_is_404_with_contract_error_body(client):
     assert response.status_code == 404
     assert ErrorDetail.model_validate(response.json()) == ErrorDetail(
         detail="overlap OVL_99 not found"
+    )
+
+
+# --- savings estimate on /overlaps and /overlaps/{overlap_id} -----------------------------
+
+DESC_3_COST = 23_787_423  # the docs/api.md example's DESC_3 cost
+
+
+@pytest.fixture
+def costed_client() -> TestClient:
+    """Starter data with DESC_3's public cost filled in (the starter CSV has no costs)."""
+    repository = FixtureRepository(costs={"DESC_3": DESC_3_COST})
+    app = create_app(SETTINGS)
+    app.dependency_overrides[get_repository] = lambda: repository
+    return TestClient(app)
+
+
+def test_overlaps_without_any_known_cost_are_null_with_the_redaction_reason(client):
+    body = client.get("/overlaps").json()
+
+    assert len(body) == 6
+    for overlap in body:
+        assert "est_savings_usd" in overlap and overlap["est_savings_usd"] is None
+        # Every starter pair has a Georgia Power side, whose cost is redacted.
+        assert "cost redacted in Georgia Power IRP" in overlap["savings_basis"]
+
+
+def test_get_overlap_without_known_cost_is_null_with_the_redaction_reason(client):
+    body = client.get("/overlaps/OVL_3").json()
+
+    assert body["est_savings_usd"] is None
+    assert body["savings_basis"] == (
+        "No estimate: neither project has a known cost "
+        "(the Dominion Energy South Carolina project: no published cost; "
+        "the Georgia Power project: cost redacted in Georgia Power IRP)."
+    )
+
+
+def test_overlaps_with_a_known_cost_carry_the_estimate(costed_client):
+    by_id = {o["overlap_id"]: o for o in costed_client.get("/overlaps").json()}
+
+    # DESC_3's pairs get a number; the closer, sooner OVL_2 beats OVL_3.
+    assert by_id["OVL_2"]["est_savings_usd"] == 709_900
+    assert by_id["OVL_3"]["est_savings_usd"] == 324_472
+    assert "$23,787,423" in by_id["OVL_2"]["savings_basis"]
+    # Pairs without DESC_3 still have no known cost.
+    for overlap_id in ("OVL_1", "OVL_4", "OVL_5", "OVL_6"):
+        assert by_id[overlap_id]["est_savings_usd"] is None
+        assert "cost redacted in Georgia Power IRP" in by_id[overlap_id]["savings_basis"]
+
+
+def test_get_overlap_with_a_known_cost_carries_the_estimate(costed_client):
+    response = costed_client.get("/overlaps/OVL_2")
+
+    assert response.status_code == 200
+    overlap = Overlap.model_validate(response.json())
+    assert overlap.est_savings_usd == 709_900
+    assert overlap.savings_basis == (
+        "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's "
+        "$23,787,423 cost, x0.80 for 5.65 mi apart and x0.75 for 152 days between in-service "
+        "dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
     )
 
 

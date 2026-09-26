@@ -41,6 +41,14 @@ One flagged cross-utility pair (project centers < 25 mi apart).
 | `distance_mi` | number 0–25 | haversine between centers, R = 3958.8 mi, 2 decimals |
 | `time_gap_days` | integer ≥ 0 | absolute gap between the two in-service dates |
 | `project_a`, `project_b` | `Project` | the pair, full records |
+| `est_savings_usd` | integer ≥ 0 \| null | rough shared-mobilization savings, whole dollars; null when neither project's cost is known (never invented) |
+| `savings_basis` | string | plain-English explanation of the figure, or why there is none (e.g. "cost redacted in Georgia Power IRP"); shown verbatim in the detail panel |
+
+`est_savings_usd` is derived, not stored (`backend/pipeline/savings.py`):
+`0.05 · known_cost · (1 − 0.9·distance/25) · 0.5^(gap/365)`, where `known_cost` is the
+smaller known `est_cost_usd` of the pair. The 5% shared-mobilization share is an assumption,
+not a sourced figure; the estimate falls to 10% of full value at the 25 mi radius and halves
+for every year between in-service dates.
 
 ## Endpoints
 
@@ -75,12 +83,14 @@ Every flagged pair, **ranked: `rank` 1 first** (descending `score`). Response: `
   {
     "overlap_id": "OVL_2", "rank": 1, "score": 0.8311, "distance_mi": 5.65, "time_gap_days": 152,
     "project_a": {"project_id": "DESC_3", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Jasper - Okatie 230 kV #2: Construct", "name_a": "Jasper Sub", "lat_a": 32.35912, "lon_a": -81.1246, "name_b": "Okatie Sub", "lat_b": 32.333758, "lon_b": -81.032495, "lat_center": 32.346439, "lon_center": -81.0785475, "in_service_date": "2025-12-31", "est_cost_usd": 23787423, "location_confidence": "confirmed"},
-    "project_b": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"}
+    "project_b": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
+    "est_savings_usd": 709900, "savings_basis": "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's $23,787,423 cost, x0.80 for 5.65 mi apart and x0.75 for 152 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
   },
   {
     "overlap_id": "OVL_3", "rank": 2, "score": 0.7055, "distance_mi": 7.55, "time_gap_days": 517,
     "project_a": {"project_id": "DESC_3", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Jasper - Okatie 230 kV #2: Construct", "name_a": "Jasper Sub", "lat_a": 32.35912, "lon_a": -81.1246, "name_b": "Okatie Sub", "lat_b": 32.333758, "lon_b": -81.032495, "lat_center": 32.346439, "lon_center": -81.0785475, "in_service_date": "2025-12-31", "est_cost_usd": 23787423, "location_confidence": "confirmed"},
-    "project_b": {"project_id": "GPC_3", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: GOSHEN (SAV) - MCINTOSH 115KV LINE REBUILD", "name_a": "GOSHEN", "lat_a": 32.248701, "lon_a": -81.209472, "name_b": "MCINTOSH", "lat_b": 32.352116, "lon_b": -81.182105, "lat_center": 32.3004085, "lon_center": -81.1957885, "in_service_date": "2027-06-01", "est_cost_usd": null, "location_confidence": "confirmed"}
+    "project_b": {"project_id": "GPC_3", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: GOSHEN (SAV) - MCINTOSH 115KV LINE REBUILD", "name_a": "GOSHEN", "lat_a": 32.248701, "lon_a": -81.209472, "name_b": "MCINTOSH", "lat_b": 32.352116, "lon_b": -81.182105, "lat_center": 32.3004085, "lon_center": -81.1957885, "in_service_date": "2027-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
+    "est_savings_usd": 324472, "savings_basis": "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's $23,787,423 cost, x0.73 for 7.55 mi apart and x0.37 for 517 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
   }
 ]
 ```
@@ -94,7 +104,8 @@ One pair, for the detail panel. Response: `Overlap`.
 {
   "overlap_id": "OVL_2", "rank": 1, "score": 0.8311, "distance_mi": 5.65, "time_gap_days": 152,
   "project_a": {"project_id": "DESC_3", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Jasper - Okatie 230 kV #2: Construct", "name_a": "Jasper Sub", "lat_a": 32.35912, "lon_a": -81.1246, "name_b": "Okatie Sub", "lat_b": 32.333758, "lon_b": -81.032495, "lat_center": 32.346439, "lon_center": -81.0785475, "in_service_date": "2025-12-31", "est_cost_usd": 23787423, "location_confidence": "confirmed"},
-  "project_b": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"}
+  "project_b": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
+  "est_savings_usd": 709900, "savings_basis": "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's $23,787,423 cost, x0.80 for 5.65 mi apart and x0.75 for 152 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
 }
 ```
 

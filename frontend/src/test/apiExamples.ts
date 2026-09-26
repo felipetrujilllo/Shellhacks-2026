@@ -48,6 +48,8 @@ const OVERLAP_CHECKS: Record<Exclude<keyof Overlap, 'project_a' | 'project_b'>, 
   score: (v) => typeof v === 'number',
   distance_mi: (v) => typeof v === 'number',
   time_gap_days: (v) => Number.isInteger(v) && (v as number) >= 0,
+  est_savings_usd: (v) => v === null || (Number.isInteger(v) && (v as number) >= 0),
+  savings_basis: (v) => typeof v === 'string' && v.length > 0,
 }
 
 function expectShape(value: unknown, checks: Record<string, (v: unknown) => boolean>, extra: string[] = []) {
