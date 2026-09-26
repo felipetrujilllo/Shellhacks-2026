@@ -242,6 +242,84 @@ def test_the_exact_coordinate_limits_are_still_valid_places():
     assert (row.lat_center, row.lon_center) == (90.0, -180.0)
 
 
+# --- centers computed from endpoints (#13) ------------------------------------------
+
+
+def test_a_blank_center_is_filled_with_the_midpoint_of_both_endpoints():
+    row = parse_project_row(
+        raw_row(
+            lat_a="32.35912",
+            lon_a="-81.1246",
+            lat_b="32.333758",
+            lon_b="-81.032495",
+            lat_center="",
+            lon_center="",
+        )
+    )
+
+    # DESC_3's endpoints; the sponsor's table has 32.346439, -81.0785475.
+    assert row.lat_center == pytest.approx(32.346439, abs=1e-9)
+    assert row.lon_center == pytest.approx(-81.0785475, abs=1e-9)
+
+
+def test_a_blank_center_with_one_endpoint_is_that_endpoint():
+    row = parse_project_row(raw_row(lat_center="", lon_center=""))
+
+    assert (row.lat_center, row.lon_center) == (33.562599, -82.051362)
+
+
+def test_a_blank_center_with_no_endpoints_fails_naming_the_project():
+    with pytest.raises(LoadError, match="DESC_9"):
+        parse_project_row(
+            raw_row(
+                project_id="DESC_9",
+                lat_a="",
+                lon_a="",
+                lat_center="",
+                lon_center="",
+            )
+        )
+
+
+def test_a_blank_center_with_a_half_located_endpoint_fails_naming_the_project():
+    with pytest.raises(LoadError, match="DESC_9"):
+        parse_project_row(
+            raw_row(project_id="DESC_9", lon_a="", lat_center="", lon_center="")
+        )
+
+
+@pytest.mark.parametrize("column", ["lat_center", "lon_center"])
+def test_half_a_center_is_rejected_rather_than_recomputed(column):
+    with pytest.raises(LoadError, match=f"DESC_1: {column}"):
+        parse_project_row(raw_row(**{column: ""}))
+
+
+def test_a_present_center_is_kept_even_when_the_endpoints_disagree():
+    """The sponsor's precomputed center is authoritative; only blanks are filled."""
+    row = parse_project_row(
+        raw_row(lat_b="33.0", lon_b="-81.0", lat_center="34.5", lon_center="-83.25")
+    )
+
+    assert (row.lat_center, row.lon_center) == (34.5, -83.25)
+
+
+def test_a_seed_with_blank_centers_loads_with_computed_ones(tmp_path):
+    with open(STARTER_CSV, newline="", encoding="utf-8") as f:
+        original = list(csv.DictReader(f))
+    blanked = tmp_path / "blank_centers.csv"
+    with open(blanked, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=original[0].keys())
+        writer.writeheader()
+        writer.writerows({**r, "lat_center": "", "lon_center": ""} for r in original)
+
+    computed = {r.project_id: r for r in read_project_csv(blanked)}
+
+    for sponsor in read_project_csv(STARTER_CSV):
+        mine = computed[sponsor.project_id]
+        assert mine.lat_center == pytest.approx(sponsor.lat_center, abs=5e-7)
+        assert mine.lon_center == pytest.approx(sponsor.lon_center, abs=5e-7)
+
+
 # --- reading the seed file ----------------------------------------------------------
 
 

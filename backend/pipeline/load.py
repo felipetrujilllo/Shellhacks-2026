@@ -27,6 +27,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from pipeline.centers import HalfLocatedEndpointError, project_center
 from pipeline.overlap import Overlap, Project, detect_overlaps
 
 SCHEMA_PATH = Path(__file__).parents[1] / "db" / "schema.sql"
@@ -51,6 +52,9 @@ REQUIRED_COLUMNS = (
     "lon_center",
     "in_service_date",
 )
+# Required on every loaded row, but a blank one in the CSV is derived from the endpoints
+# (parse_center) rather than rejected up front.
+DERIVABLE_COLUMNS = ("lat_center", "lon_center")
 
 INSERT_PROJECT = """
 INSERT INTO projects (
@@ -145,11 +149,35 @@ def optional_coordinate(raw: dict, column: str, project_id: str) -> float | None
     return degrees
 
 
-def required_coordinate(raw: dict, column: str, project_id: str) -> float:
-    value = optional_coordinate(raw, column, project_id)
-    if value is None:
-        raise LoadError(f"{project_id}: {column} is required")
-    return value
+def parse_center(
+    raw: dict,
+    project_id: str,
+    endpoints: tuple[float | None, float | None, float | None, float | None],
+) -> tuple[float, float]:
+    """The CSV's center if it has one, else the midpoint of the endpoints (centers.py).
+
+    A center already in the CSV is the sponsor's and is kept as-is. Only a fully blank
+    center is computed; half a center is bad data and fails loud, as does a row with no
+    center and no located endpoint — that project cannot be placed on the map at all.
+    """
+    lat = optional_coordinate(raw, "lat_center", project_id)
+    lon = optional_coordinate(raw, "lon_center", project_id)
+    if lat is not None and lon is not None:
+        return lat, lon
+    if lat is not None or lon is not None:
+        missing = "lon_center" if lon is None else "lat_center"
+        raise LoadError(f"{project_id}: {missing} is required when the other half is set")
+
+    try:
+        center = project_center(*endpoints)
+    except HalfLocatedEndpointError as exc:
+        raise LoadError(f"{project_id}: center is blank and {exc}") from exc
+    if center is None:
+        raise LoadError(
+            f"{project_id}: lat_center/lon_center are blank and neither endpoint is "
+            "located, so there is no center to compute"
+        )
+    return center
 
 
 def parse_cost(raw: dict, project_id: str) -> int | None:
@@ -173,7 +201,11 @@ def parse_project_row(raw: dict) -> ProjectRow:
     if not project_id:
         raise LoadError("a row has no project_id")
 
-    missing = [c for c in REQUIRED_COLUMNS if not (raw.get(c) or "").strip()]
+    missing = [
+        c
+        for c in REQUIRED_COLUMNS
+        if c not in DERIVABLE_COLUMNS and not (raw.get(c) or "").strip()
+    ]
     if missing:
         raise LoadError(f"{project_id}: missing required column(s) {', '.join(missing)}")
 
@@ -192,19 +224,26 @@ def parse_project_row(raw: dict) -> ProjectRow:
             f"got {raw['in_service_date']!r}"
         ) from exc
 
+    endpoints = tuple(
+        optional_coordinate(raw, column, project_id)
+        for column in ("lat_a", "lon_a", "lat_b", "lon_b")
+    )
+    lat_a, lon_a, lat_b, lon_b = endpoints
+    lat_center, lon_center = parse_center(raw, project_id, endpoints)
+
     return ProjectRow(
         project_id=project_id,
         utility=raw["utility"].strip(),
         state=raw["state"].strip(),
         project_name=raw["project_name"].strip(),
         name_a=optional_text(raw, "name_a"),
-        lat_a=optional_coordinate(raw, "lat_a", project_id),
-        lon_a=optional_coordinate(raw, "lon_a", project_id),
+        lat_a=lat_a,
+        lon_a=lon_a,
         name_b=optional_text(raw, "name_b"),
-        lat_b=optional_coordinate(raw, "lat_b", project_id),
-        lon_b=optional_coordinate(raw, "lon_b", project_id),
-        lat_center=required_coordinate(raw, "lat_center", project_id),
-        lon_center=required_coordinate(raw, "lon_center", project_id),
+        lat_b=lat_b,
+        lon_b=lon_b,
+        lat_center=lat_center,
+        lon_center=lon_center,
         in_service_date=in_service,
         est_cost_usd=parse_cost(raw, project_id),
         location_confidence=confidence,
