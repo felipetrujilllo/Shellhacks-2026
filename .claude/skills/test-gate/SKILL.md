@@ -14,7 +14,8 @@ $ARGUMENTS
 - **Pasted ticket text** - mode `ticket`.
 - **`full`** - mode `full`: whole-project demo-readiness audit, no single ticket.
 - **Blank** - mode `diff`: gate whatever is in `git status` / `git diff HEAD` (plus
-  `git diff main...HEAD` if on a branch). If there are no changes either, switch to `full`
+  `git diff <working branch>...HEAD` if on a branch other than the working branch named in
+  `CLAUDE.md` `## Branches`). If there are no changes either, switch to `full`
   and say so.
 
 ## Step 2 - Gather what the agent needs

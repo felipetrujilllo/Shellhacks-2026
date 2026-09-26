@@ -13,16 +13,19 @@ text before doing anything else - do not guess at requirements. The ticket can b
 issue (paste the number or URL and read it with `gh issue view`) or raw ticket text the user
 pastes directly - handle both the same way once you have the requirements.
 
-## Step 0 - Sync with main and record a baseline
+## Step 0 - Sync with the working branch and record a baseline
 
 Work directly in the current checkout. Do not create a git worktree, and do not create a
 feature branch unless the user explicitly asks for one.
 
-Before implementing, get the checkout up to date with `main`:
+Read the **working branch** name from the `CLAUDE.md` `## Branches` section (the
+"Working branch:" line). Never implement on `main` - it only receives milestone merges.
+
+Before implementing, get the checkout up to date with the working branch:
 - `git status` - if the working tree is dirty, stop and ask the user how to proceed rather
   than moving or stashing their changes.
-- If clean: `git checkout main` then `git pull` so the implementation starts from the latest
-  `main`.
+- If clean: `git checkout <working branch>` then `git pull` so the implementation starts
+  from the latest working branch.
 
 Then record the **baseline**: run every command in the `CLAUDE.md` `## Checks` table plus the
 smoke test, and note for each one the exit status and the names of any failing tests. Keep

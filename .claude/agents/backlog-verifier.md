@@ -29,7 +29,7 @@ You also receive the PM's list of drift closes/reopens, if any.
      functions/endpoints/symbols the ticket describes.
    - **Not already tracked.** Read the open issues. If an open issue already covers this
      work, the ticket is a duplicate - FAIL it and name the issue number.
-   - **Not already done.** If the work is already present and wired in on `main` or a branch,
+   - **Not already done.** If the work is already present and wired in on the working branch (`CLAUDE.md` `## Branches`), `main`, or another branch,
      FAIL it as drift - the PM should close/relabel, not open a new ticket.
    - **Format matches the repo convention.** Title is `[P<n>-<AREA>] <imperative>`. Labels
      include one `size:`, one `area:`, one `phase:`. Body has the `**Assignee:** ... · **Size:**

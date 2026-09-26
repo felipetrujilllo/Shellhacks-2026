@@ -98,6 +98,22 @@ cost:
 - **AI calls are mocked in unit tests** — tests must not hit a paid/rate-limited model API or
   need a real key. Keep at most one opt-in live test for the demo path.
 
+## Branches
+- **Working branch: `test-branch-1`.** All day-to-day work happens here: every ticket starts
+  from the latest `test-branch-1`, and every commit and push goes to it. The skills read the
+  branch name from this line, so if the branch is renamed, update it here only.
+- **`main` is the stable, demo-safe branch.** Nobody commits to it directly. It only
+  receives merges of `test-branch-1` at milestones (e.g. the slice working end to end, the
+  pre-demo freeze), done by D, and only after `/test-gate full` returns APPROVE on
+  `test-branch-1`. Deployment (DigitalOcean) builds from `main`.
+- To promote: on an up-to-date `test-branch-1` with `/test-gate full` APPROVE, run
+  `git checkout main && git pull && git merge --ff-only test-branch-1 && git push`, then
+  switch back with `git checkout test-branch-1`. If `--ff-only` fails, someone committed to
+  `main` directly — stop and sort that out rather than forcing it.
+- Before starting work, check you're on `test-branch-1` (`git status -sb`). If you're on
+  `main`, switch before changing anything.
+- Don't create per-ticket feature branches unless the user asks for one.
+
 ## Working style
 - This is a timeboxed hackathon. Prioritize working code over polish — get a thin end-to-end
   slice running before adding features.

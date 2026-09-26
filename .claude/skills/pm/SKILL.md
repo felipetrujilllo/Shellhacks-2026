@@ -38,8 +38,13 @@ Gather all of this before forming an opinion:
   currently in progress.
 
 **Git state**
-- `git log --oneline -25`, `git branch -a`, `git status`, `git diff main --stat`.
-- For each active branch: `git diff main..<branch> --stat`.
+- Read the working branch from `CLAUDE.md` `## Branches`; all in-progress work lives there
+  and `main` only holds milestone merges. Judge what is built from the working branch.
+- `git fetch`, `git log --oneline -25 origin/<working branch>`, `git branch -a`,
+  `git status`, `git diff <working branch> --stat`.
+- `git log --oneline origin/main..origin/<working branch>` - work not yet promoted to
+  `main`. Note it in the report so D knows whether a milestone merge is due.
+- For each other active branch: `git diff <working branch>..<branch> --stat`.
 
 **The actual codebase - do not skip this, it is the point of the pass**
 - For each phase, list the artifacts it is supposed to have produced (from the `## Owns`
