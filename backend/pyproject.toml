@@ -37,4 +37,9 @@ line-length = 100
 extend-exclude = [".venv"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
+# PLW1514: open()/read_text()/write_text() without encoding= uses the platform default
+# (cp1252 on Windows) and silently mangles non-ASCII data. It is a preview rule, so preview is
+# on but explicit-preview-rules keeps every other preview rule off unless it is named here.
+preview = true
+explicit-preview-rules = true
+select = ["E", "F", "W", "I", "B", "UP", "PLW1514"]

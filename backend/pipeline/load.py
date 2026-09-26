@@ -291,7 +291,7 @@ def to_engine_project(row: ProjectRow) -> Project:
 
 
 def apply_schema(connection) -> None:
-    connection.execute(SCHEMA_PATH.read_text())
+    connection.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 def load(connection, rows: list[ProjectRow], overlaps: list[Overlap]) -> tuple[int, int]:

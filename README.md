@@ -21,21 +21,46 @@ Most loader tests run against a recording stub, which cannot tell valid SQL from
 tests that execute the real schema are opt-in and need a scratch Postgres — they TRUNCATE, so
 they deliberately ignore `$DATABASE_URL` and read `TEST_DATABASE_URL` instead:
 
+Needs Docker Desktop running (the container is `postgis/postgis`, so PostGIS is already
+installed). Start it once; it keeps running across sessions until you remove it:
+
 ```bash
 docker run -d --name gridwatch-pg -e POSTGRES_HOST_AUTH_METHOD=trust \
     -e POSTGRES_DB=gridwatch_test -p 55432:5432 postgis/postgis:16-3.4
 
 cd backend
 TEST_DATABASE_URL=postgresql://postgres@localhost:55432/gridwatch_test \
-    .venv/bin/python -m pytest
+    .venv/bin/python -m pytest tests/test_load.py
 ```
+
+On Windows (PowerShell), same container, then:
+
+```powershell
+cd backend
+$env:TEST_DATABASE_URL = "postgresql://postgres@localhost:55432/gridwatch_test"
+.venv\Scripts\python.exe -m pytest tests/test_load.py
+```
+
+Done with it: `docker rm -f gridwatch-pg` (it holds nothing worth keeping). If `docker run`
+says the name is taken, the container already exists — `docker start gridwatch-pg`.
 
 Trust auth on purpose: the container is throwaway and local-only, so there is no password
 to put in a URL and nothing for the credential scanner in `tests/test_env_example.py` to
 flag.
 
-Without it, those tests skip and `pytest` still passes — so run it before touching
-`db/schema.sql` or `pipeline/load.py`.
+Without it, those tests skip and `pytest` still passes — which is how a reserved-word table
+name once shipped past green checks. So this run is **required** (see `CLAUDE.md` `## Checks`)
+for any change to `backend/db/` or `pipeline/load.py`.
+
+#### Encodings and line endings (Windows + Mac team)
+
+- Always pass `encoding="utf-8"` to `open()`, `Path.read_text()` and `Path.write_text()`:
+  Windows defaults to cp1252. `ruff check` enforces this (rule PLW1514), but it cannot see
+  through every call — e.g. `SOME_PATH_CONSTANT.read_text()` — so write it anyway.
+- `.gitattributes` stores and checks out every text file with LF, on Windows too, and treats
+  `*.pdf`/`*.xlsx`/`*.docx` as binary. If `git ls-files --eol | grep i/crlf` ever prints
+  anything, fix it with `git add --renormalize <file>`; `tests/test_repo_hygiene.py` fails
+  until you do.
 
 ### Loading seed data
 
