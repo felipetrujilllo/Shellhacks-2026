@@ -63,15 +63,19 @@ class FixtureRepository:
             for p in fixture_projects()
         ]
         self.overlaps = list(reversed(fixture_overlaps(self.projects)))
+        self.submitted: list[Project] = []
 
     def list_projects(self) -> list[Project]:
-        return self.projects
+        return [*self.projects, *self.submitted]
 
     def list_overlaps(self) -> list[Overlap]:
         return self.overlaps
 
     def get_overlap(self, overlap_id: str) -> Overlap | None:
         return next((o for o in self.overlaps if o.overlap_id == overlap_id), None)
+
+    def add_submission(self, projects: list[Project]) -> None:
+        self.submitted.extend(projects)
 
 
 @pytest.fixture
@@ -229,6 +233,82 @@ def test_get_overlap_with_a_known_cost_carries_the_estimate(costed_client):
     )
 
 
+# --- POST /submissions --------------------------------------------------------------------
+
+
+def upload_row(**overrides) -> dict:
+    """One row as the frontend's upload dialog sends it (docs/api.md)."""
+    return {
+        "project_id": "client-ref-1",
+        "utility": "Tidewater Grid Co.",
+        "state": "SC",
+        "project_name": "Savannah River crossing",
+        "lat_center": 32.352116,
+        "lon_center": -81.175112,
+        "in_service_date": "2026-06-01",
+        "est_cost_usd": 2500000,
+        **overrides,
+    }
+
+
+def test_a_submission_is_stored_and_returned_with_server_ids(client, repository):
+    rows = [upload_row(), upload_row(project_id="client-ref-2", project_name="Second line")]
+    response = client.post("/submissions", json={"projects": rows})
+
+    assert response.status_code == 201
+    stored = TypeAdapter(list[Project]).validate_python(response.json())
+    assert [p.project_name for p in stored] == ["Savannah River crossing", "Second line"]
+    assert all(p.project_id.startswith("SUB-") for p in stored)
+    assert all(p.location_confidence == "low" for p in stored)
+    assert repository.submitted == stored
+
+
+def test_submitted_projects_are_served_to_everyone_by_get_projects(client):
+    [stored] = client.post("/submissions", json={"projects": [upload_row()]}).json()
+
+    ids = [p["project_id"] for p in client.get("/projects").json()]
+    assert stored["project_id"] in ids
+    assert len(ids) == 11
+
+
+def test_a_project_that_already_exists_is_a_409_and_nothing_is_stored(client, repository):
+    duplicate = upload_row(
+        project_id="client-ref-2",
+        utility="georgia power",
+        project_name=repository.projects[5].project_name,
+    )
+    response = client.post("/submissions", json={"projects": [upload_row(), duplicate]})
+
+    assert response.status_code == 409
+    assert "already exists" in ErrorDetail.model_validate(response.json()).detail
+    assert repository.submitted == []
+
+
+def test_submitting_the_same_upload_twice_is_a_409_the_second_time(client, repository):
+    assert client.post("/submissions", json={"projects": [upload_row()]}).status_code == 201
+    assert client.post("/submissions", json={"projects": [upload_row()]}).status_code == 409
+    assert len(repository.submitted) == 1
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"projects": []},
+        {"projects": [upload_row()] * 1001},
+        {"projects": [upload_row(lat_center=91)]},
+        {"projects": [upload_row(in_service_date="06/01/2026")]},
+        {"projects": [upload_row(utility="")]},
+        {"projects": [upload_row(est_cost_usd=-1)]},
+        [upload_row()],
+    ],
+    ids=["empty", "over-1000", "bad-latitude", "non-iso-date", "no-utility", "negative-cost",
+         "bare-list"],
+)
+def test_an_invalid_submission_is_a_422_and_nothing_is_stored(client, repository, body):
+    assert client.post("/submissions", json=body).status_code == 422
+    assert repository.submitted == []
+
+
 # --- CORS ---------------------------------------------------------------------------------
 
 
@@ -273,3 +353,13 @@ def test_cors_origin_comes_from_settings(repository):
     assert "access-control-allow-origin" not in client.get(
         "/health", headers={"Origin": FRONTEND_ORIGIN}
     ).headers
+
+
+def test_cors_preflight_allows_posting_a_submission(client):
+    response = client.options(
+        "/submissions",
+        headers={"Origin": FRONTEND_ORIGIN, "Access-Control-Request-Method": "POST"},
+    )
+
+    assert response.status_code == 200
+    assert "POST" in response.headers["access-control-allow-methods"]

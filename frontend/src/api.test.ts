@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiUrl, fetchHealth, fetchOverlap, fetchOverlaps, fetchProjects } from './api'
+import { apiUrl, fetchHealth, fetchOverlap, fetchOverlaps, fetchProjects, submitProjects } from './api'
 import { apiExample, expectOverlap, expectProject } from './test/apiExamples'
+import type { Project } from './types'
 
 function jsonResponse(body: unknown, status = 200, statusText = 'OK'): Response {
   return new Response(JSON.stringify(body), {
@@ -96,5 +97,38 @@ describe('non-2xx responses', () => {
   it('throws an error carrying the status for a 500', async () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
     await expect(fetchProjects()).rejects.toThrow('failed with status 500')
+  })
+})
+
+describe('submitProjects', () => {
+  const sent = () => (apiExample('submission') as { projects: Project[] }).projects
+
+  it('POSTs {"projects": [...]} as JSON to /submissions and returns the stored projects', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(apiExample('submitted'), 201, 'Created'))
+    const stored = await submitProjects(sent())
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('http://api.test:8000/submissions')
+    expect(init?.method).toBe('POST')
+    expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
+    expect(JSON.parse(String(init?.body))).toEqual({ projects: sent() })
+    expect(stored.map((p) => p.project_id)).toEqual(['SUB-3f9a1c2e-1'])
+    stored.forEach(expectProject)
+  })
+
+  it("rejects with the server's own reason for a 409", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(apiExample('conflict'), 409, 'Conflict'))
+    await expect(submitProjects(sent())).rejects.toThrow(
+      "project 1 ('Savannah River crossing' by 'Tidewater Grid Co.') already exists",
+    )
+  })
+
+  it('rejects with the status when the body has no readable reason (a 422 or a bare 500)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: [{ msg: 'bad' }] }, 422, 'Unprocessable Entity'))
+    await expect(submitProjects(sent())).rejects.toThrow(
+      'POST http://api.test:8000/submissions failed with status 422 Unprocessable Entity',
+    )
+    fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
+    await expect(submitProjects(sent())).rejects.toThrow('failed with status 500')
   })
 })

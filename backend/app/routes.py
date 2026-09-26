@@ -7,7 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.repository import Repository
-from app.schemas import ErrorDetail, Health, Overlap, Project
+from app.schemas import ErrorDetail, Health, Overlap, Project, Submission
+from app.submissions import SubmissionConflict, prepare_submission
 
 router = APIRouter()
 
@@ -46,3 +47,19 @@ def get_overlap(overlap_id: str, repository: RepositoryDep) -> Overlap:
     if overlap is None:
         raise HTTPException(status_code=404, detail=f"overlap {overlap_id} not found")
     return overlap
+
+
+@router.post(
+    "/submissions",
+    status_code=201,
+    response_model=list[Project],
+    responses={409: {"model": ErrorDetail}},
+)
+def submit_projects(submission: Submission, repository: RepositoryDep) -> list[Project]:
+    """Store an upload for everyone; its pairs appear in /overlaps from the next request."""
+    try:
+        projects = prepare_submission(submission.projects, repository.list_projects())
+        repository.add_submission(projects)
+    except SubmissionConflict as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    return projects

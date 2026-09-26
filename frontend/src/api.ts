@@ -28,3 +28,23 @@ export const fetchOverlaps = (): Promise<Overlap[]> => getJson('/overlaps')
 
 export const fetchOverlap = (overlapId: string): Promise<Overlap> =>
   getJson(`/overlaps/${encodeURIComponent(overlapId)}`)
+
+/**
+ * POST /submissions: stores an upload for everyone. Resolves with the stored projects
+ * (server ids, `low` confidence); rejects with the server's reason, e.g. a 409 duplicate.
+ */
+export async function submitProjects(projects: Project[]): Promise<Project[]> {
+  const url = apiUrl('/submissions')
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projects }),
+  })
+  if (!res.ok) {
+    // A 409 carries a readable `detail` string; a 422's is a list, so fall back to the status.
+    const body: unknown = await res.json().catch(() => null)
+    const detail = (body as { detail?: unknown } | null)?.detail
+    throw new Error(typeof detail === 'string' ? detail : `POST ${url} failed with status ${res.status} ${res.statusText}`.trimEnd())
+  }
+  return (await res.json()) as Project[]
+}

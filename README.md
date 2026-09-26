@@ -30,7 +30,7 @@ docker run -d --name gridwatch-pg -e POSTGRES_HOST_AUTH_METHOD=trust \
 
 cd backend
 TEST_DATABASE_URL=postgresql://postgres@localhost:55432/gridwatch_test \
-    .venv/bin/python -m pytest tests/test_load.py
+    .venv/bin/python -m pytest tests/test_load.py tests/test_repository.py
 ```
 
 On Windows (PowerShell), same container, then:
@@ -38,7 +38,7 @@ On Windows (PowerShell), same container, then:
 ```powershell
 cd backend
 $env:TEST_DATABASE_URL = "postgresql://postgres@localhost:55432/gridwatch_test"
-.venv\Scripts\python.exe -m pytest tests/test_load.py
+.venv\Scripts\python.exe -m pytest tests/test_load.py tests/test_repository.py
 ```
 
 Done with it: `docker rm -f gridwatch-pg` (it holds nothing worth keeping). If `docker run`

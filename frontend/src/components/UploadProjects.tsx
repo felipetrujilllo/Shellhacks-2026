@@ -4,7 +4,7 @@ import { CSV_TEMPLATE, reviewCsv, type ImportBatch } from '../importProjects'
 import Icon from './Icon'
 
 export default function UploadProjects({ existing, onClose, onImport }: {
-  existing: Project[]; onClose: () => void; onImport: (batch: ImportBatch) => void
+  existing: Project[]; onClose: () => void; onImport: (batch: ImportBatch) => Promise<void>
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -23,6 +23,12 @@ export default function UploadProjects({ existing, onClose, onImport }: {
       const id = crypto.randomUUID()
       setBatch({ id, filename: file.name, rows: reviewCsv(await file.text(), id, existing) })
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not read this file.') }
+    finally { setBusy(false) }
+  }
+  async function save(batch: ImportBatch) {
+    setError(''); setBusy(true)
+    try { await onImport(batch); onClose() }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not save these projects.') }
     finally { setBusy(false) }
   }
   const ready = batch?.rows.filter(r => r.project).length ?? 0
@@ -62,8 +68,8 @@ export default function UploadProjects({ existing, onClose, onImport }: {
           <p className="review-note">Uploaded coordinates are marked unverified. Nearby projects are candidates for review, not confirmed shared construction.</p>
         </div>}
         {error && <p role="alert" className="upload-error">{error}</p>}
-        <footer className="upload-footer"><span><Icon name="layers" size={15} /> Local to this tab. Refresh clears uploads.</span>
-          {batch && <button className="primary-button" disabled={!ready} onClick={() => { onImport(batch); onClose() }}>Add {ready} project{ready !== 1 ? 's' : ''} & compare <Icon name="arrow" size={16} /></button>}
+        <footer className="upload-footer"><span><Icon name="layers" size={15} /> Saved to the shared workspace. Everyone sees these projects.</span>
+          {batch && <button className="primary-button" disabled={!ready || busy} onClick={() => void save(batch)}>{busy ? 'Saving…' : <>Add {ready} project{ready !== 1 ? 's' : ''} & compare <Icon name="arrow" size={16} /></>}</button>}
         </footer>
       </div>
     </dialog>

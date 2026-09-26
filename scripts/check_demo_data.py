@@ -30,6 +30,7 @@ from pathlib import Path
 import httpx
 import smoke  # scripts/smoke.py: shares its server lifecycle and failure type
 
+from app.submissions import SUBMITTED_ID_PREFIX, SUBMITTED_OVERLAP_PREFIX
 from pipeline.load import read_project_csv, to_engine_project
 from pipeline.overlap import detect_overlaps
 
@@ -121,15 +122,28 @@ def _get_list(client: httpx.Client, path: str) -> list[dict]:
 
 
 def check_api(client: httpx.Client, expected: ExpectedData) -> str:
-    """Compare `client`'s API with `expected`; return a PASS summary or raise SmokeFailure."""
-    projects = _get_list(client, "/projects")
-    overlaps = _get_list(client, "/overlaps")
+    """Compare `client`'s API with `expected`; return a PASS summary or raise SmokeFailure.
+
+    Uploaded projects (POST /submissions) and their pairs are not from the CSV and survive
+    every reload, so they are left out of the comparison and only counted in the summary.
+    """
+    served_projects = _get_list(client, "/projects")
+    served_overlaps = _get_list(client, "/overlaps")
+    projects = [p for p in served_projects
+                if not p["project_id"].startswith(SUBMITTED_ID_PREFIX)]
+    overlaps = [o for o in served_overlaps
+                if not o["overlap_id"].startswith(SUBMITTED_OVERLAP_PREFIX)]
     problems = find_differences(expected, projects, overlaps)
     if problems:
         raise smoke.SmokeFailure("the API does not serve the CSV's data:\n  - "
                                  + "\n  - ".join(problems))
-    return (f"demo data OK: {len(projects)} projects and {len(overlaps)} overlaps, "
-            f"matching the CSV and the engine")
+    summary = (f"demo data OK: {len(projects)} projects and {len(overlaps)} overlaps, "
+               f"matching the CSV and the engine")
+    uploaded = len(served_projects) - len(projects)
+    if uploaded:
+        summary += (f" (ignored {uploaded} uploaded project(s) and "
+                    f"{len(served_overlaps) - len(overlaps)} of their pair(s))")
+    return summary
 
 
 def run_checks(base_url: str, expected: ExpectedData,

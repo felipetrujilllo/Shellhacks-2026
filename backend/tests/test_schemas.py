@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.schemas import ErrorDetail, Health, Overlap, Project
+from app.schemas import ErrorDetail, Health, Overlap, Project, Submission
 from pipeline.load import REQUIRED_COLUMNS
 from pipeline.overlap import haversine_miles, opportunity_score, time_gap_days
 from pipeline.savings import estimate_savings
@@ -24,6 +24,9 @@ EXAMPLE_MODELS = {
     "overlaps": list[Overlap],
     "overlap": Overlap,
     "not_found": ErrorDetail,
+    "submission": Submission,
+    "submitted": list[Project],
+    "conflict": ErrorDetail,
 }
 
 EXAMPLE_BLOCK = re.compile(r"<!-- example: (\w+) -->\s*```json\n(.*?)```", re.DOTALL)

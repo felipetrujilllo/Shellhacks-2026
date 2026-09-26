@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 import httpx
+import psycopg
 import pytest
 from dotenv import dotenv_values
 from fastapi.testclient import TestClient
@@ -193,6 +194,22 @@ def test_main_passes_when_the_api_serves_the_csv(capsys):
     assert "demo data OK: 10 projects and 6 overlaps" in out
 
 
+def test_main_ignores_uploaded_projects_and_their_pairs_but_says_so(capsys):
+    """The live demo gains uploads over time; the CSV check is about the published plans."""
+    overlaps = served_overlaps(SPONSOR_SAMPLE_CSV)
+    projects = [{"project_id": r.project_id} for r in read_project_csv(SPONSOR_SAMPLE_CSV)]
+    uploaded = project("SUB-abc-1")
+    projects.append(uploaded)
+    overlaps.append({"overlap_id": "SUB:GPC_2|SUB-abc-1", "rank": 1,
+                     "project_a": project("GPC_2"), "project_b": uploaded})
+
+    code, out, err = run_main(fake_api(projects, overlaps), capsys)
+
+    assert code == 0, err
+    assert "demo data OK: 10 projects and 6 overlaps" in out
+    assert "ignored 1 uploaded project(s) and 1 of their pair(s)" in out
+
+
 def test_main_fails_naming_the_difference_when_the_api_serves_something_else(capsys):
     """E.g. the demo still serves the 10-row sample after a projects.csv load was meant."""
     overlaps = served_overlaps(SPONSOR_SAMPLE_CSV)
@@ -235,6 +252,10 @@ def loaded_api():
         cwd=BACKEND_DIR, capture_output=True, text=True, encoding="utf-8", timeout=120,
     )
     assert result.returncode == 0, result.stderr
+    # A reload never touches uploads (POST /submissions), so clear any left in the throwaway
+    # DB by hand: this rehearses a fresh demo load, where the API serves exactly the CSV.
+    with psycopg.connect(TEST_DATABASE_URL) as conn:
+        conn.execute("DROP TABLE IF EXISTS submitted_projects")
     app = create_app(Settings(database_url=TEST_DATABASE_URL,
                               frontend_origin="http://localhost:5173"))
     with TestClient(app) as client:

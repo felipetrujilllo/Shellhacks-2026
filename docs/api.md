@@ -18,7 +18,7 @@ One utility's planned transmission project — one row of `data/seed/projects_se
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `project_id` | string | unique |
+| `project_id` | string | unique; `SUB-<batch>-<n>` for an uploaded project |
 | `utility` | string | e.g. `Dominion Energy South Carolina`, `Georgia Power` |
 | `state` | string | `SC`, `GA` |
 | `project_name` | string | |
@@ -35,7 +35,7 @@ One flagged cross-utility pair (project centers < 25 mi apart).
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order) |
+| `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order); `SUB:<project_id_a>\|<project_id_b>` for a pair involving an uploaded project |
 | `rank` | integer ≥ 1 | position by descending `score`; 1 = best opportunity |
 | `score` | number 0–1 | `0.6·(1 − distance/25) + 0.4·(1 − min(gap, 1825)/1825)` (`pipeline/overlap.py`) |
 | `distance_mi` | number 0–25 | haversine between centers, R = 3958.8 mi, 2 decimals |
@@ -63,7 +63,8 @@ Liveness check.
 
 ### `GET /projects`
 
-Every project, for the map layers. Response: `Project[]`.
+Every project, for the map layers: the published plans plus every uploaded project
+(`POST /submissions`). Response: `Project[]`.
 
 <!-- example: projects -->
 ```json
@@ -76,6 +77,10 @@ Every project, for the map layers. Response: `Project[]`.
 ### `GET /overlaps`
 
 Every flagged pair, **ranked: `rank` 1 first** (descending `score`). Response: `Overlap[]`.
+
+Published pairs come from the `project_overlaps` table the batch load writes. Pairs involving an
+uploaded project are computed on each request by the same engine (`pipeline/overlap.py`) and
+ranked in the same list, so an upload can take rank 1.
 
 <!-- example: overlaps -->
 ```json
@@ -116,9 +121,48 @@ Unknown `overlap_id` → **404** with FastAPI's default error body:
 {"detail": "overlap OVL_99 not found"}
 ```
 
+### `POST /submissions`
+
+A utility uploads its planned projects so **everyone** sees them and their nearby pairs (the
+upload dialog sends the rows of a CSV). Body: `{"projects": Project[]}`, 1–1000 projects,
+each validated like a published one. Stored in `submitted_projects` (`backend/db/submissions.sql`),
+which the published-plans reload never touches.
+
+The server, not the client, decides:
+- `project_id` is replaced with `SUB-<batch>-<n>` (the client's value is just its own reference);
+- `location_confidence` is always `low`: the coordinates are the submitter's, not matched to OSM;
+- a `utility` equal to an existing one ignoring case and spacing takes the existing spelling.
+
+<!-- example: submission -->
+```json
+{"projects": [
+  {"project_id": "row-2", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"}
+]}
+```
+
+**201** with the stored projects, in upload order:
+
+<!-- example: submitted -->
+```json
+[
+  {"project_id": "SUB-3f9a1c2e-1", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"}
+]
+```
+
+A utility + project name (ignoring case) that already exists, or appears twice in the upload →
+**409**, and nothing from the upload is stored:
+
+<!-- example: conflict -->
+```json
+{"detail": "project 1 ('Savannah River crossing' by 'Tidewater Grid Co.') already exists"}
+```
+
+An invalid body (no projects, more than 1000, a bad coordinate or date, ...) → **422** with
+FastAPI's validation error body, and nothing is stored.
+
 ## Repository functions
 
-What the route handlers call (implemented in #5/#6, not yet). Each returns validated models;
+What the route handlers call (`backend/app/repository.py`). Each returns validated models;
 the routes stay thin.
 
 ```python
@@ -126,5 +170,7 @@ def list_projects() -> list[Project]: ...
 def list_overlaps() -> list[Overlap]:  # ranked, rank 1 first
     ...
 def get_overlap(overlap_id: str) -> Overlap | None:  # None -> route returns 404
+    ...
+def add_submission(projects: list[Project]) -> None:  # all or nothing; SubmissionConflict -> 409
     ...
 ```

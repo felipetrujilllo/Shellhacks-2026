@@ -1,4 +1,8 @@
-import type { Overlap, Project } from './types'
+import type { Project } from './types'
+
+// Ids the server gives uploaded projects and their pairs (backend/app/submissions.py).
+export const SUBMITTED_PROJECT_PREFIX = 'SUB-'
+export const SUBMITTED_OVERLAP_PREFIX = 'SUB:'
 
 export interface ImportRow { row: number; name: string; issues: string[]; project: Project | null }
 export interface ImportBatch { id: string; filename: string; rows: ImportRow[] }
@@ -68,7 +72,9 @@ export function reviewCsv(text: string, batchId: string, existing: Project[]): I
     if (!issues.length) keys.add(key)
     return { row: i + 2, name: raw.project_name || `Row ${i + 2}`, issues,
       project: issues.length ? null : {
-        project_id: `${batchId}:${i + 1}`, utility: raw.utility, state: raw.state || '',
+        // project_id is only the client's reference: POST /submissions assigns the real one.
+        // The API requires a state and the template has no state column.
+        project_id: `${batchId}:${i + 1}`, utility: raw.utility, state: raw.state || 'Unknown',
         project_name: raw.project_name, lat_center: lat!, lon_center: lon!,
         name_a: raw.name_a || null, lat_a: latA, lon_a: lonA,
         name_b: raw.name_b || null, lat_b: latB, lon_b: lonB,
@@ -77,27 +83,4 @@ export function reviewCsv(text: string, batchId: string, existing: Project[]): I
         location_confidence: 'low',
       } }
   })
-}
-
-/** Same 25-mile gate and distance/time ranking as pipeline.overlap, for session imports. */
-export function compareImports(imported: Project[], all: Project[], existing: Overlap[]): Overlap[] {
-  const importedIds = new Set(imported.map(p => p.project_id))
-  const additions: Overlap[] = []
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-    const a = all[i], b = all[j]
-    if (!importedIds.has(a.project_id) && !importedIds.has(b.project_id)) continue
-    if (a.utility.trim().toLowerCase() === b.utility.trim().toLowerCase()) continue
-    const rad = (d: number) => d * Math.PI / 180
-    const h = Math.sin(rad(b.lat_center - a.lat_center) / 2) ** 2 +
-      Math.cos(rad(a.lat_center)) * Math.cos(rad(b.lat_center)) * Math.sin(rad(b.lon_center - a.lon_center) / 2) ** 2
-    const distance = 2 * 3958.8 * Math.asin(Math.sqrt(Math.min(1, h)))
-    if (distance >= 25) continue
-    const gap = Math.abs(Date.parse(a.in_service_date) - Date.parse(b.in_service_date)) / 86400000
-    additions.push({ overlap_id: `import:${a.project_id}|${b.project_id}`, rank: 0,
-      project_a: a, project_b: b, distance_mi: Math.round(distance * 100) / 100,
-      time_gap_days: gap, score: 0.6 * (1 - distance / 25) + 0.4 * (1 - Math.min(gap / 1825, 1)),
-      est_savings_usd: null, savings_basis: 'Savings have not been estimated for uploaded proposals.' })
-  }
-  return [...existing, ...additions].sort((a, b) => b.score - a.score || a.distance_mi - b.distance_mi)
-    .map((o, i) => ({ ...o, rank: i + 1 }))
 }

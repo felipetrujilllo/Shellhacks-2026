@@ -89,6 +89,20 @@ class Overlap(BaseModel):
     savings_basis: str = Field(min_length=1)
 
 
+# The frontend's upload limit too (frontend/src/importProjects.ts).
+MAX_SUBMISSION_PROJECTS = 1000
+
+
+class Submission(BaseModel):
+    """Body of POST /submissions: one upload of projects from a utility.
+
+    Each project's `project_id` is only the client's reference; the server replaces it
+    (app/submissions.py). Everything else is validated exactly like a published project.
+    """
+
+    projects: list[Project] = Field(min_length=1, max_length=MAX_SUBMISSION_PROJECTS)
+
+
 class Health(BaseModel):
     """Body of GET /health."""
 
