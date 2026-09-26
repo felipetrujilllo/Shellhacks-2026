@@ -48,9 +48,9 @@ def expected_overlap_rows() -> list[dict]:
 # the shared instance, everyone will have that set and a stray pytest run must not empty the
 # demo database. Point TEST_DATABASE_URL at a throwaway instead:
 #
-#   docker run -d --name gridwatch-pg -e POSTGRES_PASSWORD=throwaway \
+#   docker run -d --name gridwatch-pg -e POSTGRES_HOST_AUTH_METHOD=trust \
 #       -e POSTGRES_DB=gridwatch_test -p 55432:5432 postgis/postgis:16-3.4
-#   TEST_DATABASE_URL=postgresql://postgres:throwaway@localhost:55432/gridwatch_test \
+#   TEST_DATABASE_URL=postgresql://postgres@localhost:55432/gridwatch_test \
 #       .venv/bin/python -m pytest tests/test_load.py
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 requires_postgres = pytest.mark.skipif(

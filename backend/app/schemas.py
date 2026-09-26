@@ -1,6 +1,6 @@
 """API contract: the JSON shapes every layer shares (see docs/api.md).
 
-Field names match the `projects` / `overlaps` tables in db/schema.sql and the seed CSV
+Field names match the `projects` / `project_overlaps` tables in db/schema.sql and the seed CSV
 read by pipeline/load.py, so a row flows from CSV to database to API to frontend under one
 vocabulary.
 """
@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
-# The overlap engine's radius; the `overlaps` table bounds distance_mi the same way.
+# The overlap engine's radius; project_overlaps bounds distance_mi the same way.
 from pipeline.overlap import OVERLAP_RADIUS_MI
 
 Latitude = Annotated[float, Field(ge=-90, le=90)]

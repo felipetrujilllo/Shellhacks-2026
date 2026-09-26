@@ -24,14 +24,15 @@ from pipeline.parse_desc import (
 REPO_ROOT = Path(__file__).parents[2]
 DESC_CSV = REPO_ROOT / "data" / "seed" / "desc_projects.csv"
 STARTER_CSV = Path(__file__).parent / "fixtures" / "starter_projects.csv"
-# Everyone keeps the sponsor folder somewhere different until #2 commits it, so point
-# DESC_PDF at your own copy to get the against-the-real-source test instead of a skip.
+# #2 committed the sponsor folder, so the default is the repo copy and this test now runs
+# for everyone rather than only for whoever had the PDF in their Downloads. DESC_PDF still
+# overrides it.
 SOURCE_PDF = Path(
     os.environ.get(
         "DESC_PDF",
         str(
-            Path.home()
-            / "Downloads/Sperry-Tech-Challenge/Project Listings/Dominion Energy"
+            REPO_ROOT
+            / "data/source/Project Listings/Dominion Energy"
             / "2024-2028-2million-and-above-project-descriptions.pdf"
         ),
     )

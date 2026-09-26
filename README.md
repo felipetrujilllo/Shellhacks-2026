@@ -22,13 +22,17 @@ tests that execute the real schema are opt-in and need a scratch Postgres — th
 they deliberately ignore `$DATABASE_URL` and read `TEST_DATABASE_URL` instead:
 
 ```bash
-docker run -d --name gridwatch-pg -e POSTGRES_PASSWORD=throwaway \
+docker run -d --name gridwatch-pg -e POSTGRES_HOST_AUTH_METHOD=trust \
     -e POSTGRES_DB=gridwatch_test -p 55432:5432 postgis/postgis:16-3.4
 
 cd backend
-TEST_DATABASE_URL=postgresql://postgres:throwaway@localhost:55432/gridwatch_test \
+TEST_DATABASE_URL=postgresql://postgres@localhost:55432/gridwatch_test \
     .venv/bin/python -m pytest
 ```
+
+Trust auth on purpose: the container is throwaway and local-only, so there is no password
+to put in a URL and nothing for the credential scanner in `tests/test_env_example.py` to
+flag.
 
 Without it, those tests skip and `pytest` still passes — so run it before touching
 `db/schema.sql` or `pipeline/load.py`.

@@ -1,7 +1,7 @@
 # GridWatch API contract
 
 The shapes every layer builds against. Models live in `backend/app/schemas.py`; field names
-match the `projects` / `overlaps` tables in `backend/db/schema.sql` and the seed CSV columns
+match the `projects` / `project_overlaps` tables in `backend/db/schema.sql` and the seed CSV columns
 read by `backend/pipeline/load.py`.
 
 All responses are JSON. Dates are ISO `YYYY-MM-DD`. Coordinates are WGS84 decimal degrees.
