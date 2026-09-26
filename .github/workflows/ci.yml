@@ -1,0 +1,81 @@
+# CI: runs the CLAUDE.md `## Checks` table on every push and PR to the working branch and main.
+# The commands below are the Checks table's commands verbatim - if that table changes, change
+# this file in the same commit.
+#
+# CI only, no CD: deploys stay manual (`doctl apps create-deployment`, README "Redeploying"),
+# because .do/app.yaml uses a public-clone source that can't redeploy on push.
+#
+# No secrets needed. The shared demo DATABASE_URL is never used here: the DB tests run against
+# a throwaway PostGIS service container, same image and URL as the README's local one.
+name: CI
+
+on:
+  push:
+    branches: [test-branch-1, main]
+  pull_request:
+    branches: [test-branch-1, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: gridwatch_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Set for the whole pytest run, so the DB tests (test_load.py, the test_demo_data.py
+      # rehearsal) run instead of skipping. Covers the Checks table's "backend (DB)" row too.
+      TEST_DATABASE_URL: postgresql://postgres@localhost:55432/gridwatch_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Set up venv (README "Backend")
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ".[dev]"
+      - name: Build
+        run: .venv/bin/python -m compileall -q app pipeline
+      - name: Lint
+        run: .venv/bin/ruff check .
+      - name: Test (incl. DB tests)
+        run: .venv/bin/python -m pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc -b
+      - name: Test
+        run: npx vitest run
+      - name: Build
+        run: npm run build

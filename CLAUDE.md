@@ -59,6 +59,11 @@ test command — an empty entry means that layer is unguarded, and the gate will
 | backend (DB) — **required** for tickets touching `backend/db/` or `backend/pipeline/load.py` | none | `cd backend && TEST_DATABASE_URL=postgresql://postgres@localhost:55432/gridwatch_test .venv/bin/python -m pytest tests/test_load.py` (needs the throwaway PostGIS — see README "Database tests"; without `TEST_DATABASE_URL` these tests skip, so the plain backend row cannot catch SQL bugs) | same as backend |
 | frontend | `cd frontend && npm run build` | `cd frontend && npx vitest run` | `cd frontend && npx tsc -b` (bare `tsc --noEmit` checks nothing: root tsconfig is references-only) |
 
+**CI:** `.github/workflows/ci.yml` runs these same commands (the backend job with
+`TEST_DATABASE_URL` set against a PostGIS service container, so the DB row runs too) on every
+push and PR to `test-branch-1` and `main`. If you change a command in this table, change it
+there in the same commit.
+
 On Windows the venv binaries live in `.venv\Scripts\` instead of `.venv/bin/` (e.g.
 `.venv\Scripts\python.exe -m pytest`, `.venv\Scripts\ruff.exe check .`).
 
