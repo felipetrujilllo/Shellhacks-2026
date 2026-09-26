@@ -95,7 +95,7 @@ Real data is provided, so there is no synthetic fallback. The work is locating p
   with coordinates). The whole pipeline can be built against this before any parsing.
 - **DESC:** 44 one-page project sheets with name, ID, description, status, in-service date
   and cost. Regular layout, so text extraction (`pdftotext -layout` / pdfplumber) is easy.
-- **GPC:** transmission project tables in IRP Vol 3 (about pp. 215–230): project name,
+- **GPC:** transmission project list in IRP Vol 3 (Table 2, pp. ~177–191; per-project sheets from ~p. 220): project name,
   in-service date, owner. Costs are REDACTED. Filter to projects near the SC border first.
 - **Locating:** project names are "Sub A – Sub B". Match each substation to OSM via Overpass
   (by operator, within a bounding box), then take the midpoint. Record

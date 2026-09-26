@@ -36,15 +36,24 @@ Tracked as GitHub issues. Regenerate this snapshot with `gh issue list --state a
 
 | Issue | Task | Owner | Size | Status |
 |-------|------|-------|------|--------|
-| #1 | [P1-INFRA] Scaffold backend + frontend with test runners and fill ## Checks | @felipetrujilllo | M | open |
-| #2 | [P1-DATA] Add sponsor source files and convert the starter table to seed CSVs | @felipetrujilllo | S | open |
-| #3 | [P1-API] Define the API contract: Pydantic schemas + docs/api.md | @fredmaster1928 | S | open |
-| #4 | [P1-DATA] Overlap engine: haversine, 25-mi cross-utility pairs, time gap, ranking | @Eveliox | M | open |
-| #5 | [P1-DATA] DB schema + loader: seed CSV into Tiger Data projects/overlaps tables | @Eveliox | M | open |
-| #6 | [P1-API] FastAPI endpoints: /health, /projects, /overlaps, /overlaps/{id} | @fredmaster1928 | M | open |
-| #7 | [P1-INFRA] Provision Tiger Data + DigitalOcean accounts and .env.example | @felipetrujilllo | S | open |
+| #1 | [P1-INFRA] Scaffold backend + frontend with test runners and fill ## Checks | @felipetrujilllo | M | closed |
+| #2 | [P1-DATA] Add sponsor source files and convert the starter table to seed CSVs | @felipetrujilllo | S | closed |
+| #3 | [P1-API] Define the API contract: Pydantic schemas + docs/api.md | @fredmaster1928 | S | closed |
+| #4 | [P1-DATA] Overlap engine: haversine, 25-mi cross-utility pairs, time gap, ranking | @Eveliox | M | closed |
+| #5 | [P1-DATA] DB schema + loader: seed CSV into Tiger Data projects/overlaps tables | @Eveliox | M | closed |
+| #6 | [P1-API] FastAPI endpoints: /health, /projects, /overlaps, /overlaps/{id} | @fredmaster1928 | M | closed |
+| #7 | [P1-INFRA] Provision Tiger Data + DigitalOcean accounts and .env.example | @felipetrujilllo | S | closed |
 | #8 | [P1-API] Deploy backend + frontend to DigitalOcean App Platform | @fredmaster1928 | M | open |
-| #9 | [P1-FE] API client + GeoJSON builders for projects and overlaps | @roliv091 | M | open |
+| #9 | [P1-FE] API client + GeoJSON builders for projects and overlaps | @roliv091 | M | closed |
 | #10 | [P1-FE] Map page: utility layers, overlap highlights, ranked opportunity list | @roliv091 | M | open |
 | #11 | [P1-INFRA] Demo-path smoke test script | @felipetrujilllo | S | open |
-| #12 | [P1-DATA] Parse Dominion's 44 project sheets into CSV | @Eveliox | M | open |
+| #12 | [P1-DATA] Parse Dominion's 44 project sheets into CSV | @Eveliox | M | closed |
+| #13 | [P2-DATA] Compute project centers from endpoints | @Eveliox | S | open |
+| #14 | [P2-DATA] Fetch and cache OSM substations for DESC and GPC | @felipetrujilllo | S | open |
+| #15 | [P2-DATA] Match projects to OSM substations with confidence | @Eveliox | M | open |
+| #16 | [P2-FE] Overlap detail panel with savings estimate | @roliv091 | M | open |
+| #17 | [P2-INFRA] Guard SQL tests, encodings and line endings in Checks | @felipetrujilllo | S | open |
+| #18 | [P2-DATA] Parse Georgia Power transmission projects from IRP Vol 3 | @felipetrujilllo | M | open |
+| #19 | [P2-DATA] Build and load the full located dataset | @Eveliox | M | open |
+| #20 | [P2-API] Estimate cost/impact per overlap | @fredmaster1928 | M | open |
+| #21 | [P2-DATA] Split project names into substation endpoints | @Eveliox | M | open |

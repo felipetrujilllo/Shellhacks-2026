@@ -23,7 +23,7 @@ historically planned in isolation.
 - **Utility 1: Dominion Energy South Carolina (DESC)**: 44 projects, one per page, in
   `2024-2028-2million-and-above-project-descriptions.pdf` (SCRTP). Includes cost.
 - **Utility 2: Georgia Power (GPC)**: project tables inside `2025 IRP Volume 3 PUBLIC
-  DISCLOSURE.pdf` (668 pages; transmission tables around pp. 215–230). Costs are REDACTED.
+  DISCLOSURE.pdf` (668 pages; project list in Table 2 on pp. ~177–191, per-project sheets from ~p. 220). Costs are REDACTED.
 - They share the Savannah River border, and both are in SERTP. DESC has real planned projects
   along that border that sit close to active GPC work.
 

@@ -1,0 +1,4 @@
+# Treat sponsor documents as binary: no text diffs or line-ending conversion.
+*.pdf binary
+*.xlsx binary
+*.docx binary
