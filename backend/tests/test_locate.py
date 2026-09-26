@@ -9,11 +9,17 @@ synthesize OSM records from the sponsor's coordinates: that would test the oracl
 import csv
 import json
 from copy import deepcopy
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import pytest
 
-from pipeline.locate import locate_endpoint, locate_endpoints, normalize_name
+from pipeline.locate import (
+    DEFAULT_FUZZY_THRESHOLD,
+    locate_endpoint,
+    locate_endpoints,
+    normalize_name,
+)
 from pipeline.osm_fetch import TARGETS
 from pipeline.overlap import haversine_miles
 
@@ -90,6 +96,31 @@ def test_multiple_fuzzy_candidates_far_apart_do_not_choose_highest_score():
     assert result.location_confidence == "low"
     assert len(result.candidates) == 2
     assert result.lat is result.lon is None
+
+
+@pytest.mark.parametrize("endpoint,osm_name", [
+    ("GRADY", "Gray Substation"),
+    ("LICK CREEK", "Black Creek Substation"),
+    ("WEST VALDOSTA", "East Valdosta Substation"),
+])
+def test_fuzzy_match_with_a_different_first_word_is_another_station(endpoint, osm_name):
+    # Real Georgia Power endpoints that used to land on these wrong-area stations.
+    similarity = SequenceMatcher(None, normalize_name(endpoint), normalize_name(osm_name)).ratio()
+    assert similarity >= DEFAULT_FUZZY_THRESHOLD  # so it is the first-word rule rejecting it
+    result = locate_endpoint(endpoint, [[sub(osm_name)]])
+    assert result.location_confidence == "unlocated"
+    assert result.lat is result.lon is None
+
+
+@pytest.mark.parametrize("endpoint,osm_name", [
+    ("Queensboro", "Queensborough Substation"),
+    ("JEFFERSON ROAD", "Jefferson Rd Substation"),
+    ("Stevens Creek", "Stevens Creek Dam Substation"),
+])
+def test_fuzzy_match_with_the_same_first_word_still_locates(endpoint, osm_name):
+    result = locate_endpoint(endpoint, [[sub(osm_name)]])
+    assert result.location_confidence == "low"
+    assert (result.lat, result.lon) == (32.33, -81.03)
 
 
 def test_colocated_candidates_are_one_site_but_still_low():

@@ -9,7 +9,11 @@ end at the other utility's substations and many DESC substations carry no operat
 
 Rules, in order:
   1. Names are compared after `normalize_name`. Exact normalized matches win; only if there are
-     none do fuzzy matches (similarity >= `fuzzy_threshold`) count.
+     none do fuzzy matches (similarity >= `fuzzy_threshold`) count, and only when the first words
+     agree (one is a prefix of the other). Fuzzy matching is there for spelling and suffix
+     differences ("Queensboro" / "Queensborough", "Jefferson Road" / "Jefferson Rd", "Stevens
+     Creek" / "Stevens Creek Dam"), not for a different place: "GRADY" / "Gray", "LICK CREEK" /
+     "Black Creek" and "WEST VALDOSTA" / "East Valdosta" all score >= 0.85 but are other stations.
   2. The same OSM feature appearing in more than one cache counts once (keyed by `osm_id`).
   3. One candidate from an exact match whose record names an operator -> `confirmed`.
      An exact match on a record with no operator (the `untagged_sc` cache) is only `low`:
@@ -92,6 +96,12 @@ def _valid_point(record: Mapping[str, Any]) -> tuple[float, float] | None:
     return None
 
 
+def _same_first_word(a: str, b: str) -> bool:
+    """Both normalized names start with the same word, allowing one to abbreviate the other."""
+    first_a, first_b = a.split()[0], b.split()[0]
+    return first_a.startswith(first_b) or first_b.startswith(first_a)
+
+
 def _same_site(candidates: Sequence[Candidate]) -> bool:
     return all(
         haversine_miles(a.lat, a.lon, b.lat, b.lon) <= SAME_SITE_MILES
@@ -125,7 +135,7 @@ def locate_endpoint(
             score = SequenceMatcher(None, target, normalized, autojunk=False).ratio()
             if normalized == target:
                 pool = exact
-            elif score >= fuzzy_threshold:
+            elif score >= fuzzy_threshold and _same_first_word(target, normalized):
                 pool = fuzzy
             else:
                 continue
