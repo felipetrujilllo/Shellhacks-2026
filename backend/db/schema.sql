@@ -40,7 +40,12 @@ CREATE INDEX IF NOT EXISTS projects_utility_idx ON projects (utility);
 
 -- One flagged cross-utility pair, written by the overlap batch job.
 -- A project may not overlap itself, and the same pair may only be flagged once.
-CREATE TABLE IF NOT EXISTS overlaps (
+--
+-- Named project_overlaps, not overlaps: OVERLAPS is a reserved word in Postgres (it is the
+-- SQL period-overlap operator), so `CREATE TABLE overlaps` is a syntax error. Quoting it
+-- would work but would force "overlaps" in every query written against it forever. The API
+-- and the frontend still call the concept an overlap - only the SQL identifier differs.
+CREATE TABLE IF NOT EXISTS project_overlaps (
     overlap_id    TEXT PRIMARY KEY,
     project_id_a  TEXT NOT NULL REFERENCES projects (project_id) ON DELETE CASCADE,
     project_id_b  TEXT NOT NULL REFERENCES projects (project_id) ON DELETE CASCADE,
@@ -57,4 +62,4 @@ CREATE TABLE IF NOT EXISTS overlaps (
     UNIQUE (project_id_a, project_id_b)
 );
 
-CREATE INDEX IF NOT EXISTS overlaps_score_idx ON overlaps (score DESC);
+CREATE INDEX IF NOT EXISTS project_overlaps_score_idx ON project_overlaps (score DESC);

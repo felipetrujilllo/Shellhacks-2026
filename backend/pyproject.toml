@@ -14,6 +14,7 @@ dependencies = [
     "psycopg[binary]",
     "httpx",
     "pdfplumber",
+    "python-dotenv",
     "requests",
 ]
 

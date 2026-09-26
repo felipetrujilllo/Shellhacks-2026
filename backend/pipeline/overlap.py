@@ -39,7 +39,11 @@ class Project:
 
 @dataclass(frozen=True)
 class Overlap:
-    """One flagged cross-utility pair, shaped like a row of the `overlaps` table."""
+    """One flagged cross-utility pair, shaped like a row of the `project_overlaps` table.
+
+    The SQL table is `project_overlaps` (OVERLAPS is a reserved word in Postgres); the API
+    endpoint is still `GET /overlaps`.
+    """
 
     overlap_id: str
     project_id_a: str

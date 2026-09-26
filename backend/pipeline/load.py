@@ -1,4 +1,4 @@
-"""Load the seed CSV into Tiger Data and rebuild the overlaps table.
+"""Load the seed CSV into Tiger Data and rebuild the project_overlaps table.
 
 This is the batch job from the plan: read projects, run the overlap engine over them, and
 write both tables inside one transaction so the database is never half-loaded. Re-running it
@@ -6,22 +6,35 @@ is the supported way to refresh — it truncates first rather than trying to mer
 
     python -m pipeline.load --csv ../data/seed/projects_seed.csv
 
-Reads the connection string from --database-url or $DATABASE_URL.
+That seed CSV is issue #2's deliverable and does not exist yet. Until it lands, the ten-row
+sponsor starter table at tests/fixtures/starter_projects.csv is the only CSV that loads end
+to end.
+
+Reads the connection string from --database-url, else $DATABASE_URL, else DATABASE_URL in
+the repo-root .env (a real environment variable always wins, so deploys need no file).
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import math
 import os
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from pipeline.overlap import Overlap, Project, detect_overlaps
 
 SCHEMA_PATH = Path(__file__).parents[1] / "db" / "schema.sql"
+ENV_PATH = Path(__file__).parents[2] / ".env"
+
+# Degrees. A value outside these bounds is a swapped lat/lon or a bad substation match,
+# not a location, and it must not reach the database.
+COORDINATE_LIMITS = {"lat": 90.0, "lon": 180.0}
 
 VALID_CONFIDENCE = ("confirmed", "low")
 DEFAULT_CONFIDENCE = "confirmed"
@@ -62,7 +75,7 @@ INSERT INTO projects (
 """
 
 INSERT_OVERLAP = """
-INSERT INTO overlaps (
+INSERT INTO project_overlaps (
     overlap_id, project_id_a, project_id_b, distance_mi, time_gap_days, score
 ) VALUES (
     %(overlap_id)s, %(project_id_a)s, %(project_id_b)s,
@@ -106,18 +119,34 @@ def optional_text(raw: dict, column: str) -> str | None:
     return value or None
 
 
-def optional_float(raw: dict, column: str, project_id: str) -> float | None:
+def optional_coordinate(raw: dict, column: str, project_id: str) -> float | None:
+    """One latitude or longitude, checked against its real-world bound.
+
+    float() accepts "nan" and "inf", and the engine's distance gate (`distance >= 25`) is
+    False for nan — so an unchecked coordinate is flagged as an overlap carrying a nan
+    distance, which then trips the schema's CHECK and aborts the whole transaction. A
+    finite-but-impossible value is worse: it loads silently and changes which pairs get
+    flagged. Reject both here, at the boundary.
+    """
     value = (raw.get(column) or "").strip()
     if not value:
         return None
     try:
-        return float(value)
+        degrees = float(value)
     except ValueError as exc:
         raise LoadError(f"{project_id}: {column} is not a number: {value!r}") from exc
 
+    limit = COORDINATE_LIMITS[column.split("_")[0]]
+    if not math.isfinite(degrees) or abs(degrees) > limit:
+        raise LoadError(
+            f"{project_id}: {column} must be a number between -{limit:g} and {limit:g}, "
+            f"got {value!r}"
+        )
+    return degrees
 
-def required_float(raw: dict, column: str, project_id: str) -> float:
-    value = optional_float(raw, column, project_id)
+
+def required_coordinate(raw: dict, column: str, project_id: str) -> float:
+    value = optional_coordinate(raw, column, project_id)
     if value is None:
         raise LoadError(f"{project_id}: {column} is required")
     return value
@@ -169,13 +198,13 @@ def parse_project_row(raw: dict) -> ProjectRow:
         state=raw["state"].strip(),
         project_name=raw["project_name"].strip(),
         name_a=optional_text(raw, "name_a"),
-        lat_a=optional_float(raw, "lat_a", project_id),
-        lon_a=optional_float(raw, "lon_a", project_id),
+        lat_a=optional_coordinate(raw, "lat_a", project_id),
+        lon_a=optional_coordinate(raw, "lon_a", project_id),
         name_b=optional_text(raw, "name_b"),
-        lat_b=optional_float(raw, "lat_b", project_id),
-        lon_b=optional_float(raw, "lon_b", project_id),
-        lat_center=required_float(raw, "lat_center", project_id),
-        lon_center=required_float(raw, "lon_center", project_id),
+        lat_b=optional_coordinate(raw, "lat_b", project_id),
+        lon_b=optional_coordinate(raw, "lon_b", project_id),
+        lat_center=required_coordinate(raw, "lat_center", project_id),
+        lon_center=required_coordinate(raw, "lon_center", project_id),
         in_service_date=in_service,
         est_cost_usd=parse_cost(raw, project_id),
         location_confidence=confidence,
@@ -183,8 +212,16 @@ def parse_project_row(raw: dict) -> ProjectRow:
 
 
 def read_project_csv(csv_path: Path | str) -> list[ProjectRow]:
-    with open(csv_path, newline="") as f:
+    # utf-8-sig, not utf-8: exporting a CSV from the sponsor's xlsx in Excel prepends a BOM,
+    # which would otherwise land in the first header name and read as a row with no project_id.
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
         rows = [parse_project_row(raw) for raw in csv.DictReader(f)]
+
+    if not rows:
+        raise LoadError(
+            f"{csv_path} has no project rows - refusing to truncate the tables for an "
+            "empty load"
+        )
 
     seen = Counter(r.project_id for r in rows)
     duplicates = sorted(pid for pid, count in seen.items() if count > 1)
@@ -233,6 +270,10 @@ def load(connection, rows: list[ProjectRow], overlaps: list[Overlap]) -> tuple[i
 
 
 def main() -> None:
+    # Before the parser, so $DATABASE_URL's default picks .env up. override=False keeps a
+    # real exported variable authoritative - DigitalOcean sets one and ships no .env.
+    load_dotenv(ENV_PATH, override=False)
+
     parser = argparse.ArgumentParser(description="Load seed projects and rebuild overlaps.")
     parser.add_argument("--csv", required=True, help="seed projects CSV")
     parser.add_argument(
