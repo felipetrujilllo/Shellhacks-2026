@@ -18,7 +18,7 @@
   --landing-drop-shadow: drop-shadow(0 2px 6px color-mix(in srgb, var(--palette-navy) 65%, transparent));
 }
 .landing-headline { text-shadow:var(--landing-shadow-strong); }
-.landing-subline,.landing-brand,.landing-nav-anchor a,.landing-button-ghost,.landing-feature h2,.landing-feature p { text-shadow:var(--landing-shadow-soft); }
+.landing-subline,.landing-brand,.landing-nav-anchor a,.landing-feature h2,.landing-feature p { text-shadow:var(--landing-shadow-soft); }
 .landing-brand img,.landing-feature-icon { filter:var(--landing-drop-shadow); }
 .landing :focus-visible { outline:2px solid var(--color-focus-ring); outline-offset:3px; }
 
@@ -48,8 +48,6 @@
 .landing-button { display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:14px 24px; border-radius:var(--radius-md); font-size:16px; font-weight:600; text-decoration:none; border:1px solid transparent; transition:background .15s,border-color .15s; }
 .landing-button-primary { background:var(--palette-gold); color:var(--palette-navy); box-shadow:var(--shadow-control); }
 .landing-button-primary:hover { background:var(--palette-gold-dark); }
-.landing-button-ghost { color:var(--color-header-text); border-color:color-mix(in srgb, var(--color-header-text) 35%, transparent); background:color-mix(in srgb, var(--color-header-text) 6%, transparent); }
-.landing-button-ghost:hover { background:color-mix(in srgb, var(--color-header-text) 14%, transparent); border-color:color-mix(in srgb, var(--color-header-text) 55%, transparent); }
 .landing-button-small { padding:10px 18px; font-size:14px; }
 
 /* Headline, subline and calls to action. */

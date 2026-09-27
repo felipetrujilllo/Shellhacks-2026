@@ -93,9 +93,6 @@ export default function LandingPage({ mapHref = MAP_HREF }: { mapHref?: string }
                 <path d="M5 12h14M13 6l6 6-6 6" />
               </LineIcon>
             </a>
-            <a className="landing-button landing-button-ghost" href="#product">
-              See how it works
-            </a>
           </div>
         </div>
 

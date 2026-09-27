@@ -40,9 +40,12 @@ describe('LandingPage', () => {
     expect(screen.getByRole('link', { name: 'Get Started' })).toHaveAttribute('href', '/map')
   })
 
-  it('points "See how it works" and the nav anchors at sections that exist', () => {
+  it('points the nav anchors at sections that exist, and has only one call-to-action button in the hero', () => {
     const { container } = render(<LandingPage />)
-    expect(screen.getByRole('link', { name: 'See how it works' })).toHaveAttribute('href', '#product')
+    // "See how it works" was removed: it went to #product, the same place as the Product nav link.
+    expect(screen.queryByRole('link', { name: /see how it works/i })).toBeNull()
+    const actions = container.querySelector('.landing-actions')!
+    expect(within(actions as HTMLElement).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Try the map'])
     const nav = screen.getByRole('navigation', { name: 'Primary' })
     for (const [label, id] of [['Product', 'product'], ['Data', 'data'], ['About', 'about']]) {
       expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('href', `#${id}`)
