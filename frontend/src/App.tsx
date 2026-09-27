@@ -3,11 +3,13 @@ import { fetchWorkspace } from './api'
 import { utilityColor } from './colors'
 import OverlapDetail from './components/OverlapDetail'
 import ProjectMap from './components/ProjectMap'
+import ThemeToggle from './components/ThemeToggle'
 import UploadProjects from './components/UploadProjects'
 import Icon from './components/Icon'
 import { formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
 import { MAX_UPLOADED_PROJECTS, SUBMITTED_OVERLAP_PREFIX, SUBMITTED_PROJECT_PREFIX, type ImportBatch } from './importProjects'
 import { summarizeSavings } from './savings'
+import { useTheme } from './theme'
 import { DEFAULT_SORT_KEY, SORT_OPTIONS, sortOverlaps, type SortKey } from './sortOverlaps'
 import type { Overlap, Project, Workspace } from './types'
 import { loadUploads, saveUploads } from './uploadCache'
@@ -43,6 +45,8 @@ function App() {
   const [notice, setNotice] = useState('')
   // The sidebar starts closed so the map fills the screen; the top bar's menu button toggles it.
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Light or dark (#45): main.tsx applied the initial one to <html> before this first render.
+  const [theme, toggleTheme] = useTheme()
   useEffect(() => {
     let cancelled = false
     const cached = loadUploads()
@@ -121,10 +125,11 @@ function App() {
     <main className="workspace">
       <header className="workspace-header">
         {/* Three columns (1fr auto 1fr) keep the brand centered whatever the sides hold. Left: the
-            icon-only menu button, right above the sidebar it opens (disabled until the data, and so the sidebar, exists). */}
+            icon-only menu button, right above the sidebar it opens (disabled until the data, and so the sidebar, exists).
+            Right: the theme toggle, then Upload projects. */}
         <div className="header-side"><button type="button" className="sidebar-toggle" disabled={state.status !== 'ready'} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'} aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => setSidebarOpen(open => !open)}><Icon name={sidebarOpen ? 'close' : 'menu'} size={20} /></button></div>
         <div className="brand"><span className="brand-symbol"><img src="/relay-icon.svg" alt="" width={28} height={28} /></span><h1>Relay</h1></div>
-        <div className="header-side header-actions"><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
+        <div className="header-side header-actions"><ThemeToggle theme={theme} onToggle={toggleTheme} /><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
       </header>
       {state.status === 'loading' && <p className="workspace-message">Loading projects…</p>}
       {state.status === 'error' && <div role="alert" className="workspace-message">Could not load project data: {state.message}</div>}
@@ -156,7 +161,7 @@ function App() {
           <footer className="sidebar-footer"><span className="source-dot" /> {submitted.length ? 'Published plans + your uploads' : 'Published utility plans'}<span>{submitted.length ? 'PRIVATE' : 'SC / GA'}</span></footer>
         </div></aside>
         <section className="workspace-map" aria-label="Project map">
-          <ProjectMap projects={visibleProjects} overlaps={visibleOverlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focusedProject} />
+          <ProjectMap projects={visibleProjects} overlaps={visibleOverlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focusedProject} theme={theme} />
           <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{visibleProjects.length} mapped projects</span></div>
           {uploadProblem && <div role="alert" className="workspace-notice upload-problem"><span>{uploadProblem}</span><button className="text-link" onClick={clearUploads}>Clear my uploads</button><button onClick={() => setUploadProblem('')} aria-label="Dismiss upload problem"><Icon name="close" size={14} /></button></div>}
           {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}

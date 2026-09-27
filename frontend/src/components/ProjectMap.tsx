@@ -13,10 +13,11 @@ import Map, {
 import { setWorkerUrl, type ExpressionSpecification } from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { overlapsToGeoJSON, projectsToGeoJSON } from '../geo'
+import type { Theme } from '../theme'
 import type { Overlap, Project } from '../types'
 import BasemapToggle from './BasemapToggle'
 import MapLegend from './MapLegend'
-import { BASEMAPS, DEFAULT_BASEMAP, dataBounds, type BasemapId } from './basemaps'
+import { BASEMAPS, DEFAULT_BASEMAP, basemapOptions, dataBounds, themedBasemap, type BasemapId } from './basemaps'
 import {
   HALO_COLOR_DARK,
   HALO_COLOR_LIGHT,
@@ -50,16 +51,21 @@ interface ProjectMapProps {
   selectedId: string | null
   onSelect: (overlapId: string) => void
   focusedProject?: Project | null
+  /** The app's theme: picks the vector basemap (Dark Matter or Positron). */
+  theme: Theme
 }
 
-export default function ProjectMap({ projects, overlaps, selectedId, onSelect, focusedProject }: ProjectMapProps) {
+export default function ProjectMap({ projects, overlaps, selectedId, onSelect, focusedProject, theme }: ProjectMapProps) {
   const mapRef = useRef<MapRef>(null)
-  const [basemap, setBasemap] = useState<BasemapId>(DEFAULT_BASEMAP)
+  // The user's pick; what the map shows follows the theme too. A new mapStyle keeps the project
+  // and overlap layers: react-map-gl re-adds the <Source>/<Layer> children after a style change.
+  const [pick, setPick] = useState<BasemapId>(DEFAULT_BASEMAP)
+  const basemap = themedBasemap(pick, theme)
   const [loaded, setLoaded] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const hoveredProject = projects.find((p) => p.project_id === hoveredId)
   const bounds = useMemo(() => dataBounds(projects), [projects])
-  const haloColor = basemap === 'dark' ? HALO_COLOR_DARK : HALO_COLOR_LIGHT
+  const haloColor = BASEMAPS[basemap].halo === 'dark' ? HALO_COLOR_DARK : HALO_COLOR_LIGHT
 
   function fitData() {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 11, duration: 600 })
@@ -164,7 +170,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         </Source>
       </Map>
       <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2 pr-12">
-        <BasemapToggle value={basemap} onChange={setBasemap} />
+        <BasemapToggle options={basemapOptions(theme)} value={basemap} onChange={setPick} />
         <button type="button" onClick={fitData} disabled={!bounds}
           className="min-h-11 rounded-xl border border-white/15 bg-slate-950/90 px-3 text-xs font-semibold text-slate-200 shadow-lg backdrop-blur-md hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 disabled:opacity-40">
           Fit to data

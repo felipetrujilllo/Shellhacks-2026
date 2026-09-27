@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { BASEMAPS, DEFAULT_BASEMAP, ESRI_ATTRIBUTION, SATELLITE_STYLE, dataBounds } from './basemaps'
+import { BASEMAPS, DEFAULT_BASEMAP, ESRI_ATTRIBUTION, SATELLITE_STYLE, basemapOptions, dataBounds, themedBasemap } from './basemaps'
 import { makeOverlaps } from '../test/overlapFixtures'
 
 const project = makeOverlaps(1)[0].project_a
 
 describe('basemaps', () => {
-  it('defaults to CARTO Dark Matter and offers exactly dark and satellite', () => {
+  it('defaults to CARTO Dark Matter and offers exactly dark and satellite (in the dark theme)', () => {
     expect(DEFAULT_BASEMAP).toBe('dark')
-    expect(Object.keys(BASEMAPS)).toEqual(['dark', 'satellite'])
+    expect(themedBasemap(DEFAULT_BASEMAP, 'dark')).toBe('dark')
+    // #45 added the light theme's Positron to BASEMAPS; the dark theme still offers exactly these two.
+    expect(Object.keys(BASEMAPS)).toEqual(['dark', 'light', 'satellite'])
+    expect(basemapOptions('dark')).toEqual(['dark', 'satellite'])
     expect(BASEMAPS.dark.style).toBe('https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json')
   })
 
@@ -23,6 +26,51 @@ describe('basemaps', () => {
     })
     expect(SATELLITE_STYLE.sources['esri-imagery']).toHaveProperty('attribution', ESRI_ATTRIBUTION)
     expect(SATELLITE_STYLE.layers).toEqual([{ id: 'esri-imagery', type: 'raster', source: 'esri-imagery' }])
+  })
+})
+
+describe('basemaps per theme (#45)', () => {
+  it('uses CARTO Positron, a free light vector style needing no key, as the light basemap', () => {
+    expect(BASEMAPS.light).toEqual({
+      label: 'Light',
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      halo: 'dark',
+    })
+  })
+
+  it('in the light theme, defaults to the light style and puts it in the "Dark" slot, before satellite', () => {
+    expect(themedBasemap(DEFAULT_BASEMAP, 'light')).toBe('light')
+    expect(basemapOptions('light')).toEqual(['light', 'satellite'])
+  })
+
+  it('keeps satellite available and selected in both themes', () => {
+    for (const theme of ['dark', 'light'] as const) {
+      expect(basemapOptions(theme), theme).toContain('satellite')
+      expect(themedBasemap('satellite', theme), theme).toBe('satellite')
+    }
+  })
+
+  it('swaps the vector style when the theme changes, whichever vector style was picked', () => {
+    for (const pick of ['dark', 'light'] as const) {
+      expect(themedBasemap(pick, 'light'), pick).toBe('light')
+      expect(themedBasemap(pick, 'dark'), pick).toBe('dark')
+    }
+  })
+
+  it('always shows a basemap the picker offers for that theme', () => {
+    for (const theme of ['dark', 'light'] as const) {
+      for (const pick of Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]) {
+        expect(basemapOptions(theme), `${pick} in ${theme}`).toContain(themedBasemap(pick, theme))
+      }
+    }
+  })
+
+  it('draws the dark casing on both vector styles and the light casing on satellite', () => {
+    // Unchanged from before #45 for dark and satellite; on the near-white light style the dark casing
+    // is what gives the lines 3:1 (theme.test.ts checks the ratios).
+    expect(BASEMAPS.dark.halo).toBe('dark')
+    expect(BASEMAPS.light.halo).toBe('dark')
+    expect(BASEMAPS.satellite.halo).toBe('light')
   })
 })
 

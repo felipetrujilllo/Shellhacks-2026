@@ -7,8 +7,9 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BASEMAPS } from './components/basemaps'
 import { projectsToGeoJSON } from './geo'
-import { themeColor } from './theme'
+import { THEME_STORAGE_KEY, applyTheme, currentTheme, getInitialTheme, storeTheme, themeColor, type Theme } from './theme'
 import type { Project } from './types'
 
 // Path-based on purpose: jsdom replaces the global URL, which node:fs rejects.
@@ -21,14 +22,35 @@ const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black)
 const themeCss = read('theme.css')
 const workspaceCss = read('workspace.css')
 
-/** theme.css's tokens: name -> { value, comment } (comment is the same-line comment, if any). */
-function themeTokens(): Map<string, { value: string; comment: string }> {
-  const tokens = new Map<string, { value: string; comment: string }>()
-  for (const line of themeCss.split('\n')) {
+type Tokens = Map<string, { value: string; comment: string }>
+const THEMES: Theme[] = ['dark', 'light']
+
+/** theme.css's rules in order: the selector list (comments stripped) and the raw body. */
+const themeRules = [...themeCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+  selectors: stripCssComments(m[1]).split(',').map((s) => s.trim()),
+  body: m[2],
+}))
+// The dark theme is the default :root rule; the light theme is the rule applyTheme('light') switches on (#45).
+const DARK_SELECTORS = [':root', '::backdrop']
+const LIGHT_SELECTORS = [':root[data-theme="light"]', '[data-theme="light"] ::backdrop']
+
+/** A rule's declarations: name -> { value, comment } (comment is the same-line comment, if any). */
+function ruleTokens(selectors: string[]): Tokens {
+  const rule = themeRules.find((r) => r.selectors.join(',') === selectors.join(','))
+  if (!rule) throw new Error(`theme.css has no rule for ${selectors.join(', ')}`)
+  const tokens: Tokens = new Map()
+  for (const line of rule.body.split('\n')) {
     const m = line.match(/^\s*(--[\w-]+)\s*:\s*([^;]+);(.*)$/)
     if (m) tokens.set(m[1], { value: m[2].trim(), comment: m[3].trim() })
   }
   return tokens
+}
+const darkDeclarations = ruleTokens(DARK_SELECTORS)
+const lightDeclarations = ruleTokens(LIGHT_SELECTORS)
+
+/** The tokens in effect in `theme`, as the cascade resolves them: the light rule overrides :root. */
+function themeTokens(theme: Theme = 'dark'): Tokens {
+  return theme === 'dark' ? darkDeclarations : new Map([...darkDeclarations, ...lightDeclarations])
 }
 
 // Every non-test source file under src/, as text (same glob as colors.test.ts).
@@ -76,22 +98,137 @@ describe('themeColor', () => {
   })
 })
 
-describe('theme.css', () => {
-  it('declares every token in one :root rule, each with a one-line comment saying where it is used', () => {
-    const rules = [...stripCssComments(themeCss).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    expect(rules).toHaveLength(1)
-    expect(rules[0][1].split(',').map((s) => s.trim())).toContain(':root')
-    const declared = rules[0][2].match(/--[\w-]+\s*:/g) ?? []
+describe('theme switching (#45)', () => {
+  /** A fresh in-memory localStorage holding `entries`. */
+  function memoryStorage(entries: Record<string, string> = {}): Storage {
+    const data = new Map(Object.entries(entries))
+    return {
+      get length() { return data.size },
+      clear: () => data.clear(),
+      getItem: (key: string) => data.get(key) ?? null,
+      key: (i: number) => [...data.keys()][i] ?? null,
+      removeItem: (key: string) => { data.delete(key) },
+      setItem: (key: string, value: string) => { data.set(key, String(value)) },
+    }
+  }
+  /** A browser that refuses site data (private window, blocked storage): every call throws. */
+  function blockedStorage(): Storage {
+    const refuse = () => { throw new DOMException('The operation is insecure.', 'SecurityError') }
+    return { get length() { return refuse() }, clear: refuse, getItem: refuse, key: refuse, removeItem: refuse, setItem: refuse }
+  }
+  /** The OS preference: 'light' or 'dark' answers prefers-color-scheme; 'none' matches neither query. */
+  function prefers(scheme: 'light' | 'dark' | 'none') {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === `(prefers-color-scheme: ${scheme})`,
+      media: query, onchange: null, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+    })))
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.documentElement.removeAttribute('data-theme')
+  })
 
-    const tokens = themeTokens()
-    expect(tokens.size).toBeGreaterThan(50)
-    expect(declared).toHaveLength(tokens.size) // every declaration is on its own line, parsed above
-    for (const [name, { value, comment }] of tokens) {
-      expect(name, name).toMatch(/^--(?:palette|color)-/)
-      // A color literal, or a var()/color-mix() built only from tokens defined here.
-      if (!isDerived(value)) expect(value, name).toMatch(COLOR_LITERAL)
-      expect(() => resolveToken(name), name).not.toThrow()
-      expect(comment, `${name} needs a one-line comment`).toMatch(/^\/\*\s*\S.*\*\/$/)
+  it('getInitialTheme returns the stored choice first, whatever the OS prefers', () => {
+    prefers('dark')
+    vi.stubGlobal('localStorage', memoryStorage({ [THEME_STORAGE_KEY]: 'light' }))
+    expect(getInitialTheme()).toBe('light')
+    prefers('light')
+    vi.stubGlobal('localStorage', memoryStorage({ [THEME_STORAGE_KEY]: 'dark' }))
+    expect(getInitialTheme()).toBe('dark')
+  })
+
+  it('getInitialTheme follows prefers-color-scheme when nothing is stored', () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    prefers('light')
+    expect(getInitialTheme()).toBe('light')
+    prefers('dark')
+    expect(getInitialTheme()).toBe('dark')
+  })
+
+  it('getInitialTheme falls back to dark with no stored choice and no OS preference', () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    prefers('none')
+    expect(getInitialTheme()).toBe('dark')
+    vi.stubGlobal('matchMedia', undefined) // jsdom and other non-browsers have no matchMedia
+    expect(getInitialTheme()).toBe('dark')
+  })
+
+  it('getInitialTheme ignores a stored value that is not a theme', () => {
+    prefers('light')
+    for (const garbage of ['blue', 'LIGHT', '"light"', '']) {
+      vi.stubGlobal('localStorage', memoryStorage({ [THEME_STORAGE_KEY]: garbage }))
+      expect(getInitialTheme(), garbage).toBe('light')
+    }
+  })
+
+  it('getInitialTheme tolerates localStorage throwing: it uses the OS preference, else dark', () => {
+    const storage = blockedStorage()
+    vi.stubGlobal('localStorage', storage)
+    expect(() => storage.getItem(THEME_STORAGE_KEY)).toThrow() // the mock really throws
+    prefers('light')
+    expect(getInitialTheme()).toBe('light')
+    prefers('none')
+    expect(getInitialTheme()).toBe('dark')
+  })
+
+  it('getInitialTheme tolerates the localStorage getter itself throwing', () => {
+    // Some browsers throw on touching window.localStorage at all when site data is blocked.
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, get: () => { throw new DOMException('denied', 'SecurityError') } })
+    try {
+      expect(() => localStorage).toThrow() // the getter really throws
+      prefers('light')
+      expect(getInitialTheme()).toBe('light')
+      expect(storeTheme('dark')).toBe(false)
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'localStorage', original)
+      else delete (globalThis as { localStorage?: Storage }).localStorage
+    }
+  })
+
+  it('applyTheme sets data-theme on <html>, which currentTheme reads back (dark when unset)', () => {
+    expect(currentTheme()).toBe('dark')
+    applyTheme('light')
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+    expect(currentTheme()).toBe('light')
+    applyTheme('dark')
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(currentTheme()).toBe('dark')
+  })
+
+  it('storeTheme persists the choice for the next visit', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    prefers('dark')
+    expect(storeTheme('light')).toBe(true)
+    expect(storage.getItem(THEME_STORAGE_KEY)).toBe('light')
+    expect(getInitialTheme()).toBe('light')
+  })
+
+  it('storeTheme reports false instead of throwing when the browser refuses storage', () => {
+    vi.stubGlobal('localStorage', blockedStorage())
+    expect(storeTheme('light')).toBe(false)
+  })
+})
+
+describe('theme.css', () => {
+  it('declares the dark tokens in one :root rule and the light ones in one [data-theme="light"] rule, each with a one-line comment saying where it is used', () => {
+    // #45 changed this from "one :root rule": the light theme is a second rule. Same checks, per rule.
+    const rules = [...stripCssComments(themeCss).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    expect(rules).toHaveLength(2)
+    expect(rules.map((r) => r[1].split(',').map((s) => s.trim()))).toEqual([DARK_SELECTORS, LIGHT_SELECTORS])
+    expect(darkDeclarations.size).toBeGreaterThan(50)
+
+    for (const [i, [theme, tokens]] of ([['dark', darkDeclarations], ['light', lightDeclarations]] as const).entries()) {
+      const declared = rules[i][2].match(/--[\w-]+\s*:/g) ?? []
+      expect(declared, theme).toHaveLength(tokens.size) // every declaration is on its own line, parsed above
+      for (const [name, { value, comment }] of tokens) {
+        expect(name, name).toMatch(/^--(?:palette|color)-/)
+        // A color literal, or a var()/color-mix() built only from tokens defined here.
+        if (!isDerived(value)) expect(value, name).toMatch(COLOR_LITERAL)
+        expect(() => resolveToken(name, theme), `${theme} ${name}`).not.toThrow()
+        expect(comment, `${theme} ${name} needs a one-line comment`).toMatch(/^\/\*\s*\S.*\*\/$/)
+      }
     }
   })
 
@@ -206,8 +343,8 @@ describe('palette', () => {
     expect(literalPalette()).toEqual(BASE_PALETTE)
   })
 
-  it('builds every token that uses the palette from palette tokens only, with no new literals', () => {
-    for (const [name, { value }] of tokens) {
+  it.each(THEMES)('builds every %s token that uses the palette from palette tokens only, with no new literals', (theme) => {
+    for (const [name, { value }] of themeTokens(theme)) {
       if (!name.startsWith('--palette-') && !value.includes('var(--palette-')) continue
       if (!isDerived(value)) continue // one of the four base colors, checked above
       expect(value.replace(/var\(--palette-[\w-]+\)/g, '').match(COLOR_LITERAL), name).toBeNull()
@@ -239,9 +376,9 @@ describe('palette', () => {
     expect(tokens.get('--color-sidebar-bg')).toEqual({ value: '#47494d', comment: expect.stringMatching(/not part of the gold\/navy palette/i) })
   })
 
-  it('repeats no base color as a literal outside the palette, except in the map tokens MapLibre reads', () => {
+  it.each(THEMES)('repeats no base color as a literal outside the palette in the %s theme, except in the map tokens MapLibre reads', (theme) => {
     const base = Object.values(BASE_PALETTE).map((hex) => JSON.stringify(rgbOf(parseColor(hex))))
-    for (const [name, { value }] of tokens) {
+    for (const [name, { value }] of themeTokens(theme)) {
       if (name.startsWith('--palette-') || isDerived(value) || MAP_TOKENS.includes(name)) continue
       expect(base, `${name}: ${value} repeats a palette color; use var(--palette-…)`).not.toContain(JSON.stringify(rgbOf(parseColor(value))))
     }
@@ -267,16 +404,15 @@ describe('contrast (WCAG AA)', () => {
     expect(() => parseColor('rebeccapurple')).toThrow()
   })
 
-  it.each(CONTRAST_PAIRS)('$name: $fg on $bg is at least $min:1', ({ fg, bg, min }) => {
-    const background = composite(bg.map((name) => resolveToken(name)))
-    const ratio = contrast(composite([background, resolveToken(fg)]), background)
-    expect(ratio).toBeGreaterThanOrEqual(min)
+  // #45: the same list, run once per theme.
+  it.each(THEMES.flatMap((theme) => CONTRAST_PAIRS.map((pair) => ({ theme, ...pair }))))('$theme theme: $name: $fg on $bg is at least $min:1', ({ theme, fg, bg, min }) => {
+    expect(pairContrast(fg, bg, theme)).toBeGreaterThanOrEqual(min)
   })
 
   it('keeps the DESC and GPC map lines at least 3:1 against navy, the sidebar grey and the dark map', () => {
     for (const line of ['--color-utility-desc', '--color-utility-gpc']) {
       for (const bg of ['--palette-navy', '--color-sidebar-bg', '--color-map-bg', '--color-halo-dark']) {
-        expect(contrast(resolveToken(line), resolveToken(bg)), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
+        expect(contrast(resolveToken(line, 'dark'), resolveToken(bg, 'dark')), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
       }
     }
   })
@@ -285,9 +421,24 @@ describe('contrast (WCAG AA)', () => {
     // light/dark halo casing under every line (mapStyle.ts).
     for (const line of ['--color-utility-other', '--color-overlap', '--color-overlap-selected']) {
       for (const bg of ['--palette-navy', '--color-sidebar-bg', '--color-map-bg', '--color-halo-dark']) {
-        expect(contrast(resolveToken(line), resolveToken(bg)), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
+        expect(contrast(resolveToken(line, 'dark'), resolveToken(bg, 'dark')), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
       }
     }
+  })
+
+  it('in the light theme, keeps every map line at least 3:1 against navy, the map before tiles load and the casing under it, and that casing at least 3:1 against the light basemap', () => {
+    // On Positron (near-white) the lines themselves are about 2-3:1, so the light basemap draws the
+    // dark casing under them (BASEMAPS.light.halo), and the line reads against that casing.
+    expect(BASEMAPS.light.halo).toBe('dark')
+    const casing = `--color-halo-${BASEMAPS.light.halo}`
+    const lines = ['--color-utility-desc', '--color-utility-gpc', '--color-utility-other', '--color-overlap', '--color-overlap-selected']
+    for (const line of lines) {
+      for (const bg of ['--palette-navy', '--color-map-bg', casing]) {
+        expect(contrast(resolveToken(line, 'light'), resolveToken(bg, 'light')), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
+      }
+    }
+    // --color-halo-light (#ffffff) stands in for Positron's near-white land (#fafaf8).
+    expect(contrast(resolveToken(casing, 'light'), resolveToken('--color-halo-light', 'light'))).toBeGreaterThanOrEqual(3)
   })
 })
 
@@ -308,8 +459,8 @@ describe('no green (#43)', () => {
     }
   })
 
-  it('leaves no token with a green hue, map tokens included', () => {
-    const greens = [...themeTokens().keys()].filter((name) => isGreen(resolveToken(name)))
+  it.each(THEMES)('leaves no %s token with a green hue, map tokens included', (theme) => {
+    const greens = [...themeTokens(theme).keys()].filter((name) => isGreen(resolveToken(name, theme)))
     expect(greens).toEqual(GREEN_EXCEPTIONS)
   })
 
@@ -329,6 +480,229 @@ describe('no green (#43)', () => {
     }
   })
 })
+
+describe('light theme (#45)', () => {
+  // Map tokens stay out of the light rule: MapLibre reads them once, at page load (theme.ts).
+  const semanticNames = [...darkDeclarations.keys()].filter((name) => name.startsWith('--color-') && !MAP_TOKENS.includes(name))
+
+  it('defines every semantic token the dark theme defines, and redeclares no palette or map token', () => {
+    expect(semanticNames.length).toBeGreaterThan(100)
+    expect([...lightDeclarations.keys()].sort()).toEqual([...semanticNames].sort())
+  })
+
+  it('marks a light value "same as dark" exactly when it repeats the dark value, so the two cannot drift apart unnoticed', () => {
+    for (const [name, { value, comment }] of lightDeclarations) {
+      expect(/same as dark/.test(comment), `${name}: ${value} vs dark ${darkDeclarations.get(name)?.value}`).toBe(value === darkDeclarations.get(name)?.value)
+    }
+    // Sanity: the light theme really changes something.
+    expect([...lightDeclarations.values()].filter(({ comment }) => !/same as dark/.test(comment)).length).toBeGreaterThan(25)
+  })
+
+  it('builds every light-only value from the palette or other tokens, adding no color literal of its own', () => {
+    for (const [name, { value, comment }] of lightDeclarations) {
+      if (/same as dark/.test(comment)) continue
+      expect(isDerived(value), `${name}: ${value}`).toBe(true)
+      expect(value.replace(/var\(--[\w-]+\)/g, '').match(COLOR_LITERAL), name).toBeNull()
+    }
+  })
+
+  it('keeps the top bar navy with white text and the gold logo accent, and gold for the primary button fill', () => {
+    for (const [name, palette] of Object.entries({
+      '--color-header-bg': '--palette-navy',
+      '--color-header-text': '--palette-white',
+      '--color-accent': '--palette-gold',
+      '--color-primary-button-text': '--palette-navy',
+      '--color-primary-button-hover': '--palette-gold-dark',
+    })) {
+      expectColor(resolveToken(name, 'light'), resolveToken(palette), 6, name)
+    }
+  })
+
+  it('makes the sidebar card white with navy text, and its accent text navy since gold is unreadable on white', () => {
+    expectColor(resolveToken('--color-sidebar-bg', 'light'), parseColor('#FFFFFF'))
+    expectColor(resolveToken('--color-sidebar-text', 'light'), parseColor('#0B1F3A'))
+    expectColor(resolveToken('--color-sidebar-accent-text', 'light'), parseColor('#0B1F3A'))
+    // Gold really is below 3:1 on the white card: the reason for the swap.
+    expect(contrast(resolveToken('--palette-gold'), resolveToken('--color-sidebar-bg', 'light'))).toBeLessThan(3)
+    // The accent lines stay a gold: the darker gold mixed with navy, still gold in hue (not navy, not green).
+    expect(themeTokens('light').get('--color-sidebar-accent-line')?.value).toMatch(/^color-mix\(in srgb, var\(--palette-navy\) [\d.]+%, var\(--palette-gold-dark\)\)$/)
+    // Every surface behind the card's content is near-white (the card, its cards, hovers, fields).
+    for (const layer of ['--color-sidebar-card-bg', '--color-sidebar-card-hover-bg', '--color-sidebar-search-bg', '--color-sidebar-row-hover', '--color-sidebar-select-bg', '--color-sidebar-button-bg']) {
+      const surface = composite([resolveToken('--color-sidebar-bg', 'light'), resolveToken(layer, 'light')])
+      expect(contrast(surface, parseColor('#FFFFFF')), layer).toBeLessThan(1.15)
+    }
+  })
+})
+
+describe('dark theme unchanged by #45', () => {
+  it('resolves every token that existed before #45 to exactly the color it had then', () => {
+    const tokens = themeTokens('dark')
+    for (const [name, before] of Object.entries(DARK_BEFORE_45)) {
+      expect(tokens.has(name), `${name} was removed`).toBe(true)
+      expect(hex8(resolveToken(name, 'dark')), name).toBe(before)
+    }
+    expect(Object.keys(DARK_BEFORE_45)).toHaveLength(133)
+  })
+
+  it('adds only the sidebar accent tokens, which resolve to the gold accent the sidebar painted before', () => {
+    const added = [...darkDeclarations.keys()].filter((name) => !(name in DARK_BEFORE_45))
+    expect(added).toEqual(['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border'])
+    expect(darkDeclarations.get('--color-sidebar-accent-text')?.value).toBe('var(--color-accent)')
+    expect(darkDeclarations.get('--color-sidebar-accent-line')?.value).toBe('var(--color-accent)')
+    expect(darkDeclarations.get('--color-sidebar-accent-border')?.value).toBe('var(--color-accent-border)')
+  })
+
+  it('paints the sidebar\'s accent text and lines with the sidebar accent tokens (only the "new" tag keeps a gold fill)', () => {
+    const css = stripCssComments(workspaceCss)
+    const sidebarRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => m[1].includes('.sidebar-panel'))
+    const accentUses = sidebarRules.flatMap((m) => [...m[2].matchAll(/([\w-]+)\s*:[^;]*var\(--color-accent(?:-border)?\)/g)].map((d) => `${m[1].trim()} ${d[1]}`))
+    expect(accentUses).toEqual(['.sidebar-panel .new-tag background'])
+    for (const token of ['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border']) {
+      expect(css, token).toContain(`var(${token})`)
+    }
+  })
+})
+
+/** A color as #rrggbbaa, each channel rounded: how DARK_BEFORE_45 records the pre-#45 values. */
+const hex8 = ({ r, g, b, a }: Rgba) => '#' + [r, g, b, a * 255].map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')
+
+// Every theme.css token as it resolved before #45 (HEAD 54547fc), with this file's resolver.
+// The dark theme is "today's look, unchanged": none of these may change.
+const DARK_BEFORE_45: Record<string, string> = {
+  '--palette-gold': '#ffc928ff',
+  '--palette-gold-dark': '#f4a900ff',
+  '--palette-navy': '#0b1f3aff',
+  '--palette-white': '#ffffffff',
+  '--color-surface': '#f5f6f7ff',
+  '--color-text': '#0b1f3aff',
+  '--color-muted': '#606d7fff',
+  '--color-rule': '#dadde1ff',
+  '--color-accent': '#ffc928ff',
+  '--color-accent-border': '#ffc928ab',
+  '--color-accent-wash': '#ffc9281c',
+  '--color-accent-ink': '#0b1f3aff',
+  '--color-focus-ring': '#717d8dff',
+  '--color-header-bg': '#0b1f3aff',
+  '--color-header-text': '#ffffffff',
+  '--color-header-border': '#ffffff12',
+  '--color-header-button-hover': '#ffffff1a',
+  '--color-source-dot': '#ffc928ff',
+  '--color-primary-button-text': '#0b1f3aff',
+  '--color-primary-button-hover': '#f4a900ff',
+  '--color-secondary-button-bg': '#ffffffff',
+  '--color-secondary-button-border': '#c7cbd2ff',
+  '--color-secondary-button-hover': '#eeeff1ff',
+  '--color-icon-button-hover': '#00000008',
+  '--color-link': '#0b1f3aff',
+  '--color-body-bg': '#1c1d20ff',
+  '--color-map-bg': '#111111ff',
+  '--color-sidebar-bg': '#47494dff',
+  '--color-sidebar-border': '#ffffff1c',
+  '--color-sidebar-highlight': '#ffffff14',
+  '--color-sidebar-shadow': '#0000008c',
+  '--color-sidebar-shadow-near': '#00000059',
+  '--color-sidebar-text': '#f2f3f5ff',
+  '--color-sidebar-muted': '#cdd0d4ff',
+  '--color-sidebar-rule': '#ffffff1a',
+  '--color-sidebar-checkbox': '#ffc928ff',
+  '--color-sidebar-tab-count-bg': '#ffffff17',
+  '--color-sidebar-search-bg': '#ffffff12',
+  '--color-sidebar-search-border': '#ffffff0f',
+  '--color-sidebar-search-placeholder': '#cdd0d4ff',
+  '--color-sidebar-scrollbar': '#ffffff33',
+  '--color-sidebar-list-caption': '#d9dce0ff',
+  '--color-sidebar-card-bg': '#ffffff0a',
+  '--color-sidebar-card-border': '#ffffff14',
+  '--color-sidebar-card-hover-bg': '#ffffff14',
+  '--color-sidebar-card-hover-border': '#ffffff30',
+  '--color-sidebar-pair-connector': '#ffffff26',
+  '--color-sidebar-row-divider': '#ffffff12',
+  '--color-sidebar-row-hover': '#ffffff12',
+  '--color-sidebar-button-bg': '#ffffff14',
+  '--color-sidebar-button-border': '#ffffff26',
+  '--color-sidebar-button-hover': '#ffffff24',
+  '--color-sidebar-flagged-text': '#f4be8cff',
+  '--color-sidebar-select-bg': '#ffffff0a',
+  '--color-sidebar-select-border': '#ffffff26',
+  '--color-sidebar-option-bg': '#0b1f3aff',
+  '--color-savings': '#0b1f3aff',
+  '--color-checkbox': '#0b1f3aff',
+  '--color-tab-underline': '#0b1f3aff',
+  '--color-tab-count-bg': '#e4e6e9ff',
+  '--color-search-bg': '#ebedefff',
+  '--color-search-icon': '#7b8695ff',
+  '--color-search-focus-border': '#aab1baff',
+  '--color-search-placeholder': '#838d9bff',
+  '--color-scrollbar': '#c9ced4ff',
+  '--color-list-caption': '#48576bff',
+  '--color-card-bg': '#fdfdfdff',
+  '--color-card-border': '#dde0e3ff',
+  '--color-card-hover-bg': '#ffffffff',
+  '--color-card-hover-border': '#a2aab4ff',
+  '--color-card-selected-bg': '#ffc9281c',
+  '--color-card-selected-border': '#ffc928ab',
+  '--color-card-selected-bar': '#ffc928ff',
+  '--color-card-rank': '#747f8fff',
+  '--color-card-divider': '#e4e6e9ff',
+  '--color-pair-connector': '#dde0e3ff',
+  '--color-tag-text': '#0b1f3aff',
+  '--color-tag-bg': '#ffc928ff',
+  '--color-row-hover': '#e9ebedff',
+  '--color-batch-card-bg': '#ffffffff',
+  '--color-flagged-text': '#98632fff',
+  '--color-map-context-bg': '#0b1f3aed',
+  '--color-map-context-border': '#ffffff1f',
+  '--color-map-context-text': '#f3f4f5ff',
+  '--color-map-context-muted': '#9da5b0ff',
+  '--color-map-context-divider': '#ffffff20',
+  '--color-notice-bg': '#e9ebedff',
+  '--color-notice-text': '#304158ff',
+  '--color-upload-problem-bg': '#f4e2d4ff',
+  '--color-upload-problem-text': '#5b3419ff',
+  '--color-upload-problem-link': '#7a3f14ff',
+  '--color-floating-shadow': '#00000033',
+  '--color-panel-bg': '#fafbfbff',
+  '--color-panel-border': '#d6d9deff',
+  '--color-panel-heading': '#657283ff',
+  '--color-panel-meta': '#657283ff',
+  '--color-panel-meta-strong': '#3c4c61ff',
+  '--color-why-bg': '#eeeff1ff',
+  '--color-why-border': '#ffc928ff',
+  '--color-why-text': '#304158ff',
+  '--color-dialog-border': '#dadde1ff',
+  '--color-dialog-shadow': '#00000055',
+  '--color-dialog-backdrop': '#0b1f3aa8',
+  '--color-upload-symbol-bg': '#e9ebedff',
+  '--color-upload-symbol-border': '#dadde1ff',
+  '--color-upload-symbol-icon': '#5e6b7dff',
+  '--color-step': '#657283ff',
+  '--color-step-current': '#0b1f3aff',
+  '--color-step-current-bar': '#0b1f3aff',
+  '--color-drop-zone-bg': '#f3f4f5ff',
+  '--color-drop-zone-border': '#b6bcc4ff',
+  '--color-drop-zone-text': '#596779ff',
+  '--color-drop-zone-title': '#3c4c61ff',
+  '--color-drop-zone-hint': '#596779ff',
+  '--color-drop-zone-hover-bg': '#e9ebedff',
+  '--color-drop-zone-hover-border': '#768291ff',
+  '--color-upload-footer-text': '#657283ff',
+  '--color-error-bg': '#fff4e9ff',
+  '--color-error-border': '#e5c7b1ff',
+  '--color-error-text': '#a05225ff',
+  '--color-review-divider': '#e7e9ebff',
+  '--color-status-ready': '#0b1f3aff',
+  '--color-status-flagged': '#cc964cff',
+  '--color-review-note': '#657283ff',
+  '--color-utility-desc': '#60a5faff',
+  '--color-utility-gpc': '#f87171ff',
+  '--color-utility-other': '#22d3eeff',
+  '--color-overlap': '#f59e0bff',
+  '--color-overlap-selected': '#c4b5fdff',
+  '--color-point-stroke': '#ffffffff',
+  '--color-legend-low-confidence': '#cbd5e1ff',
+  '--color-halo-dark': '#020617ff',
+  '--color-halo-light': '#ffffffff',
+}
 
 const BASE_PALETTE = {
   '--palette-gold': '#FFC928',
@@ -388,6 +762,8 @@ const PALETTE_ROLES: Record<string, string> = {
 
 // Text/background pairs as workspace.css paints them. `bg` lists the layers bottom to top
 // (translucent fills are composited over what is under them). 4.5 for text, 3 for UI parts.
+// Every pair is checked in both themes (#45). The sidebar accent pairs name what workspace.css
+// paints since #45 (--color-sidebar-accent-*); in the dark theme those are the gold --color-accent*.
 const SIDEBAR = '--color-sidebar-bg'
 const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] = [
   { name: 'top bar text', fg: '--color-header-text', bg: ['--color-header-bg'], min: 4.5 },
@@ -402,8 +778,8 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'sidebar text', fg: '--color-sidebar-text', bg: [SIDEBAR], min: 4.5 },
   { name: 'sidebar muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR], min: 4.5 },
   { name: 'sidebar list caption', fg: '--color-sidebar-list-caption', bg: [SIDEBAR], min: 4.5 },
-  { name: 'sidebar gold text (savings figure, text links)', fg: '--color-accent', bg: [SIDEBAR], min: 4.5 },
-  { name: 'sidebar sort select text', fg: '--color-accent', bg: [SIDEBAR, '--color-sidebar-select-bg'], min: 4.5 },
+  { name: 'sidebar accent text (savings figure, text links)', fg: '--color-sidebar-accent-text', bg: [SIDEBAR], min: 4.5 },
+  { name: 'sidebar sort select text', fg: '--color-sidebar-accent-text', bg: [SIDEBAR, '--color-sidebar-select-bg'], min: 4.5 },
   { name: 'sidebar sort options', fg: '--color-sidebar-text', bg: ['--color-sidebar-option-bg'], min: 4.5 },
   { name: 'sidebar card text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 4.5 },
   { name: 'sidebar card muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 4.5 },
@@ -415,9 +791,9 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'sidebar search placeholder', fg: '--color-sidebar-search-placeholder', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 4.5 },
   { name: 'sidebar secondary button hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-hover'], min: 4.5 },
   { name: 'sidebar flagged import reason', fg: '--color-sidebar-flagged-text', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 4.5 },
-  { name: 'sidebar focus outline', fg: '--color-accent', bg: [SIDEBAR], min: 3 },
-  { name: 'sidebar selected tab underline', fg: '--color-accent', bg: [SIDEBAR], min: 3 },
-  { name: 'sidebar selected card bar', fg: '--color-accent', bg: [SIDEBAR, '--color-accent-wash'], min: 3 },
+  { name: 'sidebar focus outline', fg: '--color-sidebar-accent-line', bg: [SIDEBAR], min: 3 },
+  { name: 'sidebar selected tab underline', fg: '--color-sidebar-accent-line', bg: [SIDEBAR], min: 3 },
+  { name: 'sidebar selected card bar', fg: '--color-sidebar-accent-line', bg: [SIDEBAR, '--color-accent-wash'], min: 3 },
   { name: 'body text on the light surface', fg: '--color-text', bg: ['--color-surface'], min: 4.5 },
   { name: 'muted text on the light surface', fg: '--color-muted', bg: ['--color-surface'], min: 4.5 },
   { name: 'text on the selection panel and upload dialog', fg: '--color-text', bg: ['--color-panel-bg'], min: 4.5 },
@@ -436,9 +812,9 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   // Sidebar details: the unselected Uploads count badge, and the search field's only focus indicator.
   { name: 'sidebar tab count badge (unselected)', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-sidebar-tab-count-bg'], min: 4.5 },
   { name: 'sidebar tab count badge (selected)', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-tab-count-bg'], min: 4.5 },
-  { name: 'sidebar search focus border vs the card', fg: '--color-accent-border', bg: [SIDEBAR], min: 3 },
-  { name: 'sidebar search focus border vs the search field', fg: '--color-accent-border', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 3 },
-  { name: 'selected sidebar card border', fg: '--color-accent-border', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 3 },
+  { name: 'sidebar search focus border vs the card', fg: '--color-sidebar-accent-border', bg: [SIDEBAR], min: 3 },
+  { name: 'sidebar search focus border vs the search field', fg: '--color-sidebar-accent-border', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 3 },
+  { name: 'selected sidebar card border', fg: '--color-sidebar-accent-border', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 3 },
   // #43: combinations the green-to-navy swap changed. The sidebar's focus outline is gold (pair above).
   { name: 'focus outline on the selection panel and upload dialog', fg: '--color-focus-ring', bg: ['--color-panel-bg'], min: 3 },
   { name: 'focus outline on the navy top bar', fg: '--color-focus-ring', bg: ['--color-header-bg'], min: 3 },
@@ -468,6 +844,13 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'close icon on a hovered icon button', fg: '--color-muted', bg: ['--color-panel-bg', '--color-icon-button-hover'], min: 3 },
   { name: '"ready" status dot in upload review', fg: '--color-status-ready', bg: ['--color-panel-bg'], min: 3 },
   { name: 'text on a hovered secondary button', fg: '--color-text', bg: ['--color-secondary-button-hover'], min: 4.5 },
+  // #45: the top bar's theme toggle (icon-only, white on navy in both themes) and the sidebar pieces the light theme restyles.
+  { name: 'top bar theme toggle icon', fg: '--color-header-text', bg: ['--color-header-bg'], min: 3 },
+  { name: 'top bar theme toggle icon while hovered', fg: '--color-header-text', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
+  { name: 'sidebar sort select hover border', fg: '--color-sidebar-accent-border', bg: [SIDEBAR, '--color-sidebar-select-bg'], min: 3 },
+  { name: 'sidebar secondary button text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-bg'], min: 4.5 },
+  { name: 'sidebar project row hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-row-hover'], min: 4.5 },
+  { name: 'sidebar hovered card text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-card-hover-bg'], min: 4.5 },
 ]
 
 type Rgba = { r: number; g: number; b: number; a: number } // channels 0-255, alpha 0-1
@@ -479,16 +862,16 @@ function expectColor(actual: Rgba, expected: Rgba, digits = 6, label = '') {
   for (const k of ['r', 'g', 'b', 'a'] as const) expect(actual[k], `${label} ${k}`).toBeCloseTo(expected[k], digits)
 }
 
-/** A theme.css token's color, following var() references. Throws on anything it can't resolve. */
-function resolveToken(name: string, seen: string[] = []): Rgba {
+/** A theme.css token's color in `theme`, following var() references. Throws on anything it can't resolve. */
+function resolveToken(name: string, theme: Theme = 'dark', seen: string[] = []): Rgba {
   if (seen.includes(name)) throw new Error(`circular reference: ${[...seen, name].join(' -> ')}`)
-  const token = themeTokens().get(name)
+  const token = themeTokens(theme).get(name)
   if (!token) throw new Error(`${name} is not defined in theme.css`)
-  return parseColor(token.value, [...seen, name])
+  return parseColor(token.value, [...seen, name], theme)
 }
 
-/** Parse the color syntaxes theme.css uses: hex, white, transparent, var(), color-mix(in srgb, …). */
-function parseColor(value: string, seen: string[] = []): Rgba {
+/** Parse the color syntaxes theme.css uses: hex, white, transparent, var(), color-mix(in srgb, …); var() resolves in `theme`. */
+function parseColor(value: string, seen: string[] = [], theme: Theme = 'dark'): Rgba {
   const v = value.trim()
   const hex = v.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)?.[1]
   if (hex) {
@@ -499,14 +882,14 @@ function parseColor(value: string, seen: string[] = []): Rgba {
   if (v === 'white') return { r: 255, g: 255, b: 255, a: 1 }
   if (v === 'transparent') return { r: 0, g: 0, b: 0, a: 0 }
   const ref = v.match(/^var\((--[\w-]+)\)$/)?.[1]
-  if (ref) return resolveToken(ref, seen)
+  if (ref) return resolveToken(ref, theme, seen)
   const mix = v.match(/^color-mix\(in srgb,\s*(.+)\)$/)?.[1]
   if (mix) {
     const parts = splitTopLevel(mix)
     if (parts.length !== 2) throw new Error(`color-mix needs two colors: ${v}`)
     const [[c1, p1], [c2, p2]] = parts.map((part) => {
       const m = part.match(/^(.+?)(?:\s+([\d.]+)%)?$/)!
-      return [parseColor(m[1], seen), m[2] === undefined ? undefined : Number(m[2]) / 100] as const
+      return [parseColor(m[1], seen, theme), m[2] === undefined ? undefined : Number(m[2]) / 100] as const
     })
     return colorMix(c1, p1, c2, p2)
   }
@@ -550,6 +933,12 @@ function composite(layers: Rgba[]): Rgba {
     }),
     { ...layers[0], a: 1 },
   )
+}
+
+/** Contrast of `fg` painted over the `bg` layers (bottom to top), as CONTRAST_PAIRS lists them, in `theme`. */
+function pairContrast(fg: string, bg: string[], theme: Theme): number {
+  const background = composite(bg.map((name) => resolveToken(name, theme)))
+  return contrast(composite([background, resolveToken(fg, theme)]), background)
 }
 
 /** WCAG 2 contrast ratio of two opaque colors. */

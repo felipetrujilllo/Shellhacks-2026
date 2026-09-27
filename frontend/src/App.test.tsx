@@ -5,6 +5,7 @@ import { fetchWorkspace } from './api'
 import { apiExample, expectProject } from './test/apiExamples'
 import { makeOverlaps } from './test/overlapFixtures'
 import type { Overlap, Project, Workspace } from './types'
+import { THEME_STORAGE_KEY } from './theme'
 import { UNREADABLE_UPLOADS, UPLOADS_STORAGE_KEY } from './uploadCache'
 
 vi.mock('./api', () => ({
@@ -13,8 +14,8 @@ vi.mock('./api', () => ({
 
 // jsdom has no WebGL: replace the MapLibre map with a stub that exposes what it was given.
 vi.mock('./components/ProjectMap', () => ({
-  default: ({ projects, overlaps, selectedId }: { projects: unknown[]; overlaps: unknown[]; selectedId: string | null }) => (
-    <div data-testid="project-map">
+  default: ({ projects, overlaps, selectedId, theme }: { projects: unknown[]; overlaps: unknown[]; selectedId: string | null; theme: string }) => (
+    <div data-testid="project-map" data-theme={theme}>
       {projects.length} projects, {overlaps.length} overlaps, selected {String(selectedId)}
     </div>
   ),
@@ -262,6 +263,55 @@ describe('App', () => {
       expect(within(right).getByRole('button', { name: 'Upload projects' })).toBeDisabled()
       await screen.findByTestId('project-map')
       expect(within(right).getByRole('button', { name: 'Upload projects' })).toBeEnabled()
+    })
+
+    it('puts the theme toggle in the right region, just before Upload projects, and keeps the brand alone in the center (#45)', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      const [left, center, right] = Array.from(screen.getByRole('banner').children) as HTMLElement[]
+      const toggle = within(right).getByRole('button', { name: 'Light theme' })
+      expect(Array.from(right.children)).toEqual([toggle, within(right).getByRole('button', { name: 'Upload projects' })])
+      expect(within(left).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Open menu'])
+      expect(within(center).queryByRole('button')).not.toBeInTheDocument()
+      expect(within(center).getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
+    })
+
+    it('the theme toggle switches <html> to the light theme and back, remembers it, and the map follows (#45)', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      const toggle = screen.getByRole('button', { name: 'Light theme' })
+      expect(toggle).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'dark')
+      try {
+        fireEvent.click(toggle)
+        expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+        expect(storage.getItem(THEME_STORAGE_KEY)).toBe('light')
+        expect(toggle).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'light')
+
+        fireEvent.click(toggle)
+        expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+        expect(storage.getItem(THEME_STORAGE_KEY)).toBe('dark')
+        expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'dark')
+      } finally {
+        document.documentElement.removeAttribute('data-theme')
+      }
+    })
+
+    it('keeps the selected pair when the theme changes (#45)', async () => {
+      await renderApp()
+      const list = await screen.findByRole('list', { name: /coordination opportunities/i })
+      fireEvent.click(within(list).getAllByRole('button')[1])
+      const selectedBefore = screen.getByTestId('project-map').textContent
+      expect(selectedBefore).toMatch(/selected OVL_/)
+      try {
+        fireEvent.click(screen.getByRole('button', { name: 'Light theme' }))
+        expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'light')
+        expect(screen.getByTestId('project-map').textContent).toBe(selectedBefore)
+        expect(within(list).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true')
+      } finally {
+        document.documentElement.removeAttribute('data-theme')
+      }
     })
 
     it('no longer shows the workspace title, subtitle or shared-workspace badge', async () => {

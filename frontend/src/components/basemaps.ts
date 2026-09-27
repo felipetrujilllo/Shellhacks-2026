@@ -1,7 +1,9 @@
 import type { StyleSpecification } from 'maplibre-gl'
+import type { Theme } from '../theme'
 import type { Project } from '../types'
 
-export type BasemapId = 'dark' | 'satellite'
+export type BasemapId = 'dark' | 'light' | 'satellite'
+/** The pick before the user chooses one; themedBasemap() shows the light style for it in the light theme. */
 export const DEFAULT_BASEMAP: BasemapId = 'dark'
 export const ESRI_ATTRIBUTION = 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
 export const SATELLITE_STYLE: StyleSpecification = {
@@ -17,9 +19,32 @@ export const SATELLITE_STYLE: StyleSpecification = {
   },
   layers: [{ id: 'esri-imagery', type: 'raster', source: 'esri-imagery' }],
 }
-export const BASEMAPS: Record<BasemapId, { label: string; style: string | StyleSpecification }> = {
-  dark: { label: 'Dark', style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json' },
-  satellite: { label: 'Satellite', style: SATELLITE_STYLE },
+/**
+ * Every basemap. `halo` is the casing color drawn under project lines and overlap connectors:
+ * dark on both vector styles (on the near-white light style it is what keeps the lines at 3:1),
+ * light on satellite imagery.
+ */
+export const BASEMAPS: Record<BasemapId, { label: string; style: string | StyleSpecification; halo: 'dark' | 'light' }> = {
+  dark: { label: 'Dark', style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', halo: 'dark' },
+  // CARTO Positron: free, no key, and the same vector tiles as Dark Matter.
+  light: { label: 'Light', style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', halo: 'dark' },
+  satellite: { label: 'Satellite', style: SATELLITE_STYLE, halo: 'light' },
+}
+
+// Each theme's own vector basemap: the one in the "Dark" slot of the basemap picker.
+const THEME_BASEMAP: Record<Theme, BasemapId> = { dark: 'dark', light: 'light' }
+
+/** The basemaps the picker offers in `theme`: the theme's vector style, then satellite (both themes). */
+export function basemapOptions(theme: Theme): BasemapId[] {
+  return [THEME_BASEMAP[theme], 'satellite']
+}
+
+/**
+ * The basemap to show for the user's pick in `theme`: satellite stays satellite, and either
+ * vector style becomes the theme's own, so switching theme swaps Dark Matter and Positron.
+ */
+export function themedBasemap(pick: BasemapId, theme: Theme): BasemapId {
+  return pick === 'satellite' ? 'satellite' : THEME_BASEMAP[theme]
 }
 
 export type DataBounds = [[number, number], [number, number]]

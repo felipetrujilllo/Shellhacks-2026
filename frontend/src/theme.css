@@ -32,6 +32,12 @@
  * greys, black shadows and the orange warning/flagged colors.
  * Map tokens stay plain hex (MapLibre can't parse var() or color-mix()), so the map's white
  * outline and casing repeat #ffffff there.
+ *
+ * Two themes (#45): the :root rule below is the dark theme (the default, as the app looked
+ * before #45), and the [data-theme="light"] rule after it redeclares every --color-* token
+ * except the map's for the light theme (white sidebar card; the top bar stays navy). The
+ * sidebar's gold text and lines read --color-sidebar-accent-* so the light theme can swap them
+ * for navy and a darker gold. Edit both rules when a token's role changes.
  */
 :root, ::backdrop {
   /* Palette: the only base colors; everything below that uses them derives from these four */
@@ -101,6 +107,9 @@
   --color-sidebar-select-bg: color-mix(in srgb, var(--palette-white) 4%, transparent); /* sidebar "Sort:" select background */
   --color-sidebar-select-border: color-mix(in srgb, var(--palette-white) 15%, transparent); /* sidebar "Sort:" select border */
   --color-sidebar-option-bg: var(--palette-navy); /* sidebar "Sort:" dropdown option background (navy) */
+  --color-sidebar-accent-text: var(--color-accent); /* sidebar accent text: savings figure, text links, "Sort:" select text (gold on the grey card) */
+  --color-sidebar-accent-line: var(--color-accent); /* sidebar accent lines: focus outline, selected tab underline, selected card bar (gold on the grey card) */
+  --color-sidebar-accent-border: var(--color-accent-border); /* sidebar search focus, selected card and "Sort:" select hover borders (the gold accent border) */
 
   /* Sidebar contents (light variant, used outside the dark card) */
   --color-savings: var(--palette-navy); /* savings figures on light surfaces (navy; the sidebar shows them in gold) */
@@ -184,6 +193,155 @@
   --color-overlap-selected: #c4b5fd; /* the selected overlap connector and its legend swatch */
   --color-point-stroke: #ffffff; /* outline of confirmed single-point projects */
   --color-legend-low-confidence: #cbd5e1; /* neutral low-confidence legend swatch */
-  --color-halo-dark: #020617; /* casing under project lines and connectors on the dark basemap */
-  --color-halo-light: #ffffff; /* casing under project lines and connectors on the other basemaps */
+  --color-halo-dark: #020617; /* casing under project lines and connectors on the dark and light vector basemaps (basemaps.ts) */
+  --color-halo-light: #ffffff; /* casing under project lines and connectors on the satellite basemap */
+}
+
+/*
+ * Light theme (#45): applyTheme() in theme.ts sets data-theme="light" on <html>. The same
+ * semantic tokens as above (every --color-* token except the map's, which MapLibre reads once
+ * and so stay the same in both themes), from the same four palette colors: a white sidebar card
+ * on a light navy tint, navy text, and gold for fills. Gold is about 1.5:1 on white, so accent
+ * text in the white sidebar is navy and its accent lines a darker gold mixed with navy.
+ * The top bar stays navy in both themes. "same as dark" marks a value the dark theme shares.
+ */
+:root[data-theme="light"], [data-theme="light"] ::backdrop {
+  /* Workspace base (light in both themes) */
+  --color-surface: color-mix(in srgb, var(--palette-navy) 4%, var(--palette-white)); /* same as dark */
+  --color-text: var(--palette-navy); /* same as dark */
+  --color-muted: color-mix(in srgb, var(--palette-navy) 65%, var(--palette-white)); /* same as dark */
+  --color-rule: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* same as dark */
+  --color-accent: var(--palette-gold); /* same as dark */
+  --color-accent-border: color-mix(in srgb, var(--palette-gold) 67%, transparent); /* same as dark */
+  --color-accent-wash: color-mix(in srgb, var(--palette-gold) 11%, transparent); /* same as dark */
+  --color-accent-ink: var(--palette-navy); /* same as dark */
+  --color-focus-ring: color-mix(in srgb, var(--palette-navy) 58%, var(--palette-white)); /* same as dark */
+
+  /* Header */
+  --color-header-bg: var(--palette-navy); /* same as dark */
+  --color-header-text: var(--palette-white); /* same as dark */
+  --color-header-border: color-mix(in srgb, var(--palette-white) 7%, transparent); /* same as dark */
+  --color-header-button-hover: color-mix(in srgb, var(--palette-white) 10%, transparent); /* same as dark */
+  --color-source-dot: var(--color-sidebar-accent-line); /* the dark gold of the light sidebar's accent lines: gold is under 3:1 on the white sidebar, and this also reaches 3:1 on the navy map chip */
+
+  /* Buttons */
+  --color-primary-button-text: var(--palette-navy); /* same as dark */
+  --color-primary-button-hover: var(--palette-gold-dark); /* same as dark */
+  --color-secondary-button-bg: var(--palette-white); /* same as dark */
+  --color-secondary-button-border: color-mix(in srgb, var(--palette-navy) 23%, var(--palette-white)); /* same as dark */
+  --color-secondary-button-hover: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* same as dark */
+  --color-icon-button-hover: #00000008; /* same as dark */
+  --color-link: var(--palette-navy); /* same as dark */
+
+  /* Layout backdrops */
+  --color-body-bg: color-mix(in srgb, var(--palette-navy) 8%, var(--palette-white)); /* navy at 8% over white: light area behind the white sidebar card */
+  --color-map-bg: #111; /* same as dark */
+
+  /* Sidebar card (white in the light theme) */
+  --color-sidebar-bg: var(--palette-white); /* floating sidebar card background (white) */
+  --color-sidebar-border: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar card border */
+  --color-sidebar-highlight: color-mix(in srgb, var(--palette-white) 8%, transparent); /* same as dark */
+  --color-sidebar-shadow: color-mix(in srgb, var(--palette-navy) 22%, transparent); /* navy at 22%: sidebar card far drop shadow, softer than the dark theme's black */
+  --color-sidebar-shadow-near: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar card near drop shadow */
+  --color-sidebar-text: var(--palette-navy); /* sidebar text (sidebar --ink) and sort dropdown options (navy) */
+  --color-sidebar-muted: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: sidebar secondary text (sidebar --muted); at least 4.5:1 on hovered/selected sidebar cards */
+  --color-sidebar-rule: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar dividers (sidebar --rule) */
+  --color-sidebar-checkbox: var(--palette-navy); /* sidebar map-layer checkboxes (navy) */
+  --color-sidebar-tab-count-bg: color-mix(in srgb, var(--palette-navy) 8%, transparent); /* navy at 8%: sidebar tab count badge */
+  --color-sidebar-search-bg: color-mix(in srgb, var(--palette-navy) 5%, transparent); /* navy at 5%: sidebar search field background */
+  --color-sidebar-search-border: color-mix(in srgb, var(--palette-navy) 10%, transparent); /* navy at 10%: sidebar search field border */
+  --color-sidebar-search-placeholder: var(--color-sidebar-muted); /* same as dark */
+  --color-sidebar-scrollbar: color-mix(in srgb, var(--palette-navy) 22%, transparent); /* navy at 22%: sidebar list scrollbar thumb */
+  --color-sidebar-list-caption: color-mix(in srgb, var(--palette-navy) 78%, var(--palette-white)); /* navy at 78% over white: sidebar list caption count */
+  --color-sidebar-card-bg: color-mix(in srgb, var(--palette-navy) 2%, transparent); /* navy at 2%: sidebar opportunity and import batch cards */
+  --color-sidebar-card-border: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar card borders and the divider inside opportunity cards */
+  --color-sidebar-card-hover-bg: color-mix(in srgb, var(--palette-navy) 5%, transparent); /* navy at 5%: sidebar opportunity card hover background */
+  --color-sidebar-card-hover-border: color-mix(in srgb, var(--palette-navy) 30%, transparent); /* navy at 30%: sidebar opportunity card hover border */
+  --color-sidebar-pair-connector: color-mix(in srgb, var(--palette-navy) 18%, transparent); /* navy at 18%: line joining the two projects in a sidebar card */
+  --color-sidebar-row-divider: color-mix(in srgb, var(--palette-navy) 8%, transparent); /* navy at 8%: sidebar project row divider */
+  --color-sidebar-row-hover: color-mix(in srgb, var(--palette-navy) 6%, transparent); /* navy at 6%: sidebar project row hover/active background */
+  --color-sidebar-button-bg: var(--palette-white); /* secondary button inside the sidebar (white) */
+  --color-sidebar-button-border: color-mix(in srgb, var(--palette-navy) 23%, transparent); /* navy at 23%: secondary button border inside the sidebar */
+  --color-sidebar-button-hover: color-mix(in srgb, var(--palette-navy) 7%, transparent); /* navy at 7%: secondary button hover inside the sidebar */
+  --color-sidebar-flagged-text: var(--color-flagged-text); /* flagged-row reason in sidebar import batches (the light-surface flagged color) */
+  --color-sidebar-select-bg: var(--palette-white); /* sidebar "Sort:" select background (white) */
+  --color-sidebar-select-border: color-mix(in srgb, var(--palette-navy) 23%, transparent); /* navy at 23%: sidebar "Sort:" select border */
+  --color-sidebar-option-bg: var(--palette-white); /* sidebar "Sort:" dropdown option background (white) */
+  --color-sidebar-accent-text: var(--palette-navy); /* sidebar accent text: savings figure, text links, "Sort:" select text (navy: gold is about 1.5:1 on white) */
+  --color-sidebar-accent-line: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-gold-dark)); /* darker gold with navy at 35%: sidebar focus outline, selected tab underline, selected card bar; a gold that reaches 3:1 on the white card */
+  --color-sidebar-accent-border: var(--color-sidebar-accent-line); /* sidebar search focus, selected card and "Sort:" select hover borders (the dark gold accent line) */
+
+  /* Sidebar contents (light variant, used outside the dark card) */
+  --color-savings: var(--palette-navy); /* same as dark */
+  --color-checkbox: var(--palette-navy); /* same as dark */
+  --color-tab-underline: var(--palette-navy); /* same as dark */
+  --color-tab-count-bg: color-mix(in srgb, var(--palette-navy) 11%, var(--palette-white)); /* same as dark */
+  --color-search-bg: color-mix(in srgb, var(--palette-navy) 8%, var(--palette-white)); /* same as dark */
+  --color-search-icon: color-mix(in srgb, var(--palette-navy) 54%, var(--palette-white)); /* same as dark */
+  --color-search-focus-border: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* same as dark */
+  --color-search-placeholder: color-mix(in srgb, var(--palette-navy) 51%, var(--palette-white)); /* same as dark */
+  --color-scrollbar: color-mix(in srgb, var(--palette-navy) 22%, var(--palette-white)); /* same as dark */
+  --color-list-caption: color-mix(in srgb, var(--palette-navy) 75%, var(--palette-white)); /* same as dark */
+  --color-card-bg: color-mix(in srgb, var(--palette-navy) 1%, var(--palette-white)); /* same as dark */
+  --color-card-border: color-mix(in srgb, var(--palette-navy) 14%, var(--palette-white)); /* same as dark */
+  --color-card-hover-bg: var(--palette-white); /* same as dark */
+  --color-card-hover-border: color-mix(in srgb, var(--palette-navy) 38%, var(--palette-white)); /* same as dark */
+  --color-card-selected-bg: var(--color-accent-wash); /* same as dark */
+  --color-card-selected-border: var(--color-accent-border); /* same as dark */
+  --color-card-selected-bar: var(--color-accent); /* same as dark */
+  --color-card-rank: color-mix(in srgb, var(--palette-navy) 57%, var(--palette-white)); /* same as dark */
+  --color-card-divider: color-mix(in srgb, var(--palette-navy) 11%, var(--palette-white)); /* same as dark */
+  --color-pair-connector: color-mix(in srgb, var(--palette-navy) 14%, var(--palette-white)); /* same as dark */
+  --color-tag-text: var(--color-accent-ink); /* same as dark */
+  --color-tag-bg: var(--color-accent); /* same as dark */
+  --color-row-hover: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
+  --color-batch-card-bg: var(--palette-white); /* same as dark */
+  --color-flagged-text: #98632f; /* same as dark */
+
+  /* Map overlay chips and panels */
+  --color-map-context-bg: color-mix(in srgb, var(--palette-navy) 93%, transparent); /* same as dark */
+  --color-map-context-border: color-mix(in srgb, var(--palette-white) 12%, transparent); /* same as dark */
+  --color-map-context-text: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* same as dark */
+  --color-map-context-muted: color-mix(in srgb, var(--palette-navy) 40%, var(--palette-white)); /* same as dark */
+  --color-map-context-divider: color-mix(in srgb, var(--palette-white) 12.5%, transparent); /* same as dark */
+  --color-notice-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
+  --color-notice-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* same as dark */
+  --color-upload-problem-bg: #f4e2d4; /* same as dark */
+  --color-upload-problem-text: #5b3419; /* same as dark */
+  --color-upload-problem-link: #7a3f14; /* same as dark */
+  --color-floating-shadow: #0003; /* same as dark */
+  --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* same as dark */
+  --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* same as dark */
+  --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
+  --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
+  --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* same as dark */
+  --color-why-bg: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* same as dark */
+  --color-why-border: var(--palette-gold); /* same as dark */
+  --color-why-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* same as dark */
+
+  /* Upload dialog */
+  --color-dialog-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* same as dark */
+  --color-dialog-shadow: #0005; /* same as dark */
+  --color-dialog-backdrop: color-mix(in srgb, var(--palette-navy) 66%, transparent); /* same as dark */
+  --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
+  --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* same as dark */
+  --color-upload-symbol-icon: color-mix(in srgb, var(--palette-navy) 66%, var(--palette-white)); /* same as dark */
+  --color-step: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
+  --color-step-current: var(--palette-navy); /* same as dark */
+  --color-step-current-bar: var(--palette-navy); /* same as dark */
+  --color-drop-zone-bg: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* same as dark */
+  --color-drop-zone-border: color-mix(in srgb, var(--palette-navy) 30%, var(--palette-white)); /* same as dark */
+  --color-drop-zone-text: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* same as dark */
+  --color-drop-zone-title: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* same as dark */
+  --color-drop-zone-hint: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* same as dark */
+  --color-drop-zone-hover-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
+  --color-drop-zone-hover-border: color-mix(in srgb, var(--palette-navy) 56%, var(--palette-white)); /* same as dark */
+  --color-upload-footer-text: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
+  --color-error-bg: #fff4e9; /* same as dark */
+  --color-error-border: #e5c7b1; /* same as dark */
+  --color-error-text: #a05225; /* same as dark */
+  --color-review-divider: color-mix(in srgb, var(--palette-navy) 10%, var(--palette-white)); /* same as dark */
+  --color-status-ready: var(--palette-navy); /* same as dark */
+  --color-status-flagged: #cc964c; /* same as dark */
+  --color-review-note: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
 }
