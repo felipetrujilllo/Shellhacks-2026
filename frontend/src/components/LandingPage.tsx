@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import '../landing.css'
 import LandingHero from './LandingHero'
 
-/** Where "Try the map" and "Get Started" go: the planned hash route for the map workspace (App). */
+/** Where "Try the map" and "Get Started" go: the hash route for the map workspace (App); Root.tsx routes on it. */
 export const MAP_HREF = '#/map'
 
 const FEATURES: { title: string; text: string; icon: ReactNode }[] = [
@@ -47,7 +47,7 @@ function LineIcon({ children, size = 24 }: { children: ReactNode; size?: number 
   )
 }
 
-/** Marketing landing page. Not wired into the app yet: see landing-preview.html for the dev-only preview. */
+/** Marketing landing page, shown at the site root; Root.tsx swaps in the map workspace at MAP_HREF. */
 export default function LandingPage({ mapHref = MAP_HREF }: { mapHref?: string }) {
   return (
     <div className="landing">

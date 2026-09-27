@@ -82,8 +82,13 @@ describe('LandingPage', () => {
 })
 
 describe('landing page wiring', () => {
-  it('is not wired into the app yet: main.tsx and App.tsx do not import LandingPage', () => {
-    for (const file of ['main.tsx', 'App.tsx']) expect(readSource(file), file).not.toMatch(/LandingPage/)
+  // Root.test.tsx covers the routing itself; this pins that the app entry actually renders Root.
+  it('is the app entry: main.tsx renders Root, which routes between LandingPage and App', () => {
+    const main = readSource('main.tsx')
+    expect(main).toMatch(/import Root from '\.\/Root\.tsx'/)
+    expect(main).toMatch(/<Root \/>/)
+    expect(main).not.toMatch(/<App \/>/)
+    expect(readSource('Root.tsx')).toMatch(/LandingPage/)
   })
 })
 

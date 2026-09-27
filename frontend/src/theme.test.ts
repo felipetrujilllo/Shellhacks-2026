@@ -975,11 +975,11 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number; the
   { name: 'top bar text', fg: '--color-header-text', bg: ['--color-header-bg'], min: 4.5 },
   { name: 'primary button text', fg: '--color-primary-button-text', bg: ['--color-accent'], min: 4.5 },
   { name: 'primary button hover text', fg: '--color-primary-button-text', bg: ['--color-primary-button-hover'], min: 4.5 },
-  // Top bar menu button (#44): icon-only, white on navy; gold while the sidebar is open.
-  { name: 'top bar menu icon', fg: '--color-header-text', bg: ['--color-header-bg'], min: 3 },
-  { name: 'top bar menu icon while hovered', fg: '--color-header-text', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
-  { name: 'top bar menu icon while the sidebar is open', fg: '--color-accent', bg: ['--color-header-bg'], min: 3 },
-  { name: 'top bar menu icon while open and hovered', fg: '--color-accent', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
+  // Top bar menu button (#44, #64): icon-only, gold on navy whether the sidebar is closed (☰) or open (✕);
+  // only the icon shape changes, so one pair per background covers both states. (--color-header-text
+  // stays covered by 'top bar text' above.)
+  { name: 'top bar menu icon (closed or open)', fg: '--color-accent', bg: ['--color-header-bg'], min: 3 },
+  { name: 'top bar menu icon (closed or open) while hovered', fg: '--color-accent', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
   { name: 'sidebar "new" tag', fg: '--color-accent-ink', bg: [SIDEBAR, '--color-accent'], min: 4.5 },
   { name: 'sidebar text', fg: '--color-sidebar-text', bg: [SIDEBAR], min: 4.5 },
   { name: 'sidebar muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR], min: 4.5 },
@@ -1052,7 +1052,7 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number; the
   { name: '"ready" status dot in upload review', fg: '--color-status-ready', bg: ['--color-panel-bg'], min: 3 },
   { name: 'text on a hovered secondary button', fg: '--color-text', bg: ['--color-secondary-button-hover'], min: 4.5 },
   // #45: the sidebar pieces the light theme restyles. (The top bar theme toggle is gone: the theme is
-  // picked in the map's Dark/Light control; the "top bar menu icon" pairs above cover the same header tokens.)
+  // picked in the map's Dark/Light control; the "top bar text" and "top bar menu icon" pairs above cover the same header tokens.)
   { name: 'sidebar sort select hover border', fg: '--color-sidebar-accent-border', bg: [SIDEBAR, '--color-sidebar-select-bg'], min: 3 },
   { name: 'sidebar secondary button text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-bg'], min: 4.5 },
   { name: 'sidebar project row hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-row-hover'], min: 4.5 },
@@ -1501,6 +1501,27 @@ const FLOATING_RULES = [
 ]
 // A different palette, as if someone edited theme.css's four base colors.
 const OTHER_PALETTE = { '--palette-navy': '#3a0b1f', '--palette-white': '#f0f0e0', '--palette-gold': '#28c9ff', '--palette-gold-dark': '#00a9f4' }
+
+describe('top bar menu icon is gold when closed and open (#64)', () => {
+  it('paints the base .sidebar-toggle icon with the accent token, not a literal', () => {
+    const color = workspaceDeclarations('.sidebar-toggle').get('color')
+    expect(color).toBe('var(--color-accent)')
+    expect(color).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+
+  it('has no .sidebar-toggle rule (any state, any media query) that sets the icon back to another color', () => {
+    const css = stripCssComments(workspaceCss)
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => m[1].includes('.sidebar-toggle'))
+    expect(rules.length).toBeGreaterThan(0)
+    for (const [, selector, body] of rules) {
+      expect(body, selector.trim()).not.toContain('--color-header-text')
+      for (const d of body.split(';')) {
+        const [prop, ...rest] = d.split(':')
+        if (prop.trim() === 'color') expect(rest.join(':').trim(), selector.trim()).toBe('var(--color-accent)')
+      }
+    }
+  })
+})
 
 describe('modals and floating surfaces follow the theme (#63)', () => {
   it('gives every dialog/overlay token a different value in the light and dark rules, never "same as dark"', () => {
