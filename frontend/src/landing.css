@@ -1,0 +1,120 @@
+/* Landing page (components/LandingPage.tsx). Colors: every value is a theme.css token (--palette-* or --color-*),
+   mixed with transparent where it needs to be translucent; to try a new color scheme, edit theme.css only. The page is
+   dark by design in both app themes (text over a sunset scene), so it reads the navy and gold palette tokens directly, and white
+   through --color-header-text (white on navy in both themes; theme.test.ts keeps the word white out of stylesheets).
+   The sunset's own colors live inside the SVG in LandingHero.tsx, not here. Shapes use the --radius-* / --shadow-* tokens. */
+:root:has(.landing) { scroll-behavior:smooth; }
+@media (prefers-reduced-motion: reduce) { :root:has(.landing) { scroll-behavior:auto; } }
+
+.landing { font-family:Inter,Arial,sans-serif; background:var(--palette-navy); color:var(--color-header-text); min-height:100dvh; overflow-x:hidden; }
+.landing a { -webkit-tap-highlight-color:transparent; }
+
+/* Text and icon shadows over the scene: navy from the palette, never a literal, so they follow theme.css.
+   --landing-shadow-strong lifts the headline off the bright sunset; --landing-shadow-soft is for smaller text;
+   --landing-drop-shadow is the filter version for the logo and the gold icons (SVG/img ignore text-shadow). */
+.landing {
+  --landing-shadow-strong: 0 3px 6px color-mix(in srgb, var(--palette-navy) 90%, transparent), 0 10px 24px color-mix(in srgb, var(--palette-navy) 80%, transparent), 0 18px 60px color-mix(in srgb, var(--palette-navy) 70%, transparent);
+  --landing-shadow-soft: 0 1px 3px color-mix(in srgb, var(--palette-navy) 75%, transparent), 0 4px 14px color-mix(in srgb, var(--palette-navy) 45%, transparent);
+  --landing-drop-shadow: drop-shadow(0 2px 6px color-mix(in srgb, var(--palette-navy) 65%, transparent));
+}
+.landing-headline { text-shadow:var(--landing-shadow-strong); }
+.landing-subline,.landing-brand,.landing-nav-anchor a,.landing-button-ghost,.landing-feature h2,.landing-feature p { text-shadow:var(--landing-shadow-soft); }
+.landing-brand img,.landing-feature-icon { filter:var(--landing-drop-shadow); }
+.landing :focus-visible { outline:2px solid var(--color-focus-ring); outline-offset:3px; }
+
+/* Hero: the SVG scene fills it, the shade keeps the text side (left) and the features row (bottom) dark. */
+.landing-hero { position:relative; isolation:isolate; min-height:100dvh; display:flex; flex-direction:column; padding:0 clamp(16px,5vw,72px) 40px; }
+.landing-hero-art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
+.landing-hero-shade { position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:
+    linear-gradient(0deg, color-mix(in srgb, var(--palette-navy) 92%, transparent) 0%, color-mix(in srgb, var(--palette-navy) 55%, transparent) 22%, transparent 42%),
+    linear-gradient(90deg, color-mix(in srgb, var(--palette-navy) 95%, transparent) 0%, color-mix(in srgb, var(--palette-navy) 80%, transparent) 40%, transparent 75%); }
+.landing-hero-far { fill:var(--palette-navy); opacity:.8; }
+.landing-hero-ground,.landing-hero-near { fill:var(--palette-navy); }
+.landing-hero-tower { fill:none; stroke:var(--palette-navy); stroke-width:2.2; stroke-linejoin:round; }
+.landing-hero-lattice { stroke-width:1.1; }
+.landing-hero-wire { fill:none; stroke:var(--palette-navy); stroke-width:1.4; opacity:.85; }
+
+/* Top nav, transparent over the hero. */
+.landing-nav { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 0; }
+.landing-brand { display:flex; align-items:center; gap:12px; color:var(--color-header-text); text-decoration:none; }
+.landing-logo { width:40px; height:40px; }
+.landing-wordmark { font-weight:700; font-size:20px; letter-spacing:.22em; }
+.landing-nav-links ul { display:flex; align-items:center; gap:36px; list-style:none; margin:0; padding:0; }
+.landing-nav-anchor a { color:color-mix(in srgb, var(--color-header-text) 88%, transparent); text-decoration:none; font-size:15px; font-weight:500; transition:color .15s; }
+.landing-nav-anchor a:hover { color:var(--color-header-text); }
+
+/* Buttons: real links styled as buttons. */
+.landing-button { display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:14px 24px; border-radius:var(--radius-md); font-size:16px; font-weight:600; text-decoration:none; border:1px solid transparent; transition:background .15s,border-color .15s; }
+.landing-button-primary { background:var(--palette-gold); color:var(--palette-navy); box-shadow:var(--shadow-control); }
+.landing-button-primary:hover { background:var(--palette-gold-dark); }
+.landing-button-ghost { color:var(--color-header-text); border-color:color-mix(in srgb, var(--color-header-text) 35%, transparent); background:color-mix(in srgb, var(--color-header-text) 6%, transparent); }
+.landing-button-ghost:hover { background:color-mix(in srgb, var(--color-header-text) 14%, transparent); border-color:color-mix(in srgb, var(--color-header-text) 55%, transparent); }
+.landing-button-small { padding:10px 18px; font-size:14px; }
+
+/* Headline, subline and calls to action. */
+.landing-hero-copy { flex:1; display:flex; flex-direction:column; justify-content:center; max-width:720px; padding:48px 0; }
+.landing-headline { font-size:clamp(40px,6vw,72px); line-height:1.04; font-weight:800; letter-spacing:-.035em; margin:0; }
+.landing-headline span { display:block; }
+.landing-headline-accent { color:var(--palette-gold); }
+.landing-subline { margin:24px 0 0; max-width:560px; font-size:20px; line-height:1.5; color:color-mix(in srgb, var(--color-header-text) 85%, transparent); }
+.landing-actions { display:flex; flex-wrap:wrap; gap:14px; margin-top:36px; }
+
+/* Features row (#product). */
+.landing-features { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:32px; list-style:none; margin:0; padding:28px 0 0; border-top:1px solid color-mix(in srgb, var(--color-header-text) 14%, transparent); scroll-margin-top:24px; }
+.landing-feature-icon { display:inline-flex; color:var(--palette-gold); margin-bottom:12px; }
+.landing-feature h2 { margin:0 0 6px; font-size:17px; font-weight:700; }
+.landing-feature p { margin:0; font-size:14px; line-height:1.5; color:color-mix(in srgb, var(--color-header-text) 75%, transparent); max-width:260px; }
+
+/* Data / About, below the fold. */
+.landing-info { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:32px; padding:56px clamp(16px,5vw,72px) 64px; border-top:1px solid color-mix(in srgb, var(--color-header-text) 10%, transparent); }
+.landing-info > div { scroll-margin-top:24px; }
+.landing-info h2 { margin:0 0 8px; font-size:13px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--palette-gold); }
+.landing-info p { margin:0; max-width:560px; font-size:16px; line-height:1.6; color:color-mix(in srgb, var(--color-header-text) 80%, transparent); }
+
+@media (max-width: 768px) {
+  .landing-hero { padding-bottom:32px; }
+  .landing-hero-shade { background:linear-gradient(0deg, color-mix(in srgb, var(--palette-navy) 94%, transparent) 0%, color-mix(in srgb, var(--palette-navy) 80%, transparent) 55%, color-mix(in srgb, var(--palette-navy) 55%, transparent) 100%); }
+  .landing-nav-anchor { display:none; }
+  .landing-wordmark { font-size:17px; }
+  .landing-hero-copy { padding:32px 0 40px; }
+  .landing-subline { font-size:17px; }
+  .landing-features { grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+  .landing-info { grid-template-columns:1fr; gap:28px; padding-top:40px; padding-bottom:48px; }
+}
+@media (max-width: 480px) {
+  .landing-features { grid-template-columns:1fr; }
+  .landing-actions .landing-button { flex:1 1 100%; }
+}
+
+/* Motion (all of it switched off below for prefers-reduced-motion).
+   1. Load: the nav fades in; headline, subline, buttons and the four features rise in, staggered.
+   2. Energy pulses: a gold dash runs along two wires span by span (LandingHero.tsx sets each span's delay).
+      Dash math with pathLength=100: dasharray 8/200, dashoffset 8 (dash just before the start) to -100 (just
+      past the end) during the first 15% of a 4s cycle = 0.6s per span, matching PULSE_SPAN_SECONDS.
+   3. Hover: the Try-the-map arrow nudges right; features lift a little.
+   4. Scroll: the Data/About section rises in as it enters view (scroll-driven, where the browser supports it). */
+@keyframes landing-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+@keyframes landing-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes landing-pulse { 0% { stroke-dashoffset:8; } 15%, 100% { stroke-dashoffset:-100; } }
+.landing-nav { animation:landing-fade .6s ease-out both; }
+.landing-headline { animation:landing-rise .7s cubic-bezier(.2,.7,.2,1) .05s both; }
+.landing-subline { animation:landing-rise .7s cubic-bezier(.2,.7,.2,1) .18s both; }
+.landing-actions { animation:landing-rise .7s cubic-bezier(.2,.7,.2,1) .31s both; }
+.landing-feature { animation:landing-rise .6s cubic-bezier(.2,.7,.2,1) both; transition:transform .2s ease; }
+.landing-feature:nth-child(1) { animation-delay:.45s; }
+.landing-feature:nth-child(2) { animation-delay:.53s; }
+.landing-feature:nth-child(3) { animation-delay:.61s; }
+.landing-feature:nth-child(4) { animation-delay:.69s; }
+.landing-feature:hover { transform:translateY(-3px); }
+.landing-hero-pulse { fill:none; stroke:var(--palette-gold); stroke-width:2.6; stroke-linecap:round; stroke-dasharray:8 200; stroke-dashoffset:8;
+  filter:drop-shadow(0 0 4px color-mix(in srgb, var(--palette-gold) 85%, transparent)); animation:landing-pulse 4s linear infinite both; }
+.landing-button-primary svg { transition:transform .2s ease; }
+.landing-button-primary:hover svg { transform:translateX(4px); }
+@supports (animation-timeline: view()) {
+  .landing-info > * { animation:landing-rise linear both; animation-timeline:view(); animation-range:entry 0% entry 70%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing *, .landing *::before, .landing *::after { animation:none !important; transition:none !important; }
+  .landing-hero-pulses { display:none; }
+}
