@@ -3,14 +3,21 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 import type { LayerProps } from 'react-map-gl/maplibre'
 import { OTHER_UTILITY_COLOR, UTILITY_COLORS } from '../colors'
+import { themeColor } from '../theme'
 
 export const PROJECT_LINE_WIDTH = 5
 export const OVERLAP_LINE_WIDTH = 4
 export const SELECTED_LINE_WIDTH = 7
 export const LINE_CASING_WIDTH = 3
 
-export const OVERLAP_COLOR = '#f59e0b' // amber
-export const SELECTED_OVERLAP_COLOR = '#c4b5fd' // violet
+// Colors come from theme.css (see theme.ts); the hex is only the fallback and must match it.
+export const OVERLAP_COLOR = themeColor('--color-overlap', '#f59e0b') // amber
+export const SELECTED_OVERLAP_COLOR = themeColor('--color-overlap-selected', '#c4b5fd') // violet
+/** Outline of confirmed single-point projects. */
+export const POINT_STROKE_COLOR = themeColor('--color-point-stroke', '#ffffff')
+/** Casing that separates lines from the basemap: dark on the dark basemap, light on the others. */
+export const HALO_COLOR_DARK = themeColor('--color-halo-dark', '#020617')
+export const HALO_COLOR_LIGHT = themeColor('--color-halo-light', '#ffffff')
 /** Overlap connectors are long amber dashes; low-confidence projects must not look like them. */
 export const OVERLAP_DASH: [number, number] = [2, 1.5]
 
@@ -96,7 +103,7 @@ export function projectLayers(selectedPair: readonly string[] | null, haloColor:
       'circle-color': utilityColorExpression,
       'circle-radius': 6,
       'circle-opacity': withConfidence(selection, LOW_CONFIDENCE_POINT_FILL_OPACITY),
-      'circle-stroke-color': ['case', IS_LOW, utilityColorExpression, '#ffffff'],
+      'circle-stroke-color': ['case', IS_LOW, utilityColorExpression, POINT_STROKE_COLOR],
       'circle-stroke-width': ['case', IS_LOW, 2, 1.5],
       'circle-stroke-opacity': withConfidence(selection, LOW_CONFIDENCE_OPACITY),
     },

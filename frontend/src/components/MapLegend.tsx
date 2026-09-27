@@ -1,8 +1,10 @@
 // Map legend. Reads the same constants as the layer styles in mapStyle.ts.
 import { UTILITY_COLORS } from '../colors'
+import { themeColor } from '../theme'
 import { LOW_CONFIDENCE_OPACITY, OVERLAP_COLOR, SELECTED_OVERLAP_COLOR } from './mapStyle'
 
-const LOW_CONFIDENCE_SWATCH = '#cbd5e1' // neutral: the real layer uses each utility's color
+// Neutral: the real layer uses each utility's color. Fallback must match theme.css.
+const LOW_CONFIDENCE_SWATCH = themeColor('--color-legend-low-confidence', '#cbd5e1')
 
 export default function MapLegend() {
   return (

@@ -18,6 +18,8 @@ import BasemapToggle from './BasemapToggle'
 import MapLegend from './MapLegend'
 import { BASEMAPS, DEFAULT_BASEMAP, dataBounds, type BasemapId } from './basemaps'
 import {
+  HALO_COLOR_DARK,
+  HALO_COLOR_LIGHT,
   LINE_CASING_WIDTH,
   OVERLAP_COLOR,
   OVERLAP_DASH,
@@ -57,7 +59,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const hoveredProject = projects.find((p) => p.project_id === hoveredId)
   const bounds = useMemo(() => dataBounds(projects), [projects])
-  const haloColor = basemap === 'dark' ? '#020617' : '#ffffff'
+  const haloColor = basemap === 'dark' ? HALO_COLOR_DARK : HALO_COLOR_LIGHT
 
   function fitData() {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 11, duration: 600 })

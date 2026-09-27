@@ -1,0 +1,164 @@
+/*
+ * Relay palette: the single source of truth for every color in the app.
+ * To try a new color scheme, edit theme.css only. workspace.css reads these tokens through
+ * var(--color-…), and the MapLibre map reads them through themeColor() in theme.ts (its
+ * fallbacks must equal the values here; theme.test.ts checks that). The map reads its tokens
+ * once at page load, so reload the page after editing a map token.
+ * Tailwind utility classes on the map controls (bg-slate-950/90, text-sky-300, …) are not
+ * tokenized yet.
+ * Tokens are also set on ::backdrop so the upload dialog's backdrop can read them in
+ * browsers where ::backdrop does not inherit from :root.
+ */
+:root, ::backdrop {
+  /* Workspace base (light) — aliased in workspace.css as --paper/--ink/--muted/--rule/--accent */
+  --color-surface: #f5f5f0; /* workspace page background (--paper) */
+  --color-text: #232722; /* default workspace text (--ink) */
+  --color-muted: #73776f; /* secondary/meta text (--muted) */
+  --color-rule: #dddfd7; /* hairline dividers and borders (--rule) */
+  --color-accent: #d6ed8a; /* brand lime: primary button, logo mark, sidebar highlights, sort select text (--accent) */
+  --color-accent-border: #d6ed8a8c; /* translucent accent border: sidebar search focus, selected card, sort select hover */
+  --color-accent-wash: #d6ed8a1c; /* faint accent fill behind the selected sidebar opportunity card */
+  --color-accent-glow: #d6ed8a55; /* accent ring around the closed sidebar toggle */
+  --color-accent-ink: #1d2614; /* text on accent fills: sidebar toggle, sidebar "new" tag */
+  --color-focus-ring: #7b8c44; /* keyboard focus outline across the workspace */
+
+  /* Header */
+  --color-header-bg: #0B1F3A; /* navy top bar background */
+  --color-header-text: #fff; /* top bar text */
+  --color-header-border: #ffffff12; /* top bar bottom border */
+  --color-source-dot: #8fa36b; /* small "data source" dot */
+
+  /* Buttons */
+  --color-primary-button-text: #273018; /* text on the primary (accent) button */
+  --color-primary-button-hover: #e2f4b0; /* primary button hover background */
+  --color-secondary-button-bg: #fff; /* secondary button background */
+  --color-secondary-button-border: #c9cdc0; /* secondary button border */
+  --color-secondary-button-hover: #eef0e7; /* secondary button hover background */
+  --color-icon-button-hover: #00000008; /* icon button hover wash */
+  --color-link: #4e6532; /* inline text links */
+
+  /* Layout backdrops */
+  --color-body-bg: #1c1d20; /* dark area behind the sidebar card */
+  --color-map-bg: #111; /* map area background before tiles load */
+
+  /* Sidebar card (dark) — aliased in workspace.css as the sidebar's --ink/--muted/--rule */
+  --color-sidebar-bg: #47494d; /* floating sidebar card background */
+  --color-sidebar-border: #ffffff1c; /* sidebar card border */
+  --color-sidebar-highlight: #ffffff14; /* sidebar card inset top highlight */
+  --color-sidebar-shadow: #0000008c; /* sidebar card far drop shadow */
+  --color-sidebar-shadow-near: #00000059; /* sidebar card near drop shadow */
+  --color-sidebar-text: #f2f3f5; /* sidebar text (sidebar --ink) and sort dropdown options */
+  --color-sidebar-muted: #c0c3c9; /* sidebar secondary text (sidebar --muted) */
+  --color-sidebar-rule: #ffffff1a; /* sidebar dividers (sidebar --rule) */
+  --color-sidebar-checkbox: #c3dc72; /* sidebar map-layer checkboxes */
+  --color-sidebar-tab-count-bg: #ffffff1f; /* sidebar tab count badge */
+  --color-sidebar-search-bg: #ffffff12; /* sidebar search field background */
+  --color-sidebar-search-border: #ffffff10; /* sidebar search field border */
+  --color-sidebar-search-placeholder: #9da1a8; /* sidebar search placeholder text */
+  --color-sidebar-scrollbar: #ffffff33; /* sidebar list scrollbar thumb */
+  --color-sidebar-list-caption: #d9dce0; /* sidebar list caption count */
+  --color-sidebar-card-bg: #ffffff0b; /* sidebar opportunity and import batch cards */
+  --color-sidebar-card-border: #ffffff14; /* sidebar card borders and the divider inside opportunity cards */
+  --color-sidebar-card-hover-bg: #ffffff14; /* sidebar opportunity card hover background */
+  --color-sidebar-card-hover-border: #ffffff30; /* sidebar opportunity card hover border */
+  --color-sidebar-pair-connector: #ffffff26; /* line joining the two projects in a sidebar card */
+  --color-sidebar-row-divider: #ffffff12; /* sidebar project row divider */
+  --color-sidebar-row-hover: #ffffff12; /* sidebar project row hover/active background */
+  --color-sidebar-button-bg: #ffffff14; /* secondary button inside the sidebar */
+  --color-sidebar-button-border: #ffffff26; /* secondary button border inside the sidebar */
+  --color-sidebar-button-hover: #ffffff24; /* secondary button hover inside the sidebar */
+  --color-sidebar-flagged-text: #f0b37a; /* flagged-row reason in sidebar import batches */
+  --color-sidebar-select-bg: #ffffff0b; /* sidebar "Sort:" select background */
+  --color-sidebar-select-border: #ffffff26; /* sidebar "Sort:" select border */
+  --color-sidebar-option-bg: #20251f; /* sidebar "Sort:" dropdown option background */
+
+  /* Sidebar contents (light variant, used outside the dark card) */
+  --color-savings: #3f5a1d; /* savings figures (headline and detail metrics) */
+  --color-checkbox: #6d8044; /* map-layer checkboxes */
+  --color-tab-underline: #5b6e3e; /* selected tab underline */
+  --color-tab-count-bg: #e4e9d9; /* tab count badge */
+  --color-search-bg: #ebede5; /* search field background */
+  --color-search-icon: #838779; /* search field icon */
+  --color-search-focus-border: #a4b680; /* search field focus border */
+  --color-search-placeholder: #8a8d83; /* search placeholder text */
+  --color-scrollbar: #cbcec3; /* list scrollbar thumb */
+  --color-list-caption: #52584b; /* list caption count */
+  --color-card-bg: #fcfcf9; /* opportunity card background */
+  --color-card-border: #dedfd8; /* opportunity card border */
+  --color-card-hover-bg: white; /* opportunity card hover background */
+  --color-card-hover-border: #a5ad96; /* opportunity card hover border */
+  --color-card-selected-bg: #eef2e5; /* selected opportunity card background */
+  --color-card-selected-border: #91a66b; /* selected opportunity card border */
+  --color-card-selected-bar: #81985a; /* selected opportunity card left bar */
+  --color-card-rank: #7a8270; /* opportunity card rank label */
+  --color-card-divider: #e6e8e0; /* divider above an opportunity card's footer */
+  --color-pair-connector: #dde1d5; /* line joining the two projects in a card */
+  --color-tag-text: #526c30; /* "new" tag text */
+  --color-tag-bg: #dce9c3; /* "new" tag background */
+  --color-row-hover: #e9edde; /* project row hover/active background */
+  --color-batch-card-bg: white; /* import batch card background */
+  --color-flagged-text: #98632f; /* flagged-row reason in import batches */
+
+  /* Sidebar toggle (floating bottom-left) */
+  --color-toggle-border: #20251f; /* toggle border */
+  --color-toggle-shadow: #000a; /* toggle drop shadow */
+  --color-toggle-hover: #e6f6b8; /* closed toggle hover background */
+  --color-toggle-open-bg: #f9faf5; /* toggle background while the sidebar is open */
+  --color-toggle-open-ring: #ffffff40; /* ring around the toggle while the sidebar is open */
+  --color-toggle-focus-ring: #f9faf5; /* toggle keyboard focus outline */
+
+  /* Map overlay chips and panels */
+  --color-map-context-bg: #20251fec; /* map context chip background */
+  --color-map-context-border: #ffffff1f; /* map context chip border */
+  --color-map-context-text: #f2f4eb; /* map context chip text */
+  --color-map-context-muted: #a1aa98; /* map context chip secondary text */
+  --color-map-context-divider: #ffffff20; /* divider inside the map context chip */
+  --color-notice-bg: #e7eed9; /* status notice background */
+  --color-notice-text: #354328; /* status notice text */
+  --color-floating-shadow: #0003; /* drop shadow of the notice and selection panel */
+  --color-panel-bg: #f9faf5; /* selection panel and upload dialog background */
+  --color-panel-border: #d7dbce; /* selection panel border */
+  --color-panel-heading: #717964; /* selection panel heading */
+  --color-panel-meta: #828776; /* selection panel project meta line */
+  --color-panel-meta-strong: #454c3d; /* emphasized value in the selection panel meta line */
+  --color-why-bg: #eef2e2; /* overlap detail "why" callout background */
+  --color-why-border: #8fa36b; /* overlap detail "why" callout left border */
+  --color-why-text: #3a4034; /* overlap detail "why" callout text */
+
+  /* Upload dialog */
+  --color-dialog-border: #dbdfd2; /* upload dialog border */
+  --color-dialog-shadow: #0005; /* upload dialog drop shadow */
+  --color-dialog-backdrop: #111b16a8; /* dimmed backdrop behind the upload dialog */
+  --color-upload-symbol-bg: #e6edd9; /* upload dialog icon tile background */
+  --color-upload-symbol-border: #d7dfc9; /* upload dialog icon tile border */
+  --color-upload-symbol-icon: #5a7040; /* upload dialog icon */
+  --color-step: #a2a698; /* upload step labels */
+  --color-step-current: #3e5030; /* current upload step label */
+  --color-step-current-bar: #6f8650; /* current upload step underline */
+  --color-drop-zone-bg: #f0f3e9; /* file drop zone background */
+  --color-drop-zone-border: #afbda0; /* file drop zone dashed border */
+  --color-drop-zone-text: #738461; /* file drop zone text and icon */
+  --color-drop-zone-title: #3f4b35; /* file drop zone title */
+  --color-drop-zone-hint: #8e9585; /* file drop zone hint */
+  --color-drop-zone-hover-bg: #e6eed8; /* file drop zone hover/dragging background */
+  --color-drop-zone-hover-border: #718750; /* file drop zone hover/dragging border */
+  --color-upload-footer-text: #818975; /* upload dialog footer note */
+  --color-error-bg: #fff4e9; /* upload error box background */
+  --color-error-border: #e5c7b1; /* upload error box border */
+  --color-error-text: #a05225; /* upload error box text */
+  --color-review-divider: #e7e9df; /* divider between upload review rows */
+  --color-status-ready: #80975d; /* "ready" status dot in upload review */
+  --color-status-flagged: #cc964c; /* "flagged" status dot in upload review */
+  --color-review-note: #7c826f; /* upload review footnote */
+
+  /* Map (MapLibre reads these through themeColor() in theme.ts) */
+  --color-utility-desc: #60a5fa; /* Dominion Energy SC projects on the map, legend and sidebar swatches */
+  --color-utility-gpc: #f87171; /* Georgia Power projects on the map, legend and sidebar swatches */
+  --color-utility-other: #a3be8c; /* projects of any other utility (e.g. uploaded proposals) */
+  --color-overlap: #f59e0b; /* dashed overlap connectors and their legend swatch */
+  --color-overlap-selected: #c4b5fd; /* the selected overlap connector and its legend swatch */
+  --color-point-stroke: #ffffff; /* outline of confirmed single-point projects */
+  --color-legend-low-confidence: #cbd5e1; /* neutral low-confidence legend swatch */
+  --color-halo-dark: #020617; /* casing under project lines and connectors on the dark basemap */
+  --color-halo-light: #ffffff; /* casing under project lines and connectors on the other basemaps */
+}
