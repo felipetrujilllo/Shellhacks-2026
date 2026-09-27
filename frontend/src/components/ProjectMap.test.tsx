@@ -42,8 +42,8 @@ describe('ProjectMap top-left toolbar (#44)', () => {
     renderMap()
     const basemap = screen.getByRole('group', { name: 'Basemap' })
     const toolbar = basemap.parentElement!
-    expect(within(basemap).getByRole('button', { name: /dark/i })).toBeInTheDocument()
-    expect(within(basemap).getByRole('button', { name: /satellite/i })).toBeInTheDocument()
+    // #59: the picker is just the Satellite toggle; the theme toggle picks Dark Matter or Positron.
+    expect(within(basemap).getAllByRole('button').map((b) => b.textContent)).toEqual(['Satellite'])
 
     const children = Array.from(toolbar.children)
     expect(children[0]).toBe(basemap)
@@ -68,18 +68,19 @@ describe('ProjectMap follows the theme (#45)', () => {
   // basemap, hidden on the others), under the points so their own stroke draws on top of it.
   const ALL_LAYERS = ['project-casing', 'project-lines', 'project-lines-low', 'project-points-low-ring', 'project-points', 'overlap-casing', 'overlap-lines']
 
-  it('in the dark theme, shows Dark Matter with the dark casing and offers Dark and Satellite, as before', () => {
+  it('in the dark theme, shows Dark Matter with the dark casing and offers only Satellite, off (#59)', () => {
     renderMap('dark')
     expect(mapStyle()).toBe(BASEMAPS.dark.style)
-    expect(pickerLabels()).toEqual(['Dark', 'Satellite'])
+    expect(pickerLabels()).toEqual(['Satellite'])
+    expect(within(picker()).getByRole('button', { name: 'Satellite' })).toHaveAttribute('aria-pressed', 'false')
     expect(latestLayers().get('project-casing')?.paint?.['line-color']).toBe(HALO_COLOR_DARK)
   })
 
-  it('in the light theme, defaults to Positron with the dark casing and offers Light and Satellite', () => {
+  it('in the light theme, defaults to Positron with the dark casing and offers only Satellite, off (#59)', () => {
     renderMap('light')
     expect(mapStyle()).toBe('https://basemaps.cartocdn.com/gl/positron-gl-style/style.json')
-    expect(pickerLabels()).toEqual(['Light', 'Satellite'])
-    expect(within(picker()).getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
+    expect(pickerLabels()).toEqual(['Satellite'])
+    expect(within(picker()).getByRole('button', { name: 'Satellite' })).toHaveAttribute('aria-pressed', 'false')
     expect(latestLayers().get('project-casing')?.paint?.['line-color']).toBe(HALO_COLOR_DARK)
     expect(latestLayers().get('overlap-casing')?.paint?.['line-color']).toBe(HALO_COLOR_DARK)
   })
@@ -113,8 +114,24 @@ describe('ProjectMap follows the theme (#45)', () => {
     expect(within(picker()).getByRole('button', { name: 'Satellite' })).toHaveAttribute('aria-pressed', 'true')
     expect(latestLayers().get('project-casing')?.paint?.['line-color']).toBe(HALO_COLOR_LIGHT)
 
-    fireEvent.click(within(picker()).getByRole('button', { name: 'Light' }))
+    // #59: a second click on Satellite is the way back.
+    fireEvent.click(within(picker()).getByRole('button', { name: 'Satellite' }))
     expect(mapStyle()).toBe(BASEMAPS.light.style)
+  })
+
+  it.each(['dark', 'light'] as const)('in the %s theme, Satellite toggles satellite on and back off to the theme\'s vector map (#59)', (theme) => {
+    renderMap(theme)
+    const satellite = within(picker()).getByRole('button', { name: 'Satellite' })
+    expect(mapStyle()).toBe(BASEMAPS[theme].style)
+    expect(satellite).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(satellite)
+    expect(mapStyle()).toBe('raster')
+    expect(satellite).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(satellite)
+    expect(mapStyle()).toBe(BASEMAPS[theme].style)
+    expect(satellite).toHaveAttribute('aria-pressed', 'false')
   })
 })
 
@@ -157,7 +174,7 @@ describe('ProjectMap point outline follows the basemap (#47)', () => {
     expect(lowRing().visibility).toBe('none')
 
     layers.rendered = []
-    fireEvent.click(within(picker()).getByRole('button', { name: 'Light' }))
+    fireEvent.click(within(picker()).getByRole('button', { name: 'Satellite' }))
     expect(confirmedPointStroke()).toBe(colorOf(HALO_COLOR_DARK))
     expect(lowRing()).toEqual({ color: HALO_COLOR_DARK, visibility: 'visible' })
 
