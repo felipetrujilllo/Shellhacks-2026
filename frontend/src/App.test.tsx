@@ -6,7 +6,7 @@ import { apiExample, expectProject } from './test/apiExamples'
 import { makeOverlaps } from './test/overlapFixtures'
 import type { Overlap, Project, Workspace } from './types'
 import { THEME_STORAGE_KEY } from './theme'
-import { UNREADABLE_UPLOADS, UPLOADS_STORAGE_KEY } from './uploadCache'
+import { UNREADABLE_UPLOADS, UPLOAD_FILES_STORAGE_KEY, UPLOADS_STORAGE_KEY } from './uploadCache'
 
 vi.mock('./api', () => ({
   fetchWorkspace: vi.fn(),
@@ -105,6 +105,12 @@ const savedUploads = () => {
   return raw === null ? null : JSON.parse(raw) as Project[]
 }
 const sentUploads = (call: number) => vi.mocked(fetchWorkspace).mock.calls[call][0]
+const savedUploadFiles = () => {
+  const raw = storage.getItem(UPLOAD_FILES_STORAGE_KEY)
+  return raw === null ? null : JSON.parse(raw) as Record<string, string>
+}
+/** The Uploads tab's cards (#57), in order. */
+const uploadCardItems = () => within(screen.getByRole('list', { name: 'Your uploads' })).getAllByRole('listitem')
 
 /** Picks UPLOAD_CSV in the dialog and adds its one valid row. */
 async function importUpload() {
@@ -438,9 +444,14 @@ describe('App', () => {
     expect(items.filter(item => within(item).queryByText('Uploaded'))).toHaveLength(1)
 
     fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
-    expect(screen.getByText('1 mapped · 1 flagged')).toBeInTheDocument()
-    expect(screen.getByText('1 uploaded projects')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Remove Savannah Water uploads' })).toBeInTheDocument()
+    // One card for the file's one company (#57), no longer a file card plus a utility card.
+    const cards = uploadCardItems()
+    expect(cards).toHaveLength(1)
+    expect(cards[0].querySelector('strong')).toHaveTextContent('Savannah Water')
+    expect(within(cards[0]).getByText('savannah-water.csv')).toBeInTheDocument()
+    expect(within(cards[0]).getByText('1 project mapped · 1 flagged')).toBeInTheDocument()
+    expect(within(cards[0]).getByText('Row 3: lat_center is invalid')).toBeInTheDocument()
+    expect(within(cards[0]).getByRole('button', { name: 'Remove Savannah Water uploads' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Clear my uploads' })).toBeInTheDocument()
   })
 
@@ -485,7 +496,11 @@ describe('App', () => {
     expect(screen.getByTestId('project-map').textContent).toBe(selectedBefore)
     expect(selectedBefore).toContain(`selected SUB:GPC_2|SUB-${kept[0].project_id}`)
     fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
-    expect(screen.getByText('1 uploaded projects')).toBeInTheDocument()
+    // The file name was saved next to the uploads (#57), so the card still names it after the reload.
+    const [card] = uploadCardItems()
+    expect(card.querySelector('strong')).toHaveTextContent('Savannah Water')
+    expect(within(card).getByText('savannah-water.csv')).toBeInTheDocument()
+    expect(within(card).getByText('1 project mapped')).toBeInTheDocument()
   })
 
   it('shows another browser (empty storage) none of these uploads', async () => {
@@ -536,6 +551,133 @@ describe('App', () => {
     expect(screen.getByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
     expect(screen.queryByRole('button', { name: 'Remove Savannah Water uploads' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove Tidewater Grid Co. uploads' })).toBeInTheDocument()
+  })
+
+  describe('upload cards: one per company (#57)', () => {
+    const HEADER = 'utility,project_name,lat_center,lon_center,in_service_date,est_cost_usd\n'
+    /** Picks `csv` as `filename` and adds its valid rows. */
+    async function importCsv(filename: string, csv: string, add: RegExp) {
+      await chooseUpload(new File([csv], filename, { type: 'text/csv' }))
+      fireEvent.click(await screen.findByRole('button', { name: add }))
+      await screen.findByText(`from ${filename} added`, { exact: false }) // this file's notice, not an earlier one
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    }
+
+    it('gives each company in a two-company file its own card, each naming the file', async () => {
+      await renderApp()
+      await importCsv('two-companies.csv', HEADER +
+        'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01,2000000\n' +
+        'Tidewater Grid Co.,River crossing,32.36,-81.2,2027-01-01,\n' +
+        'Tidewater Grid Co.,Late line,32.36,-81.2,2027-13-01,\n', /Add 2 projects & compare/)
+
+      const cards = uploadCardItems()
+      expect(cards).toHaveLength(2)
+      expect(cards.map(c => c.querySelector('strong')!.textContent)).toEqual(['Savannah Water', 'Tidewater Grid Co.'])
+      for (const card of cards) expect(within(card).getByText('two-companies.csv')).toBeInTheDocument()
+      expect(within(cards[0]).getByText('1 project mapped · 0 flagged')).toBeInTheDocument()
+      expect(within(cards[0]).queryByText(/^Row /)).not.toBeInTheDocument()
+      expect(within(cards[1]).getByText('1 project mapped · 1 flagged')).toBeInTheDocument()
+      expect(within(cards[1]).getByText('Row 4: Use a valid in-service date (YYYY-MM-DD)')).toBeInTheDocument()
+      expect(within(cards[0]).getByRole('button', { name: 'Remove Savannah Water uploads' })).toBeInTheDocument()
+      expect(within(cards[1]).getByRole('button', { name: 'Remove Tidewater Grid Co. uploads' })).toBeInTheDocument()
+    })
+
+    it('lists one company\'s projects from two files on one card naming both files', async () => {
+      await renderApp()
+      await importUpload()
+      await importCsv('savannah-2027.csv', HEADER + 'Savannah Water,Pump station feeder,32.36,-81.2,2027-01-01,\n', /Add 1 project & compare/)
+
+      const cards = uploadCardItems()
+      expect(cards).toHaveLength(1)
+      expect(within(cards[0]).getByText('savannah-water.csv')).toBeInTheDocument()
+      expect(within(cards[0]).getByText('savannah-2027.csv')).toBeInTheDocument()
+      expect(within(cards[0]).getByText('2 projects mapped · 1 flagged')).toBeInTheDocument()
+    })
+
+    it('puts flagged rows with no company to go under on a card headed by the file name', async () => {
+      await renderApp()
+      await importCsv('mixed.csv', HEADER +
+        'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01,2000000\n' +
+        ',Nameless line,32.36,-81.2,2027-01-01,\n' + // no company at all
+        'Ghost Co,Only row,32.36,-81.2,someday,\n', // a company whose every row was flagged
+      /Add 1 project & compare/)
+
+      const cards = uploadCardItems()
+      expect(cards).toHaveLength(2)
+      expect(cards[0].querySelector('strong')).toHaveTextContent('Savannah Water')
+      expect(within(cards[0]).getByText('1 project mapped · 0 flagged')).toBeInTheDocument()
+      const fileCard = cards[1]
+      expect(fileCard.querySelector('strong')).toHaveTextContent('mixed.csv')
+      expect(within(fileCard).getByText('2 rows need attention')).toBeInTheDocument()
+      expect(within(fileCard).getByText('Row 3: Utility is missing')).toBeInTheDocument()
+      expect(within(fileCard).getByText('Row 4: Use a valid in-service date (YYYY-MM-DD)')).toBeInTheDocument()
+      expect(within(fileCard).queryByRole('button')).not.toBeInTheDocument() // nothing of it was uploaded, so nothing to remove
+    })
+
+    it('saves the file name next to the uploads, never on the projects sent to POST /workspace', async () => {
+      const first = await renderApp()
+      await importUpload()
+      const sent = sentUploads(1)
+      expect(Object.keys(sent[0]).sort()).toEqual(Object.keys(clientUpload()).sort())
+      expect(JSON.stringify(sent)).not.toContain('savannah-water.csv')
+      expect(savedUploads()).toEqual(sent)
+      expect(savedUploadFiles()).toEqual({ [sent[0].project_id]: 'savannah-water.csv' })
+
+      first.unmount()
+      vi.mocked(fetchWorkspace).mockClear()
+      await renderApp()
+      await screen.findByRole('list', { name: /coordination opportunities/i })
+      expect(sentUploads(0)).toEqual(sent) // the reload sends the same projects, still without the file name
+      expect(JSON.stringify(sentUploads(0))).not.toContain('savannah-water.csv')
+    })
+
+    it('falls back to "N uploaded projects" for uploads saved without a file name', async () => {
+      storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload(), clientUpload({ project_id: 'b1-2', project_name: 'Second main' })]))
+      await renderApp()
+      await screen.findByRole('list', { name: /coordination opportunities/i })
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+
+      const cards = uploadCardItems()
+      expect(cards).toHaveLength(1)
+      expect(cards[0].querySelector('strong')).toHaveTextContent('Savannah Water')
+      expect(within(cards[0]).getByText('2 uploaded projects')).toBeInTheDocument()
+      expect(cards[0]).not.toHaveTextContent(/mapped|\.csv/)
+      expect(within(cards[0]).getByRole('button', { name: 'Remove Savannah Water uploads' })).toBeInTheDocument()
+    })
+
+    it('drops the removed company\'s file names on Remove, and every file name on Clear my uploads', async () => {
+      const other = clientUpload({ project_id: 'b2-1', utility: 'Tidewater Grid Co.', project_name: 'River crossing' })
+      storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload(), other]))
+      storage.setItem(UPLOAD_FILES_STORAGE_KEY, JSON.stringify({ 'b1-1': 'savannah.csv', 'b2-1': 'tidewater.csv' }))
+      await renderApp()
+      await screen.findByRole('list', { name: /coordination opportunities/i })
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+      expect(uploadCardItems().map(c => within(c).getByText(/\.csv$/).textContent)).toEqual(['savannah.csv', 'tidewater.csv'])
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Savannah Water uploads' }))
+      await screen.findByRole('status')
+      expect(savedUploads()).toEqual([other])
+      expect(savedUploadFiles()).toEqual({ 'b2-1': 'tidewater.csv' })
+      const cards = uploadCardItems()
+      expect(cards).toHaveLength(1)
+      expect(within(cards[0]).getByText('tidewater.csv')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear my uploads' }))
+      await screen.findByText('Your uploads were removed from this browser.')
+      expect(storage.getItem(UPLOADS_STORAGE_KEY)).toBeNull()
+      expect(storage.getItem(UPLOAD_FILES_STORAGE_KEY)).toBeNull()
+      expect(screen.getByText('Your plans belong here.')).toBeInTheDocument()
+    })
+
+    it('still names the file for this tab when the browser refuses storage', async () => {
+      vi.stubGlobal('localStorage', blockedStorage())
+      await renderApp()
+      await importUpload()
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+      const [card] = uploadCardItems()
+      expect(within(card).getByText('savannah-water.csv')).toBeInTheDocument()
+      expect(within(card).getByText('1 project mapped · 1 flagged')).toBeInTheDocument()
+    })
   })
 
   it('keeps working when the browser refuses storage: uploads last until a refresh', async () => {

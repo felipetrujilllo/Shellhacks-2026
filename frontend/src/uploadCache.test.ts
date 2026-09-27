@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Project } from './types'
-import { UNREADABLE_UPLOADS, UPLOADS_STORAGE_KEY, loadUploads, saveUploads } from './uploadCache'
+import { UNREADABLE_UPLOADS, UPLOAD_FILES_STORAGE_KEY, UPLOADS_STORAGE_KEY, loadUploadFiles, loadUploads, saveUploadFiles, saveUploads } from './uploadCache'
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(initial))
@@ -56,5 +56,55 @@ describe('uploadCache', () => {
     storage.setItem = () => { throw new DOMException('Quota exceeded', 'QuotaExceededError') }
     vi.stubGlobal('localStorage', storage)
     expect(saveUploads([upload])).toBe(false)
+  })
+})
+
+describe('uploadCache file names (#57)', () => {
+  const other = { project_id: 'b2-1', utility: 'Tidewater Grid Co.', project_name: 'River crossing' } as Project
+
+  it('round-trips each upload\'s file name under relay.uploads.files.v1, apart from the uploads', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    expect(loadUploadFiles()).toEqual({})
+    expect(saveUploadFiles([upload, other], { 'b1-1': 'savannah.csv', 'b2-1': 'tidewater.csv' }))
+      .toEqual({ 'b1-1': 'savannah.csv', 'b2-1': 'tidewater.csv' })
+    expect(UPLOAD_FILES_STORAGE_KEY).toBe('relay.uploads.files.v1')
+    expect(JSON.parse(storage.getItem('relay.uploads.files.v1')!)).toEqual({ 'b1-1': 'savannah.csv', 'b2-1': 'tidewater.csv' })
+    expect(storage.getItem(UPLOADS_STORAGE_KEY)).toBeNull() // the uploads themselves are saved separately, unchanged
+    expect(loadUploadFiles()).toEqual({ 'b1-1': 'savannah.csv', 'b2-1': 'tidewater.csv' })
+  })
+
+  it('keeps only the names of the uploads still kept, and removes the key when none are left', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const files = { 'b1-1': 'savannah.csv', 'b2-1': 'tidewater.csv' }
+    expect(saveUploadFiles([other], files)).toEqual({ 'b2-1': 'tidewater.csv' })
+    expect(JSON.parse(storage.getItem(UPLOAD_FILES_STORAGE_KEY)!)).toEqual({ 'b2-1': 'tidewater.csv' })
+    expect(saveUploadFiles([], files)).toEqual({})
+    expect(storage.getItem(UPLOAD_FILES_STORAGE_KEY)).toBeNull()
+  })
+
+  it('stores nothing for uploads with no known file name (saved before #57)', () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    expect(saveUploadFiles([upload], {})).toEqual({})
+    expect(storage.getItem(UPLOAD_FILES_STORAGE_KEY)).toBeNull()
+  })
+
+  it.each(['{not json', '["a.csv"]', 'null', '"a.csv"'])('reads unreadable file names (%s) as none', raw => {
+    vi.stubGlobal('localStorage', memoryStorage({ [UPLOAD_FILES_STORAGE_KEY]: raw }))
+    expect(loadUploadFiles()).toEqual({})
+  })
+
+  it('drops entries that are not file names', () => {
+    vi.stubGlobal('localStorage', memoryStorage({ [UPLOAD_FILES_STORAGE_KEY]: JSON.stringify({ 'b1-1': 'savannah.csv', 'b2-1': 7, 'b3-1': null }) }))
+    expect(loadUploadFiles()).toEqual({ 'b1-1': 'savannah.csv' })
+  })
+
+  it('never throws when the browser refuses storage: no names saved, and this tab keeps them', () => {
+    vi.stubGlobal('localStorage', blocked)
+    expect(loadUploadFiles()).toEqual({})
+    expect(saveUploadFiles([upload], { 'b1-1': 'savannah.csv' })).toEqual({ 'b1-1': 'savannah.csv' })
+    expect(saveUploadFiles([], {})).toEqual({})
   })
 })

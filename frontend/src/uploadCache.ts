@@ -47,3 +47,40 @@ export function saveUploads(uploads: Project[]): boolean {
     return false
   }
 }
+
+/**
+ * Which file each saved upload came from, so the Uploads tab can still name it after a refresh
+ * (#57). Kept next to the uploads, never on them: POST /workspace validates every Project field.
+ */
+export const UPLOAD_FILES_STORAGE_KEY = 'relay.uploads.files.v1'
+
+/** Upload id (client id, as saved under UPLOADS_STORAGE_KEY) -> the file name it was uploaded from. */
+export type UploadFiles = Record<string, string>
+
+/**
+ * Never throws: blocked storage, nothing saved (uploads from before #57) or unreadable data all
+ * read as no file names, and the cards fall back to "N uploaded projects". Entries that are not
+ * strings are dropped.
+ */
+export function loadUploadFiles(): UploadFiles {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(UPLOAD_FILES_STORAGE_KEY) ?? '{}')
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).filter(([, name]) => typeof name === 'string'))
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Keeps only the file names of `uploads` (removed uploads drop theirs), stores them (none removes
+ * the key) and returns them. A browser that refuses storage keeps them for this tab only, like the uploads.
+ */
+export function saveUploadFiles(uploads: Project[], files: UploadFiles): UploadFiles {
+  const kept: UploadFiles = Object.fromEntries(uploads.flatMap(u => Object.hasOwn(files, u.project_id) ? [[u.project_id, files[u.project_id]]] : []))
+  try {
+    if (Object.keys(kept).length) localStorage.setItem(UPLOAD_FILES_STORAGE_KEY, JSON.stringify(kept))
+    else localStorage.removeItem(UPLOAD_FILES_STORAGE_KEY)
+  } catch { /* not saved: the file line is missing after a refresh, nothing else changes */ }
+  return kept
+}

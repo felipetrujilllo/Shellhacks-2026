@@ -7,7 +7,9 @@ export const SUBMITTED_OVERLAP_PREFIX = 'SUB:'
 // The most uploads one browser keeps and sends: MAX_SUBMISSION_PROJECTS in backend/app/schemas.py.
 export const MAX_UPLOADED_PROJECTS = 1000
 
-export interface ImportRow { row: number; name: string; issues: string[]; project: Project | null }
+// `utility` is the row's raw utility cell ('' when blank), kept for flagged rows too so the Uploads
+// tab can list them under their company's card (#57).
+export interface ImportRow { row: number; name: string; utility: string; issues: string[]; project: Project | null }
 export interface ImportBatch { id: string; filename: string; rows: ImportRow[] }
 
 export const CSV_TEMPLATE = 'project_id,utility,project_name,lat_center,lon_center,in_service_date,est_cost_usd,name_a,lat_a,lon_a,name_b,lat_b,lon_b\nproposal-01,Your utility,Savannah corridor upgrade,32.34,-81.14,2027-06-01,2500000,West substation,32.35,-81.18,East substation,32.33,-81.10\n'
@@ -73,7 +75,7 @@ export function reviewCsv(text: string, batchId: string, existing: Project[]): I
     const key = `${raw.utility.toLowerCase()}|${raw.project_name.toLowerCase()}`
     if (keys.has(key)) issues.push('This utility and project name already exist')
     if (!issues.length) keys.add(key)
-    return { row: i + 2, name: raw.project_name || `Row ${i + 2}`, issues,
+    return { row: i + 2, name: raw.project_name || `Row ${i + 2}`, utility: raw.utility, issues,
       project: issues.length ? null : {
         // The upload's id for good: this browser keeps it and POST /workspace serves the
         // project as SUB-<id>, so selection survives a reload. Only [A-Za-z0-9_-], at most 64

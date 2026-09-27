@@ -14,7 +14,8 @@ import { tierLabel } from './tiers'
 import { useTheme } from './theme'
 import { DEFAULT_SORT_KEY, SORT_OPTIONS, sortOverlaps, type SortKey } from './sortOverlaps'
 import type { Overlap, Project, Workspace } from './types'
-import { loadUploads, saveUploads } from './uploadCache'
+import { loadUploadFiles, loadUploads, saveUploadFiles, saveUploads, type UploadFiles } from './uploadCache'
+import { uploadCards } from './uploadCards'
 import './workspace.css'
 
 type LoadState =
@@ -39,6 +40,8 @@ function App() {
   // This browser's uploads as imported (client ids), mirrored in localStorage (uploadCache.ts).
   // The server never keeps them: they are sent with every POST /workspace.
   const [uploads, setUploads] = useState<Project[]>([])
+  // Which file each of those came from (upload id -> file name), mirrored next to them in localStorage (#57).
+  const [uploadFiles, setUploadFiles] = useState<UploadFiles>({})
   // False when the browser will not store them: they then last until a refresh.
   const [persisted, setPersisted] = useState(true)
   // Why this browser's uploads are not on the map (refused by the server, unreadable, ...).
@@ -67,7 +70,7 @@ function App() {
     load()
       .then(([workspace, problem]) => {
         if (cancelled) return
-        setUploads(cached.uploads); setPersisted(cached.available); setUploadProblem(problem)
+        setUploads(cached.uploads); setUploadFiles(loadUploadFiles()); setPersisted(cached.available); setUploadProblem(problem)
         setState({ status: 'ready', ...workspace })
       })
       .catch((err: unknown) => { if (!cancelled) setState({ status: 'error', message: errorMessage(err) }) })
@@ -76,7 +79,8 @@ function App() {
   const projects = useMemo(() => state.status === 'ready' ? state.projects : [], [state])
   const overlaps = useMemo(() => state.status === 'ready' ? state.overlaps : [], [state])
   const submitted = projects.filter(p => p.project_id.startsWith(SUBMITTED_PROJECT_PREFIX))
-  const submittedUtilities = [...new Set(submitted.map(p => p.utility))]
+  // One card per company (plus one per file for flagged rows with no company to go under): uploadCards.ts.
+  const cards = uploadCards(submitted, uploadFiles, batches)
   const utilities = [...new Set(projects.map(p => p.utility))]
   const visibleProjects = useMemo(() => projects.filter(p => !hidden.includes(p.utility)), [projects, hidden])
   const visibleOverlaps = useMemo(() => overlaps.filter(o => !hidden.includes(o.project_a.utility) && !hidden.includes(o.project_b.utility)), [overlaps, hidden])
@@ -109,6 +113,7 @@ function App() {
     if (next.length > MAX_UPLOADED_PROJECTS) throw new Error(`This browser keeps up to 1,000 uploaded projects and already has ${uploads.length}. Clear some uploads first.`)
     const workspace = await fetchWorkspace(next)
     const kept = saveUploads(next)
+    setUploadFiles(saveUploadFiles(next, { ...uploadFiles, ...Object.fromEntries(added.map(p => [p.project_id, batch.filename])) }))
     showWorkspace(workspace); setUploads(next); setPersisted(kept); setUploadProblem('')
     // Show every layer and match again, so the new pairs can't hide behind a filter.
     setBatches(current => [...current, batch]); setHidden([]); setMinMatch(DEFAULT_MIN_MATCH); setQuery('')
@@ -118,6 +123,7 @@ function App() {
   /** Replaces this browser's uploads (the user removed some), then refreshes the comparisons. */
   async function keepUploads(next: Project[], done: string) {
     const kept = saveUploads(next)
+    setUploadFiles(saveUploadFiles(next, uploadFiles)) // drops the removed uploads' file names
     setUploads(next); setPersisted(kept); setUploadProblem('')
     try {
       showWorkspace(await fetchWorkspace(next)); setNotice(done)
@@ -131,6 +137,8 @@ function App() {
   }
   function removeUtility(utility: string) {
     const ids = new Set(submitted.filter(p => p.utility === utility).map(p => p.project_id.slice(SUBMITTED_PROJECT_PREFIX.length)))
+    // Its flagged rows go with its card, rather than reappearing under their file's name.
+    setBatches(current => current.map(b => ({ ...b, rows: b.rows.filter(r => r.project || r.utility !== utility) })))
     void keepUploads(uploads.filter(u => !ids.has(u.project_id)), `${utility}'s uploads were removed from this browser.`)
   }
   return (
@@ -170,7 +178,9 @@ function App() {
               <div className="opportunity-bottom"><span>{o.time_gap_days} days apart in service</span>{o.est_savings_usd === null ? <span>No estimate</span> : <span title={`${formatUsd(o.est_savings_usd)} est. savings`}>{formatUsdCompact(o.est_savings_usd)} est. savings</span>}{o.overlap_id.startsWith(SUBMITTED_OVERLAP_PREFIX) && <span className="new-tag">Uploaded</span>}</div>
             </button></li>)}</ol>{!filteredOverlaps.length && belowMinMatch && <div className="empty-state"><Icon name="search" size={24} /><strong>{`No pairs at ${matchLabel(minMatch)}; lower the minimum`}</strong><p>Drag the Minimum match slider on the map to the left to see more pairs.</p></div>}{!filteredOverlaps.length && !belowMinMatch && <div className="empty-state"><Icon name="search" size={24} /><strong>No matching pairs</strong><p>Try another search or turn on more utility layers. Projects must be within 25 miles to appear here.</p></div>}</>}
             {tab === 'projects' && <><div className="list-caption"><span>{filteredProjects.length} projects</span><span>All participating utilities</span></div>{filteredProjects.map(p => <button className={`project-row ${focused?.project_id === p.project_id ? 'active' : ''}`} key={p.project_id} onClick={() => { setFocusedProject(p); setSelectedId(null) }}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small><span>In service {p.in_service_date}</span></div><Icon name="arrow" size={14} /></button>)}{!filteredProjects.length && <p className="empty-state">{belowMinMatch ? `No projects in pairs at ${matchLabel(minMatch)}; lower the minimum.` : 'No projects match your search.'}</p>}</>}
-            {tab === 'imports' && <>{!batches.length && !submitted.length ? <div className="empty-state upload-empty"><Icon name="upload" size={30} /><strong>Your plans belong here.</strong><p>Add a project spreadsheet to find nearby work across utilities.</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>Upload your first file <Icon name="arrow" size={16} /></button><small>CSV spreadsheets · only you can see them</small></div> : <>{batches.map(b => <div className="batch-card" key={b.id}><Icon name="file" /><strong>{b.filename}</strong><p>{b.rows.filter(r => r.project).length} mapped · {b.rows.filter(r => !r.project).length} flagged</p>{b.rows.filter(r => !r.project).map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}</div>)}{submittedUtilities.map(utility => <div className="batch-card" key={utility}><i style={{ background: utilityColor(utility) }} /><strong>{utility}</strong><p>{submitted.filter(p => p.utility === utility).length} uploaded projects</p><button className="text-link" aria-label={`Remove ${utility} uploads`} onClick={() => removeUtility(utility)}><Icon name="close" size={14} /> Remove</button></div>)}</>}{uploads.length > 0 && <button className="secondary-button clear-uploads" onClick={clearUploads}>Clear my uploads</button>}<p className="session-note">{persisted ? 'Your uploads stay in this browser, so they are still here after a refresh. Only you can see them.' : 'This browser is not saving site data, so your uploads last until you refresh. Only you can see them.'} Published utility plans are unchanged.</p></>}
+            {tab === 'imports' && <>{!cards.length ? <div className="empty-state upload-empty"><Icon name="upload" size={30} /><strong>Your plans belong here.</strong><p>Add a project spreadsheet to find nearby work across utilities.</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>Upload your first file <Icon name="arrow" size={16} /></button><small>CSV spreadsheets · only you can see them</small></div> : <ul className="upload-cards" aria-label="Your uploads">{cards.map(card => card.kind === 'company'
+              ? <li className="batch-card" key={`company:${card.utility}`}><i style={{ background: utilityColor(card.utility) }} /><strong>{card.utility}</strong>{card.files.map(file => <p className="batch-file" key={file}><Icon name="file" size={14} /><span>{file}</span></p>)}<p>{card.files.length ? `${plural(card.mapped, 'project')} mapped${card.flagged ? ` · ${card.flagged.length} flagged` : ''}` : plural(card.mapped, 'uploaded project')}</p>{card.flagged?.map((r, i) => <p className="flagged-reason" key={i}>Row {r.row}: {r.issues.join('; ')}</p>)}<button className="text-link" aria-label={`Remove ${card.utility} uploads`} onClick={() => removeUtility(card.utility)}><Icon name="close" size={14} /> Remove</button></li>
+              : <li className="batch-card" key={`file:${card.id}`}><strong className="batch-file"><Icon name="file" size={14} /><span>{card.filename}</span></strong><p>{card.flagged.length === 1 ? '1 row needs' : `${card.flagged.length} rows need`} attention</p>{card.flagged.map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}</li>)}</ul>}{uploads.length > 0 && <button className="secondary-button clear-uploads" onClick={clearUploads}>Clear my uploads</button>}<p className="session-note">{persisted ? 'Your uploads stay in this browser, so they are still here after a refresh. Only you can see them.' : 'This browser is not saving site data, so your uploads last until you refresh. Only you can see them.'} Published utility plans are unchanged.</p></>}
           </div>
           <footer className="sidebar-footer"><span className="source-dot" /> {submitted.length ? 'Published plans + your uploads' : 'Published utility plans'}<span>{submitted.length ? 'PRIVATE' : 'SC / GA'}</span></footer>
         </div></aside>
