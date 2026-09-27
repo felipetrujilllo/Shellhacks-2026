@@ -87,8 +87,10 @@ describe('theme.css', () => {
     expect(tokens.size).toBeGreaterThan(50)
     expect(declared).toHaveLength(tokens.size) // every declaration is on its own line, parsed above
     for (const [name, { value, comment }] of tokens) {
-      expect(name, name).toMatch(/^--color-/)
-      expect(value, name).toMatch(COLOR_LITERAL)
+      expect(name, name).toMatch(/^--(?:palette|color)-/)
+      // A color literal, or a var()/color-mix() built only from tokens defined here.
+      if (!isDerived(value)) expect(value, name).toMatch(COLOR_LITERAL)
+      expect(() => resolveToken(name), name).not.toThrow()
       expect(comment, `${name} needs a one-line comment`).toMatch(/^\/\*\s*\S.*\*\/$/)
     }
   })
@@ -165,6 +167,11 @@ describe('map colors', () => {
     expect([...called].sort()).toEqual(expect.arrayContaining(MAP_TOKENS))
   })
 
+  it('keeps map tokens as plain hex, since MapLibre cannot parse var() or color-mix()', () => {
+    const theme = themeTokens()
+    for (const name of MAP_TOKENS) expect(theme.get(name)?.value, name).toMatch(/^#[0-9a-fA-F]{3,8}$/)
+  })
+
   it('leaves no hex literals in the map code except as themeColor() fallbacks', () => {
     for (const path of MAP_FILES) {
       const text = sources[path]
@@ -189,6 +196,259 @@ describe('map colors', () => {
     expect(utilityColor(GPC)).toBe(themeTokens().get('--color-utility-gpc')?.value)
   })
 })
+
+describe('palette', () => {
+  const tokens = themeTokens()
+  const literalPalette = () =>
+    Object.fromEntries([...tokens].filter(([name, { value }]) => name.startsWith('--palette-') && !isDerived(value)).map(([name, { value }]) => [name, value]))
+
+  it('defines exactly the four base colors, and they are the only literal palette tokens', () => {
+    expect(literalPalette()).toEqual(BASE_PALETTE)
+  })
+
+  it('builds every token that uses the palette from palette tokens only, with no new literals', () => {
+    for (const [name, { value }] of tokens) {
+      if (!name.startsWith('--palette-') && !value.includes('var(--palette-')) continue
+      if (!isDerived(value)) continue // one of the four base colors, checked above
+      expect(value.replace(/var\(--palette-[\w-]+\)/g, '').match(COLOR_LITERAL), name).toBeNull()
+      for (const [, ref] of value.matchAll(/var\((--[\w-]+)\)/g)) expect(ref, name).toMatch(/^--palette-/)
+    }
+  })
+
+  it('points the accent, top bar and text-on-navy/gold roles at the palette', () => {
+    for (const [name, palette] of Object.entries(PALETTE_ROLES)) {
+      expect(tokens.get(name)?.value, name).toBe(`var(${palette})`)
+    }
+    // The translucent accent and white tints keep their old alpha (except accent-border, below), mixed from the palette.
+    const mixes: Record<string, [string, number]> = {
+      // Raised from the old 0x8c (55%) to 67% so the sidebar search focus border reaches 3:1 (#42).
+      '--color-accent-border': ['--palette-gold', 0.67],
+      '--color-accent-wash': ['--palette-gold', 0x1c / 255],
+      '--color-accent-glow': ['--palette-gold', 0x55 / 255],
+      '--color-header-border': ['--palette-white', 0x12 / 255],
+    }
+    for (const [name, [palette, alpha]] of Object.entries(mixes)) {
+      expect(tokens.get(name)?.value, name).toMatch(new RegExp(`^color-mix\\(in srgb, var\\(${palette}\\) [\\d.]+%, transparent\\)$`))
+      expectColor(resolveToken(name), { ...resolveToken(palette), a: alpha }, 2, name)
+    }
+  })
+
+  it('keeps the sidebar card grey #47494d as the one documented exception to the palette', () => {
+    const roles = [...Object.keys(PALETTE_ROLES), '--color-sidebar-bg']
+    const literals = roles.filter((name) => !isDerived(tokens.get(name)!.value))
+    expect(literals).toEqual(['--color-sidebar-bg'])
+    expect(tokens.get('--color-sidebar-bg')).toEqual({ value: '#47494d', comment: expect.stringMatching(/not part of the gold\/navy palette/i) })
+  })
+
+  it('repeats no base color as a literal outside the palette, except in the map tokens MapLibre reads', () => {
+    const base = Object.values(BASE_PALETTE).map((hex) => JSON.stringify(rgbOf(parseColor(hex))))
+    for (const [name, { value }] of tokens) {
+      if (name.startsWith('--palette-') || isDerived(value) || MAP_TOKENS.includes(name)) continue
+      expect(base, `${name}: ${value} repeats a palette color; use var(--palette-…)`).not.toContain(JSON.stringify(rgbOf(parseColor(value))))
+    }
+  })
+
+  it('lists each base hex value in the palette note at the top of theme.css', () => {
+    const note = themeCss.slice(0, themeCss.search(/^:root/m))
+    for (const [name, hex] of Object.entries(BASE_PALETTE)) {
+      expect(note).toMatch(new RegExp(`${hex} [\\w ]+\\(${name}\\): \\S`)) // "#FFC928 gold (--palette-gold): where it is used"
+    }
+    expect(note).toMatch(/#47494d/)
+  })
+})
+
+describe('contrast (WCAG AA)', () => {
+  it('computes WCAG contrast ratios and color-mix() like a browser', () => {
+    expect(contrast(parseColor('#000'), parseColor('#ffffff'))).toBeCloseTo(21, 5)
+    expect(contrast(parseColor('#777777'), parseColor('#ffffff'))).toBeCloseTo(4.48, 2)
+    expectColor(parseColor('color-mix(in srgb, #ff0000 25%, #0000ff)'), { r: 63.75, g: 0, b: 191.25, a: 1 })
+    expectColor(parseColor('color-mix(in srgb, #ffffff 7%, transparent)'), { r: 255, g: 255, b: 255, a: 0.07 })
+    expectColor(parseColor('color-mix(in srgb, var(--palette-navy) 40%, transparent)'), { r: 0x0b, g: 0x1f, b: 0x3a, a: 0.4 })
+    expectColor(composite([parseColor('#000000'), parseColor('#ffffff80')]), { r: 128, g: 128, b: 128, a: 1 })
+    expect(() => parseColor('rebeccapurple')).toThrow()
+  })
+
+  it.each(CONTRAST_PAIRS)('$name: $fg on $bg is at least $min:1', ({ fg, bg, min }) => {
+    const background = composite(bg.map((name) => resolveToken(name)))
+    const ratio = contrast(composite([background, resolveToken(fg)]), background)
+    expect(ratio).toBeGreaterThanOrEqual(min)
+  })
+
+  it('keeps the DESC and GPC map lines at least 3:1 against navy, the sidebar grey and the dark map', () => {
+    for (const line of ['--color-utility-desc', '--color-utility-gpc']) {
+      for (const bg of ['--palette-navy', '--color-sidebar-bg', '--color-map-bg', '--color-halo-dark']) {
+        expect(contrast(resolveToken(line), resolveToken(bg)), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+})
+
+const BASE_PALETTE = {
+  '--palette-gold': '#FFC928',
+  '--palette-gold-dark': '#F4A900',
+  '--palette-navy': '#0B1F3A',
+  '--palette-white': '#FFFFFF',
+}
+
+// Semantic tokens that name a palette color directly.
+const PALETTE_ROLES: Record<string, string> = {
+  '--color-accent': '--palette-gold',
+  '--color-sidebar-checkbox': '--palette-gold',
+  '--color-primary-button-hover': '--palette-gold-dark',
+  '--color-toggle-hover': '--palette-gold-dark',
+  '--color-header-bg': '--palette-navy',
+  '--color-accent-ink': '--palette-navy',
+  '--color-primary-button-text': '--palette-navy',
+  '--color-header-text': '--palette-white',
+  '--color-secondary-button-bg': '--palette-white',
+  '--color-card-hover-bg': '--palette-white',
+  '--color-batch-card-bg': '--palette-white',
+}
+
+// Text/background pairs as workspace.css paints them. `bg` lists the layers bottom to top
+// (translucent fills are composited over what is under them). 4.5 for text, 3 for UI parts.
+const SIDEBAR = '--color-sidebar-bg'
+const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] = [
+  { name: 'top bar text', fg: '--color-header-text', bg: ['--color-header-bg'], min: 4.5 },
+  { name: 'primary button text', fg: '--color-primary-button-text', bg: ['--color-accent'], min: 4.5 },
+  { name: 'primary button hover text', fg: '--color-primary-button-text', bg: ['--color-primary-button-hover'], min: 4.5 },
+  { name: 'closed sidebar toggle text', fg: '--color-accent-ink', bg: ['--color-accent'], min: 4.5 },
+  { name: 'closed sidebar toggle hover text', fg: '--color-accent-ink', bg: ['--color-toggle-hover'], min: 4.5 },
+  { name: 'open sidebar toggle text', fg: '--color-accent-ink', bg: ['--color-toggle-open-bg'], min: 4.5 },
+  { name: 'sidebar "new" tag', fg: '--color-accent-ink', bg: [SIDEBAR, '--color-accent'], min: 4.5 },
+  { name: 'sidebar text', fg: '--color-sidebar-text', bg: [SIDEBAR], min: 4.5 },
+  { name: 'sidebar muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR], min: 4.5 },
+  { name: 'sidebar list caption', fg: '--color-sidebar-list-caption', bg: [SIDEBAR], min: 4.5 },
+  { name: 'sidebar gold text (savings figure, text links)', fg: '--color-accent', bg: [SIDEBAR], min: 4.5 },
+  { name: 'sidebar sort select text', fg: '--color-accent', bg: [SIDEBAR, '--color-sidebar-select-bg'], min: 4.5 },
+  { name: 'sidebar sort options', fg: '--color-sidebar-text', bg: ['--color-sidebar-option-bg'], min: 4.5 },
+  { name: 'sidebar card text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 4.5 },
+  { name: 'sidebar card muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 4.5 },
+  { name: 'sidebar hovered card muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-sidebar-card-hover-bg'], min: 4.5 },
+  { name: 'sidebar selected card text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-accent-wash'], min: 4.5 },
+  { name: 'sidebar selected card muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-accent-wash'], min: 4.5 },
+  { name: 'sidebar project row hover muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-sidebar-row-hover'], min: 4.5 },
+  { name: 'sidebar search text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 4.5 },
+  { name: 'sidebar search placeholder', fg: '--color-sidebar-search-placeholder', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 4.5 },
+  { name: 'sidebar secondary button hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-hover'], min: 4.5 },
+  { name: 'sidebar flagged import reason', fg: '--color-sidebar-flagged-text', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 4.5 },
+  { name: 'sidebar focus outline', fg: '--color-accent', bg: [SIDEBAR], min: 3 },
+  { name: 'sidebar selected tab underline', fg: '--color-accent', bg: [SIDEBAR], min: 3 },
+  { name: 'sidebar selected card bar', fg: '--color-accent', bg: [SIDEBAR, '--color-accent-wash'], min: 3 },
+  { name: 'body text on the light surface', fg: '--color-text', bg: ['--color-surface'], min: 4.5 },
+  { name: 'muted text on the light surface', fg: '--color-muted', bg: ['--color-surface'], min: 4.5 },
+  { name: 'text on the selection panel and upload dialog', fg: '--color-text', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'muted text on the selection panel and upload dialog', fg: '--color-muted', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'secondary button text', fg: '--color-text', bg: ['--color-secondary-button-bg'], min: 4.5 },
+  // Selection panel (opens when a pair or project is selected) and the upload dialog.
+  { name: 'selection panel heading', fg: '--color-panel-heading', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'selection panel project meta', fg: '--color-panel-meta', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'upload step labels', fg: '--color-step', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'upload dialog footer note', fg: '--color-upload-footer-text', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'upload review footnote', fg: '--color-review-note', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'drop zone text', fg: '--color-drop-zone-text', bg: ['--color-drop-zone-bg'], min: 4.5 },
+  { name: 'drop zone text while hovered/dragging', fg: '--color-drop-zone-text', bg: ['--color-drop-zone-hover-bg'], min: 4.5 },
+  { name: 'drop zone hint', fg: '--color-drop-zone-hint', bg: ['--color-drop-zone-bg'], min: 4.5 },
+  { name: 'drop zone hint while hovered/dragging', fg: '--color-drop-zone-hint', bg: ['--color-drop-zone-hover-bg'], min: 4.5 },
+  // Sidebar details: the unselected Uploads count badge, and the search field's only focus indicator.
+  { name: 'sidebar tab count badge (unselected)', fg: '--color-sidebar-muted', bg: [SIDEBAR, '--color-sidebar-tab-count-bg'], min: 4.5 },
+  { name: 'sidebar tab count badge (selected)', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-tab-count-bg'], min: 4.5 },
+  { name: 'sidebar search focus border vs the card', fg: '--color-accent-border', bg: [SIDEBAR], min: 3 },
+  { name: 'sidebar search focus border vs the search field', fg: '--color-accent-border', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 3 },
+  { name: 'selected sidebar card border', fg: '--color-accent-border', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 3 },
+]
+
+type Rgba = { r: number; g: number; b: number; a: number } // channels 0-255, alpha 0-1
+
+const isDerived = (value: string) => /^(?:var|color-mix)\(/.test(value)
+const rgbOf = ({ r, g, b }: Rgba) => ({ r, g, b })
+
+function expectColor(actual: Rgba, expected: Rgba, digits = 6, label = '') {
+  for (const k of ['r', 'g', 'b', 'a'] as const) expect(actual[k], `${label} ${k}`).toBeCloseTo(expected[k], digits)
+}
+
+/** A theme.css token's color, following var() references. Throws on anything it can't resolve. */
+function resolveToken(name: string, seen: string[] = []): Rgba {
+  if (seen.includes(name)) throw new Error(`circular reference: ${[...seen, name].join(' -> ')}`)
+  const token = themeTokens().get(name)
+  if (!token) throw new Error(`${name} is not defined in theme.css`)
+  return parseColor(token.value, [...seen, name])
+}
+
+/** Parse the color syntaxes theme.css uses: hex, white, transparent, var(), color-mix(in srgb, …). */
+function parseColor(value: string, seen: string[] = []): Rgba {
+  const v = value.trim()
+  const hex = v.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)?.[1]
+  if (hex) {
+    const full = hex.length <= 4 ? [...hex].map((c) => c + c).join('') : hex
+    const [r, g, b, a = 255] = full.match(/../g)!.map((pair) => parseInt(pair, 16))
+    return { r, g, b, a: a / 255 }
+  }
+  if (v === 'white') return { r: 255, g: 255, b: 255, a: 1 }
+  if (v === 'transparent') return { r: 0, g: 0, b: 0, a: 0 }
+  const ref = v.match(/^var\((--[\w-]+)\)$/)?.[1]
+  if (ref) return resolveToken(ref, seen)
+  const mix = v.match(/^color-mix\(in srgb,\s*(.+)\)$/)?.[1]
+  if (mix) {
+    const parts = splitTopLevel(mix)
+    if (parts.length !== 2) throw new Error(`color-mix needs two colors: ${v}`)
+    const [[c1, p1], [c2, p2]] = parts.map((part) => {
+      const m = part.match(/^(.+?)(?:\s+([\d.]+)%)?$/)!
+      return [parseColor(m[1], seen), m[2] === undefined ? undefined : Number(m[2]) / 100] as const
+    })
+    return colorMix(c1, p1, c2, p2)
+  }
+  throw new Error(`unsupported color value: ${value}`)
+}
+
+/** CSS Color 5 color-mix() in srgb: premultiplied-alpha interpolation, missing percentages fill to 100%. */
+function colorMix(c1: Rgba, p1: number | undefined, c2: Rgba, p2: number | undefined): Rgba {
+  const w1 = p1 ?? (p2 === undefined ? 0.5 : 1 - p2)
+  const w2 = p2 ?? 1 - w1
+  const sum = w1 + w2
+  const [n1, n2] = [w1 / sum, w2 / sum]
+  const a = c1.a * n1 + c2.a * n2
+  const channel = (k: 'r' | 'g' | 'b') => (a === 0 ? 0 : (c1[k] * c1.a * n1 + c2[k] * c2.a * n2) / a)
+  return { r: channel('r'), g: channel('g'), b: channel('b'), a: a * Math.min(sum, 1) }
+}
+
+function splitTopLevel(list: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === '(') depth++
+    else if (list[i] === ')') depth--
+    else if (list[i] === ',' && depth === 0) {
+      parts.push(list.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  return [...parts, list.slice(start).trim()]
+}
+
+/** Paint `layers` bottom to top; the bottom layer is made opaque (it sits on an opaque page). */
+function composite(layers: Rgba[]): Rgba {
+  return layers.slice(1).reduce(
+    (under, over) => ({
+      r: over.r * over.a + under.r * (1 - over.a),
+      g: over.g * over.a + under.g * (1 - over.a),
+      b: over.b * over.a + under.b * (1 - over.a),
+      a: 1,
+    }),
+    { ...layers[0], a: 1 },
+  )
+}
+
+/** WCAG 2 contrast ratio of two opaque colors. */
+function contrast(x: Rgba, y: Rgba): number {
+  const luminance = ({ r, g, b }: Rgba) => {
+    const lin = (c: number) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+  }
+  const [hi, lo] = [luminance(x), luminance(y)].sort((m, n) => n - m)
+  return (hi + 0.05) / (lo + 0.05)
+}
 
 const projectFixture: Project = {
   project_id: 'P1',
