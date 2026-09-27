@@ -1,6 +1,7 @@
 // Detail panel for one coordination opportunity. Presentational only: the parent owns selection.
 import { utilityColor } from '../colors'
 import { formatDays, formatMiles, formatScorePct, formatUsd } from '../format'
+import { tierLabel } from '../tiers'
 import type { Overlap, Project } from '../types'
 import Icon from './Icon'
 
@@ -24,6 +25,9 @@ function ProjectCard({ project }: { project: Project }) {
 
 export default function OverlapDetail({ overlap, onClose }: OverlapDetailProps) {
   const distance = formatMiles(overlap.distance_mi)
+  // closest_mi is 0 exactly when the projects cross or touch (docs/api.md).
+  const closest = overlap.closest_mi === 0 ? `${formatMiles(0)} (touching)` : formatMiles(overlap.closest_mi)
+  const tier = tierLabel(overlap.tier)
   const gap = formatDays(overlap.time_gap_days)
   const savings = overlap.est_savings_usd
 
@@ -45,8 +49,12 @@ export default function OverlapDetail({ overlap, onClose }: OverlapDetailProps) 
       </div>
 
       <dl className="overlap-detail-metrics">
-        <dt>Distance</dt>
+        <dt>Tier</dt>
+        <dd>{tier}</dd>
+        <dt>Center distance</dt>
         <dd>{distance}</dd>
+        <dt>Closest approach</dt>
+        <dd>{closest}</dd>
         <dt>Time gap</dt>
         <dd>{gap}</dd>
         <dt>Est. savings</dt>
@@ -54,9 +62,12 @@ export default function OverlapDetail({ overlap, onClose }: OverlapDetailProps) 
       </dl>
       <p className="selection-footnote">{overlap.savings_basis}</p>
 
+      {/* The tier follows from the closest approach alone, never the center distance or gap. */}
       <p className="overlap-detail-why">
-        Why this matters: these projects are {distance} apart and enter service {gap} apart, so the
-        utilities could share crews, equipment and right-of-way work instead of mobilizing twice.
+        Why this matters: their closest points are {formatMiles(overlap.closest_mi)} apart, which
+        puts them in the “{tier}” tier. Their centers are {distance} apart and they enter service{' '}
+        {gap} apart, so the utilities could share crews, equipment and right-of-way work instead of
+        mobilizing twice.
       </p>
     </section>
   )

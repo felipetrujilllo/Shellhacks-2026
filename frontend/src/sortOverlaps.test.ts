@@ -18,9 +18,20 @@ function fixture() {
 const ids = (overlaps: readonly { overlap_id: string }[]) => overlaps.map(o => o.overlap_id)
 
 describe('sortOverlaps', () => {
-  it('score: highest first, ties by rank asc', () => {
-    // 0.9 (2), 0.7 (5), 0.5 (1, 3 tie -> rank order), 0.2 (4)
-    expect(ids(sortOverlaps(fixture(), 'score'))).toEqual(['OVL_2', 'OVL_5', 'OVL_1', 'OVL_3', 'OVL_4'])
+  it('rank: keeps the server\'s tier-first order even where scores disagree', () => {
+    // Scores 0.5, 0.9, 0.5, 0.2, 0.7 would put OVL_2 first; rank order does not re-sort by score.
+    // Reversed input, so the order comes from rank, not from the input order.
+    expect(ids(sortOverlaps(fixture().reverse(), 'rank'))).toEqual(['OVL_1', 'OVL_2', 'OVL_3', 'OVL_4', 'OVL_5'])
+  })
+
+  it('rank: a crossing pair with a lower score stays ahead of a higher-scoring crews pair', () => {
+    const [crossing, crews] = makeOverlaps(2)
+    // Input arrives out of order, so the result comes from sorting by rank, not from the input order.
+    const input = [
+      { ...crews, tier: 'crews' as const, score: 0.95 },
+      { ...crossing, tier: 'crossing' as const, score: 0.2 },
+    ]
+    expect(sortOverlaps(input, DEFAULT_SORT_KEY).map(o => [o.overlap_id, o.tier])).toEqual([['OVL_1', 'crossing'], ['OVL_2', 'crews']])
   })
 
   it('distance: closest first, ties by rank asc', () => {
@@ -54,9 +65,10 @@ describe('sortOverlaps', () => {
     expect(ids(input)).toEqual(before)
   })
 
-  it('offers exactly the four keys, score first as the default', () => {
-    expect(SORT_OPTIONS.map(o => o.key)).toEqual(['score', 'distance', 'time_gap', 'savings'])
-    expect(DEFAULT_SORT_KEY).toBe('score')
+  it('offers exactly the four keys, rank first as the default, labelled tier then score', () => {
+    expect(SORT_OPTIONS.map(o => o.key)).toEqual(['rank', 'distance', 'time_gap', 'savings'])
+    expect(DEFAULT_SORT_KEY).toBe('rank')
+    expect(SORT_OPTIONS[0]).toEqual({ key: 'rank', label: 'Rank (tier, then score)' })
   })
 
   it('fails loud on an unknown key', () => {

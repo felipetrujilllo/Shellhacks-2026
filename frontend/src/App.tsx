@@ -9,6 +9,7 @@ import Icon from './components/Icon'
 import { formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
 import { MAX_UPLOADED_PROJECTS, SUBMITTED_OVERLAP_PREFIX, SUBMITTED_PROJECT_PREFIX, type ImportBatch } from './importProjects'
 import { summarizeSavings } from './savings'
+import { tierLabel } from './tiers'
 import { useTheme } from './theme'
 import { DEFAULT_SORT_KEY, SORT_OPTIONS, sortOverlaps, type SortKey } from './sortOverlaps'
 import type { Overlap, Project, Workspace } from './types'
@@ -152,6 +153,7 @@ function App() {
           <div className="sidebar-content" id="workspace-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
             {tab === 'opportunities' && <><div className="list-caption"><span>{filteredOverlaps.length} nearby pairs</span><label className="list-sort"><span aria-hidden="true">Sort:</span><select aria-label="Sort by" value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}>{SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></label></div><ol className="opportunity-list" aria-label="Top coordination opportunities">{sortedOverlaps.map(o => <li key={o.overlap_id}><button className={`opportunity-card ${selectedId === o.overlap_id ? 'selected' : ''}`} aria-pressed={selectedId === o.overlap_id} onClick={() => select(o.overlap_id)}>
               <div className="opportunity-top"><span>#{o.rank.toString().padStart(2, '0')} · {formatScorePct(o.score)} match</span><span>{o.distance_mi.toFixed(1)} mi apart <Icon name="arrow" size={14} /></span></div>
+              <div className="opportunity-tier"><span className="tier-tag">{tierLabel(o.tier)}</span></div>
               <div className="project-pair">{[o.project_a, o.project_b].map(p => <div key={p.project_id}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small></div></div>)}</div>
               <div className="opportunity-bottom"><span>{o.time_gap_days} days apart in service</span>{o.est_savings_usd === null ? <span>No estimate</span> : <span title={`${formatUsd(o.est_savings_usd)} est. savings`}>{formatUsdCompact(o.est_savings_usd)} est. savings</span>}{o.overlap_id.startsWith(SUBMITTED_OVERLAP_PREFIX) && <span className="new-tag">Uploaded</span>}</div>
             </button></li>)}</ol>{!filteredOverlaps.length && <div className="empty-state"><Icon name="search" size={24} /><strong>No matching pairs</strong><p>Try another search or turn on more utility layers. Projects must be within 25 miles to appear here.</p></div>}</>}

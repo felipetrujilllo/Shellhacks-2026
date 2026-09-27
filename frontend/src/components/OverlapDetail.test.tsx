@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { apiExample, expectOverlap } from '../test/apiExamples'
+import type { CoordinationTier } from '../types'
 import OverlapDetail from './OverlapDetail'
 
 // The docs/api.md contract example: OVL_2, rank 2 (tier-first, behind the crossing OVL_1),
@@ -74,6 +75,63 @@ describe('OverlapDetail', () => {
     const why = screen.getByText(/why this matters/i)
     expect(why).toHaveTextContent('5.7 mi apart')
     expect(why).toHaveTextContent('152 days apart')
+  })
+
+  // Spelled out (not read from tiers.ts) so a changed label fails here too.
+  const TIER_CASES: [CoordinationTier, string][] = [
+    ['crossing', 'Crossing — must coordinate'],
+    ['shared_land', 'Share land & permits'],
+    ['site_logistics', 'Share site logistics'],
+    ['crews', 'Share crews & equipment'],
+  ]
+
+  it.each(TIER_CASES)('"why this matters" names the %s tier\'s label', (tier, label) => {
+    render(<OverlapDetail overlap={{ ...overlapExample(), tier }} onClose={() => {}} />)
+
+    const why = screen.getByText(/why this matters/i)
+    expect(why).toHaveTextContent(`“${label}” tier`)
+    expect(why).toHaveTextContent('share crews, equipment and right-of-way work')
+    for (const [, other] of TIER_CASES) if (other !== label) expect(why).not.toHaveTextContent(other)
+  })
+
+  it('"why this matters" puts the tier down to the closest approach, not the center distance or gap', () => {
+    // The contract example: closest_mi 2.99 (site_logistics), distance_mi 5.65, 152 days.
+    render(<OverlapDetail overlap={overlapExample()} onClose={() => {}} />)
+
+    const why = screen.getByText(/why this matters/i)
+    expect(why).toHaveTextContent(
+      'their closest points are 3.0 mi apart, which puts them in the “Share site logistics” tier.',
+    )
+    expect(why).toHaveTextContent('Their centers are 5.7 mi apart and they enter service 152 days apart')
+    expect(why.textContent).not.toMatch(/(5\.7 mi|days) apart, which puts them/)
+  })
+
+  it('"why this matters" reads a crossing as 0.0 mi apart at the closest points', () => {
+    render(<OverlapDetail overlap={{ ...overlapExample(), closest_mi: 0, tier: 'crossing' }} onClose={() => {}} />)
+
+    expect(screen.getByText(/why this matters/i)).toHaveTextContent(
+      'their closest points are 0.0 mi apart, which puts them in the “Crossing — must coordinate” tier.',
+    )
+  })
+
+  it('shows "Center distance", "Closest approach" and the tier label as metric rows (no bare "Distance")', () => {
+    // The contract example: distance_mi 5.65, closest_mi 2.99, tier site_logistics.
+    render(<OverlapDetail overlap={overlapExample()} onClose={() => {}} />)
+
+    const row = (term: string) => screen.getByText(term, { selector: 'dt' }).nextElementSibling
+    expect(row('Center distance')).toHaveTextContent(/^5\.7 mi$/)
+    expect(row('Closest approach')).toHaveTextContent(/^3\.0 mi$/)
+    expect(row('Tier')).toHaveTextContent(/^Share site logistics$/)
+    expect(screen.queryByText('Distance', { selector: 'dt' })).not.toBeInTheDocument()
+  })
+
+  it('reads a closest approach of 0 as touching, with the crossing tier label', () => {
+    render(<OverlapDetail overlap={{ ...overlapExample(), closest_mi: 0, tier: 'crossing' }} onClose={() => {}} />)
+
+    const row = (term: string) => screen.getByText(term, { selector: 'dt' }).nextElementSibling
+    expect(row('Closest approach')).toHaveTextContent(/^0\.0 mi \(touching\)$/)
+    expect(row('Tier')).toHaveTextContent(/^Crossing — must coordinate$/)
+    expect(row('Center distance')).toHaveTextContent(/^5\.7 mi$/)
   })
 
   it('calls onClose when the close button is clicked', () => {

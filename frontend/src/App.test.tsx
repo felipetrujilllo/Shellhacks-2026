@@ -337,7 +337,7 @@ describe('App', () => {
   })
 
   it('shows each opportunity card\'s score as a whole-number percentage', async () => {
-    // Descending, as the API ranks them (the list re-sorts by score, so rank order = score order).
+    // Descending with rank, so the cards (in rank order by default) show them in this order.
     const scores = [1, 0.8311, 0.7055, 0.5, 0.25, 0]
     published.overlaps = makeOverlaps(6).map((o, i) => ({ ...o, score: scores[i] }))
     await renderApp()
@@ -672,19 +672,53 @@ describe('App', () => {
 
     beforeEach(() => { published.overlaps = sortFixture() })
 
-    it('renders a "Sort by" control with exactly the four options, defaulting to Score', async () => {
+    it('renders a "Sort by" control with exactly the four options, defaulting to Rank (tier, then score)', async () => {
       await renderApp()
       await cards()
       const select = sortSelect()
       expect(within(select).getAllByRole('option').map(o => o.textContent)).toEqual([
-        'Score % (best first)', 'Distance (closest first)', 'Time gap (shortest first)', 'Est. savings (highest first)',
+        'Rank (tier, then score)', 'Distance (closest first)', 'Time gap (shortest first)', 'Est. savings (highest first)',
       ])
-      expect(select).toHaveValue('score')
-      expect(select).toHaveDisplayValue('Score % (best first)')
+      expect(select).toHaveValue('rank')
+      expect(select).toHaveDisplayValue('Rank (tier, then score)')
       // It takes the old caption's place; the pair count stays.
       expect(screen.queryByText('Ranked by proximity & timing')).not.toBeInTheDocument()
       expect(screen.getByText('5 nearby pairs')).toBeInTheDocument()
       expect(cardNames(await cards())).toEqual(['SC line 1', 'SC line 2', 'SC line 3', 'SC line 4', 'SC line 5'])
+    })
+
+    it('keeps the server\'s tier-first rank order by default, even when a lower-scoring crossing pair leads', async () => {
+      // Rank 1 is a crossing with the lowest score; rank 2 a crews pair with the highest.
+      // Served out of order, so the list order comes from rank, not from the response order.
+      const [crossing, crews, logistics] = makeOverlaps(3)
+      published.overlaps = [
+        { ...crews, tier: 'crews', score: 0.95 },
+        { ...logistics, tier: 'site_logistics', score: 0.6 },
+        { ...crossing, tier: 'crossing', score: 0.2 },
+      ]
+      await renderApp()
+      const items = await cards()
+      expect(sortSelect()).toHaveDisplayValue('Rank (tier, then score)')
+      expect(cardNames(items)).toEqual(['SC line 1', 'SC line 2', 'SC line 3'])
+      expect(items[0]).toHaveTextContent('#01 · 20% match')
+      expect(within(items[0]).getByText('Crossing — must coordinate')).toHaveClass('tier-tag')
+      expect(items[1]).toHaveTextContent('#02 · 95% match')
+      expect(within(items[1]).getByText('Share crews & equipment')).toHaveClass('tier-tag')
+    })
+
+    it('shows each card\'s tier label as a chip, one per card, matching its tier', async () => {
+      const tiers = ['crossing', 'shared_land', 'site_logistics', 'crews'] as const
+      const labels = ['Crossing — must coordinate', 'Share land & permits', 'Share site logistics', 'Share crews & equipment']
+      published.overlaps = makeOverlaps(4).map((o, i) => ({ ...o, tier: tiers[i] }))
+      await renderApp()
+      const items = await cards()
+      expect(items).toHaveLength(4)
+      items.forEach((item, i) => {
+        const chips = item.querySelectorAll('.tier-tag')
+        expect(chips).toHaveLength(1)
+        expect(chips[0]).toHaveTextContent(new RegExp(`^${labels[i]}$`))
+        for (const other of labels) if (other !== labels[i]) expect(item).not.toHaveTextContent(other)
+      })
     })
 
     it('reorders the cards closest first when Distance is chosen, and shows the choice', async () => {
@@ -753,7 +787,7 @@ describe('App', () => {
       await renderApp()
       await cards()
       // The top card differs per order, so each click selects a pair that was not selected yet.
-      const topCardByOrder = [['score', 'OVL_1'], ['distance', 'OVL_4'], ['time_gap', 'OVL_5'], ['savings', 'OVL_3']]
+      const topCardByOrder = [['rank', 'OVL_1'], ['distance', 'OVL_4'], ['time_gap', 'OVL_5'], ['savings', 'OVL_3']]
       for (const [key, overlapId] of topCardByOrder) {
         fireEvent.change(sortSelect(), { target: { value: key } })
         const items = await cards()
