@@ -3,8 +3,6 @@ import type { Theme } from '../theme'
 import type { Project } from '../types'
 
 export type BasemapId = 'dark' | 'light' | 'satellite'
-/** The pick before the user chooses one; themedBasemap() shows the light style for it in the light theme. */
-export const DEFAULT_BASEMAP: BasemapId = 'dark'
 export const ESRI_ATTRIBUTION = 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
 export const SATELLITE_STYLE: StyleSpecification = {
   version: 8,
@@ -35,20 +33,20 @@ export const BASEMAPS: Record<BasemapId, { label: string; style: string | StyleS
   satellite: { label: 'Satellite', style: SATELLITE_STYLE, halo: 'light', pointStroke: 'light' },
 }
 
-// Each theme's own vector basemap: the one in the "Dark" slot of the basemap picker.
-const THEME_BASEMAP: Record<Theme, BasemapId> = { dark: 'dark', light: 'light' }
+/**
+ * What the map's basemap picker offers, in order. Dark and Light are also the app theme: picking
+ * one switches the theme (and shows that theme's vector style); Satellite leaves the theme alone.
+ */
+export const BASEMAP_OPTIONS: readonly BasemapId[] = ['dark', 'light', 'satellite']
 
-/** The basemaps the picker offers in `theme`: the theme's vector style, then satellite (both themes). */
-export function basemapOptions(theme: Theme): BasemapId[] {
-  return [THEME_BASEMAP[theme], 'satellite']
+/** The basemap the map shows, which is also the picker's pressed option: satellite if on, else the theme's own style. */
+export function pickerValue(satellite: boolean, theme: Theme): BasemapId {
+  return satellite ? 'satellite' : theme
 }
 
-/**
- * The basemap to show for the user's pick in `theme`: satellite stays satellite, and either
- * vector style becomes the theme's own, so switching theme swaps Dark Matter and Positron.
- */
-export function themedBasemap(pick: BasemapId, theme: Theme): BasemapId {
-  return pick === 'satellite' ? 'satellite' : THEME_BASEMAP[theme]
+/** What choosing `id` in the picker does: Satellite turns imagery on; Dark/Light turn it off and set that theme. */
+export function pickerChange(id: BasemapId): { satellite: true; theme: null } | { satellite: false; theme: Theme } {
+  return id === 'satellite' ? { satellite: true, theme: null } : { satellite: false, theme: id }
 }
 
 export type DataBounds = [[number, number], [number, number]]

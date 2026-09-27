@@ -3,7 +3,6 @@ import { fetchWorkspace } from './api'
 import { utilityColor } from './colors'
 import OverlapDetail from './components/OverlapDetail'
 import ProjectMap from './components/ProjectMap'
-import ThemeToggle from './components/ThemeToggle'
 import UploadProjects from './components/UploadProjects'
 import Icon from './components/Icon'
 import { formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
@@ -63,7 +62,7 @@ function App() {
   // The sidebar starts closed so the map fills the screen; the top bar's menu button toggles it.
   const [sidebarOpen, setSidebarOpen] = useState(false)
   // Light or dark (#45): main.tsx applied the initial one to <html> before this first render.
-  const [theme, toggleTheme] = useTheme()
+  const [theme, setTheme] = useTheme()
   useEffect(() => {
     let cancelled = false
     const cached = loadUploads()
@@ -156,10 +155,10 @@ function App() {
       <header className="workspace-header">
         {/* Three columns (1fr auto 1fr) keep the brand centered whatever the sides hold. Left: the
             icon-only menu button, right above the sidebar it opens (disabled until the data, and so the sidebar, exists).
-            Right: the theme toggle, then Upload projects. */}
+            Right: Upload projects. The theme is picked in the map's Dark/Light/Satellite control. */}
         <div className="header-side"><button type="button" className="sidebar-toggle" disabled={state.status !== 'ready'} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'} aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => setSidebarOpen(open => !open)}><Icon name={sidebarOpen ? 'close' : 'menu'} size={20} /></button></div>
         <div className="brand"><span className="brand-symbol"><img src="/relay-icon.svg" alt="" width={28} height={28} /></span><h1>Relay</h1></div>
-        <div className="header-side header-actions"><ThemeToggle theme={theme} onToggle={toggleTheme} /><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
+        <div className="header-side header-actions"><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
       </header>
       {state.status === 'loading' && <p className="workspace-message">Loading projects…</p>}
       {state.status === 'error' && <div role="alert" className="workspace-message">Could not load project data: {state.message}</div>}
@@ -195,7 +194,7 @@ function App() {
           <footer className="sidebar-footer"><span className="source-dot" /> {submitted.length ? 'Published plans + your uploads' : 'Published utility plans'}<span>{submitted.length ? 'PRIVATE' : 'SC / GA'}</span></footer>
         </div></aside>
         <section className="workspace-map" aria-label="Project map">
-          <ProjectMap projects={matched.projects} overlaps={matched.overlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focused} theme={theme} minMatch={minMatch} onMinMatchChange={setMinMatch} />
+          <ProjectMap projects={matched.projects} overlaps={matched.overlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focused} theme={theme} onThemeChange={setTheme} minMatch={minMatch} onMinMatchChange={setMinMatch} />
           <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{matched.projects.length} mapped projects</span></div>
           {uploadProblem && <div role="alert" className="workspace-notice upload-problem"><span>{uploadProblem}</span><button className="text-link" onClick={clearUploads}>Clear my uploads</button><button onClick={() => setUploadProblem('')} aria-label="Dismiss upload problem"><Icon name="close" size={14} /></button></div>}
           {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice.text}</span><button onClick={() => setNotice(null)} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}

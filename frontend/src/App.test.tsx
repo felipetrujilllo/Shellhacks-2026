@@ -14,9 +14,12 @@ vi.mock('./api', () => ({
 
 // jsdom has no WebGL: replace the MapLibre map with a stub that exposes what it was given.
 vi.mock('./components/ProjectMap', () => ({
-  default: ({ projects, overlaps, selectedId, theme }: { projects: unknown[]; overlaps: unknown[]; selectedId: string | null; theme: string }) => (
+  // Its Dark/Light basemap buttons call onThemeChange (ProjectMap.test.tsx checks the real picker).
+  default: ({ projects, overlaps, selectedId, theme, onThemeChange }: { projects: unknown[]; overlaps: unknown[]; selectedId: string | null; theme: string; onThemeChange: (theme: 'dark' | 'light') => void }) => (
     <div data-testid="project-map" data-theme={theme}>
       {projects.length} projects, {overlaps.length} overlaps, selected {String(selectedId)}
+      <button type="button" onClick={() => onThemeChange('dark')}>Map: Dark</button>
+      <button type="button" onClick={() => onThemeChange('light')}>Map: Light</button>
     </div>
   ),
 }))
@@ -271,34 +274,60 @@ describe('App', () => {
       expect(within(right).getByRole('button', { name: 'Upload projects' })).toBeEnabled()
     })
 
-    it('puts the theme toggle in the right region, just before Upload projects, and keeps the brand alone in the center (#45)', async () => {
+    it('has no theme toggle in the top bar: the right region holds only Upload projects, and the brand is alone in the center', async () => {
       renderClosedApp()
       await screen.findByTestId('project-map')
       const [left, center, right] = Array.from(screen.getByRole('banner').children) as HTMLElement[]
-      const toggle = within(right).getByRole('button', { name: 'Light theme' })
-      expect(Array.from(right.children)).toEqual([toggle, within(right).getByRole('button', { name: 'Upload projects' })])
+      expect(Array.from(right.children)).toEqual([within(right).getByRole('button', { name: 'Upload projects' })])
+      const banner = screen.getByRole('banner')
+      expect(within(banner).queryByRole('button', { name: /light theme|dark theme/i })).not.toBeInTheDocument()
       expect(within(left).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Open menu'])
       expect(within(center).queryByRole('button')).not.toBeInTheDocument()
       expect(within(center).getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
     })
 
-    it('the theme toggle switches <html> to the light theme and back, remembers it, and the map follows (#45)', async () => {
+    it('the map\'s Light/Dark picks switch <html> to the light theme and back, remember it, and the map follows (#45)', async () => {
       renderClosedApp()
       await screen.findByTestId('project-map')
-      const toggle = screen.getByRole('button', { name: 'Light theme' })
-      expect(toggle).toHaveAttribute('aria-pressed', 'false')
+      expect(document.documentElement).not.toHaveAttribute('data-theme', 'light')
       expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'dark')
       try {
-        fireEvent.click(toggle)
+        fireEvent.click(screen.getByRole('button', { name: 'Map: Light' }))
         expect(document.documentElement).toHaveAttribute('data-theme', 'light')
         expect(storage.getItem(THEME_STORAGE_KEY)).toBe('light')
-        expect(toggle).toHaveAttribute('aria-pressed', 'true')
         expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'light')
 
-        fireEvent.click(toggle)
+        fireEvent.click(screen.getByRole('button', { name: 'Map: Dark' }))
         expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
         expect(storage.getItem(THEME_STORAGE_KEY)).toBe('dark')
         expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'dark')
+      } finally {
+        document.documentElement.removeAttribute('data-theme')
+      }
+    })
+
+    it('starts in the light theme when the page already shows it, and the map\'s Dark pick switches back', async () => {
+      document.documentElement.dataset.theme = 'light'
+      try {
+        renderClosedApp()
+        await screen.findByTestId('project-map')
+        expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'light')
+        fireEvent.click(screen.getByRole('button', { name: 'Map: Dark' }))
+        expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+        expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'dark')
+      } finally {
+        document.documentElement.removeAttribute('data-theme')
+      }
+    })
+
+    it('still switches the theme when the browser refuses storage', async () => {
+      vi.stubGlobal('localStorage', blockedStorage())
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      try {
+        expect(() => fireEvent.click(screen.getByRole('button', { name: 'Map: Light' }))).not.toThrow()
+        expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+        expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'light')
       } finally {
         document.documentElement.removeAttribute('data-theme')
       }
@@ -311,7 +340,7 @@ describe('App', () => {
       const selectedBefore = screen.getByTestId('project-map').textContent
       expect(selectedBefore).toMatch(/selected OVL_/)
       try {
-        fireEvent.click(screen.getByRole('button', { name: 'Light theme' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Map: Light' }))
         expect(screen.getByTestId('project-map')).toHaveAttribute('data-theme', 'light')
         expect(screen.getByTestId('project-map').textContent).toBe(selectedBefore)
         expect(within(list).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true')

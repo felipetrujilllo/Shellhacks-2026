@@ -994,9 +994,8 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'close icon on a hovered icon button', fg: '--color-muted', bg: ['--color-panel-bg', '--color-icon-button-hover'], min: 3 },
   { name: '"ready" status dot in upload review', fg: '--color-status-ready', bg: ['--color-panel-bg'], min: 3 },
   { name: 'text on a hovered secondary button', fg: '--color-text', bg: ['--color-secondary-button-hover'], min: 4.5 },
-  // #45: the top bar's theme toggle (icon-only, white on navy in both themes) and the sidebar pieces the light theme restyles.
-  { name: 'top bar theme toggle icon', fg: '--color-header-text', bg: ['--color-header-bg'], min: 3 },
-  { name: 'top bar theme toggle icon while hovered', fg: '--color-header-text', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
+  // #45: the sidebar pieces the light theme restyles. (The top bar theme toggle is gone: the theme is
+  // picked in the map's Dark/Light control; the "top bar menu icon" pairs above cover the same header tokens.)
   { name: 'sidebar sort select hover border', fg: '--color-sidebar-accent-border', bg: [SIDEBAR, '--color-sidebar-select-bg'], min: 3 },
   { name: 'sidebar secondary button text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-bg'], min: 4.5 },
   { name: 'sidebar project row hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-row-hover'], min: 4.5 },
@@ -1317,7 +1316,6 @@ describe('shape tokens (#46)', () => {
     expect([toolbar.get('left'), toolbar.get('top'), toolbar.get('gap')]).toEqual(['var(--space-4)', 'var(--space-4)', 'var(--space-2)'])
     // Top bar icon buttons, cards, inputs and the sort select share the md/sm tiers.
     expect(workspaceDeclarations('.sidebar-toggle').get('border-radius')).toBe('var(--radius-md)')
-    expect(workspaceDeclarations('.theme-toggle').get('border-radius')).toBe('var(--radius-md)')
     for (const selector of ['.opportunity-card', '.batch-card', '.workspace-search', '.primary-button', '.secondary-button']) {
       expect(workspaceDeclarations(selector).get('border-radius'), selector).toBe('var(--radius-md)')
     }

@@ -19,7 +19,7 @@ import type { Overlap, Project } from '../types'
 import BasemapToggle from './BasemapToggle'
 import MatchSlider from './MatchSlider'
 import MapLegend from './MapLegend'
-import { BASEMAPS, DEFAULT_BASEMAP, basemapOptions, dataBounds, themedBasemap, type BasemapId } from './basemaps'
+import { BASEMAPS, BASEMAP_OPTIONS, dataBounds, pickerChange, pickerValue, type BasemapId } from './basemaps'
 import {
   HALO_COLOR_DARK,
   HALO_COLOR_LIGHT,
@@ -56,6 +56,8 @@ interface ProjectMapProps {
   focusedProject?: Project | null
   /** The app's theme: picks the vector basemap (Dark Matter or Positron). */
   theme: Theme
+  /** Called when the user picks Dark or Light in the basemap picker: those set the app theme. */
+  onThemeChange: (theme: Theme) => void
   /**
    * The minimum-match slider (#54), controlled by App, which has already filtered `projects` and
    * `overlaps` by it. The slider shows when onMinMatchChange is given.
@@ -64,12 +66,18 @@ interface ProjectMapProps {
   onMinMatchChange?: (min: number) => void
 }
 
-export default function ProjectMap({ projects, overlaps, selectedId, onSelect, focusedProject, theme, minMatch = DEFAULT_MIN_MATCH, onMinMatchChange }: ProjectMapProps) {
+export default function ProjectMap({ projects, overlaps, selectedId, onSelect, focusedProject, theme, onThemeChange, minMatch = DEFAULT_MIN_MATCH, onMinMatchChange }: ProjectMapProps) {
   const mapRef = useRef<MapRef>(null)
-  // The user's pick; what the map shows follows the theme too. A new mapStyle keeps the project
-  // and overlap layers: react-map-gl re-adds the <Source>/<Layer> children after a style change.
-  const [pick, setPick] = useState<BasemapId>(DEFAULT_BASEMAP)
-  const basemap = themedBasemap(pick, theme)
+  // Satellite imagery on or off; otherwise the map shows the theme's own vector style. A new
+  // mapStyle keeps the project and overlap layers: react-map-gl re-adds the <Source>/<Layer>
+  // children after a style change.
+  const [satellite, setSatellite] = useState(false)
+  const basemap = pickerValue(satellite, theme)
+  function pickBasemap(id: BasemapId) {
+    const change = pickerChange(id)
+    setSatellite(change.satellite)
+    if (change.theme) onThemeChange(change.theme)
+  }
   const [loaded, setLoaded] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const hoveredProject = projects.find((p) => p.project_id === hoveredId)
@@ -182,7 +190,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         </Source>
       </Map>
       <div className="map-toolbar">
-        <BasemapToggle options={basemapOptions(theme)} value={basemap} onChange={setPick} />
+        <BasemapToggle options={BASEMAP_OPTIONS} value={basemap} onChange={pickBasemap} />
         <button type="button" onClick={fitData} disabled={!bounds}
           className="map-control min-h-11 border border-white/15 bg-slate-950/90 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 disabled:opacity-40">
           Fit to data

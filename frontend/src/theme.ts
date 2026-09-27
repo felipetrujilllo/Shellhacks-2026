@@ -59,14 +59,13 @@ export function currentTheme(): Theme {
   return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
 }
 
-/** The current theme and a toggle that applies the other one and remembers it. */
-export function useTheme(): [Theme, () => void] {
+/** The current theme and a setter that applies `next` and remembers it (the map's Dark/Light picker calls it). */
+export function useTheme(): [Theme, (next: Theme) => void] {
   const [theme, setTheme] = useState<Theme>(currentTheme)
-  function toggle() {
-    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+  function setThemeTo(next: Theme) {
     applyTheme(next)
     storeTheme(next)
     setTheme(next)
   }
-  return [theme, toggle]
+  return [theme, setThemeTo]
 }

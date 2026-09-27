@@ -1,45 +1,45 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
-import { describe, expect, it, vi } from 'vitest'
-import type { Theme } from '../theme'
+import { expect, it, vi } from 'vitest'
 import BasemapToggle from './BasemapToggle'
-import { basemapOptions, type BasemapId } from './basemaps'
+import { BASEMAP_OPTIONS } from './basemaps'
 
-const THEMES: Theme[] = ['dark', 'light']
-// Each theme's own vector map (Dark Matter / Positron): where turning satellite off goes back to.
-const THEME_VECTOR: Record<Theme, BasemapId> = { dark: 'dark', light: 'light' }
+const pressed = () => screen.getAllByRole('button').map((b) => b.getAttribute('aria-pressed'))
 
-/** The picker as ProjectMap wires it: controlled, starting on the theme's own vector map. */
-function Picker({ theme, onChange }: { theme: Theme; onChange: (id: BasemapId) => void }) {
-  const options = basemapOptions(theme)
-  const [value, setValue] = useState<BasemapId>(options[0])
-  return <BasemapToggle options={options} value={value} onChange={(id) => { onChange(id); setValue(id) }} />
-}
+it('is a labeled "Basemap" group with Dark, Light and Satellite buttons, in that order, with moon/sun/layers icons', () => {
+  render(<BasemapToggle options={BASEMAP_OPTIONS} value="dark" onChange={() => {}} />)
+  const group = screen.getByRole('group', { name: 'Basemap' })
+  expect(group).toHaveClass('map-control', 'map-segmented')
+  const buttons = screen.getAllByRole('button')
+  expect(buttons.map((b) => b.textContent)).toEqual(['Dark', 'Light', 'Satellite'])
+  expect(buttons.map((b) => b.getAttribute('type'))).toEqual(['button', 'button', 'button'])
+  expect(buttons.map((b) => b.querySelector('svg')?.getAttribute('data-icon'))).toEqual(['moon', 'sun', 'layers'])
+})
 
-describe.each(THEMES)('BasemapToggle in the %s theme (#59)', (theme) => {
-  const vector = THEME_VECTOR[theme]
+it('presses only the option matching value', () => {
+  const { rerender } = render(<BasemapToggle options={BASEMAP_OPTIONS} value="dark" onChange={() => {}} />)
+  expect(pressed()).toEqual(['true', 'false', 'false'])
+  rerender(<BasemapToggle options={BASEMAP_OPTIONS} value="light" onChange={() => {}} />)
+  expect(pressed()).toEqual(['false', 'true', 'false'])
+  rerender(<BasemapToggle options={BASEMAP_OPTIONS} value="satellite" onChange={() => {}} />)
+  expect(pressed()).toEqual(['false', 'false', 'true'])
+})
 
-  it('shows only the Satellite toggle: no Dark or Light button', () => {
-    render(<BasemapToggle options={basemapOptions(theme)} value={vector} onChange={() => {}} />)
-    const group = screen.getByRole('group', { name: 'Basemap' })
-    expect(group).toHaveClass('map-control', 'map-segmented')
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Satellite'])
-    expect(screen.queryByRole('button', { name: 'Dark' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Light' })).not.toBeInTheDocument()
-  })
+it('reports each click as that option\'s id, including a click on the pressed one, and leaves the state to its owner', () => {
+  const onChange = vi.fn()
+  render(<BasemapToggle options={BASEMAP_OPTIONS} value="satellite" onChange={onChange} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Light' }))
+  expect(onChange).toHaveBeenLastCalledWith('light')
+  fireEvent.click(screen.getByRole('button', { name: 'Dark' }))
+  expect(onChange).toHaveBeenLastCalledWith('dark')
+  fireEvent.click(screen.getByRole('button', { name: 'Satellite' }))
+  expect(onChange).toHaveBeenLastCalledWith('satellite')
+  expect(onChange).toHaveBeenCalledTimes(3)
+  // Controlled: nothing changes until the owner passes a new value.
+  expect(pressed()).toEqual(['false', 'false', 'true'])
+})
 
-  it('starts not pressed, turns satellite on with one click and back to the theme\'s vector map with a second', () => {
-    const onChange = vi.fn()
-    render(<Picker theme={theme} onChange={onChange} />)
-    const satellite = screen.getByRole('button', { name: 'Satellite' })
-    expect(satellite).toHaveAttribute('aria-pressed', 'false')
-
-    fireEvent.click(satellite)
-    expect(onChange).toHaveBeenLastCalledWith('satellite')
-    expect(satellite).toHaveAttribute('aria-pressed', 'true')
-
-    fireEvent.click(satellite)
-    expect(onChange).toHaveBeenLastCalledWith(vector)
-    expect(satellite).toHaveAttribute('aria-pressed', 'false')
-  })
+it('offers exactly the options it is given, in order', () => {
+  render(<BasemapToggle options={['light', 'satellite']} value="light" onChange={() => {}} />)
+  expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Light', 'Satellite'])
+  expect(screen.queryByRole('button', { name: 'Dark' })).not.toBeInTheDocument()
 })
