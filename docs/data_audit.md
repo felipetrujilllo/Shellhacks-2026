@@ -291,6 +291,54 @@ the pinned endpoint tests and `desc_projects.csv` (re-run `parse_desc`), regener
 `projects.csv`, update `AUDITED_TOP10_PROJECTS` in `test_build_dataset.py`, and reload the
 demo database.
 
+## Thomson–Vogtle: not in the public IRP project list (#52)
+
+The published challenge pairs DESC's Urquhart work with "Georgia Power's Thomson–Vogtle
+transmission line" near Augusta. We have the Urquhart projects (6852, 6810 O) and both
+Thomson projects (14222, 17993), but no project names Vogtle.
+
+**Conclusion:** the public 2025 IRP Vol 3 has **no planned Thomson–Vogtle project**. No
+line or project anywhere in the PDF is named Thomson–Vogtle (or Vogtle–Thomson), and no
+Table 2 row (the Ten-Year Plan project list) mentions Vogtle. It is not hidden by
+redaction: Table 2 redacts only costs, never project names. So seed data is unchanged and the
+demo database does not need a reload.
+
+**How we searched:** we extracted the text of **all 668 pages** with pdfplumber (every page
+has a text layer, so none were skipped). We then matched each line, ignoring case, against
+`vogtle` (this also covers "VOGTLE" and "Plant Vogtle"), `waynesboro`, `thomson`, `burke`
+and `thomson - vogtle` / `vogtle - thomson`. `burke` and both line names had no hits.
+
+Hits for a transmission project or line:
+
+| Page | Where | Text | What it is |
+|---|---|---|---|
+| p189 | Table 2 | 14222 THOMSON PRIMARY [230/115KV SECOND TRANSFORMER] | planned; already in `projects.csv` |
+| p190 | Table 2 | 17993 EVANS PRIMARY - THOMSON [PRIMARY 115KV REBUILD] | planned; already in `projects.csv` |
+| p420, p425 | project sheets | the same two projects (14222, 17993) | planned; already in `projects.csv` |
+| p191 | Table 3, cancelled | 19623 GTC: AUGUSTA CORPORATE PARK - VOGTLE 230KV REBUILD | cancelled, not planned |
+| p191 | Table 3, cancelled | 20266 GTC: GOSHEN - VOGTLE 230KV REBUILD | cancelled, not planned |
+| p192 | Table 4, completed | 14271 THOMSON PRI - WARRENTON PRI 115KV WHITE LINE REBUILD | completed (2024), not planned |
+| p209 | Table 8, operating guides | Augusta Corporate Park - Vogtle 230kV Operating Guide | operating procedure, not construction |
+| p211 | Table 8, operating guides | Goshen - Vogtle 230kV Operating Guide; Evans Primary - Thomson Primary 115kV Operating Guide | operating procedures, not construction |
+| p212 | Table 8, operating guides | Thomson Primary 230/115kV Bank C Operating Guide | operating procedure, not construction |
+| p382 | project sheet | 21116 GOSHEN AREA STRATEGIC SOLUTION: "a 230kV switching station on the Waynesboro - Wilson 230kV line ... outside of the existing constrained Goshen - Vogtle corridor" | planned, but not Thomson–Vogtle (see below) |
+| p452, p453 | Hatch–Wadley 500 kV study tables | Thomson 500/230 kV Bank D | existing equipment it monitors, not a project |
+
+The other hits are about generation, not transmission projects: p97 and p100 (Vogtle and
+McIntosh units in study cases), p428 and p429 (the Vogtle nuclear FSAR study), p437 (the
+VOGTLE 1–4 unit list), and p495–p498 (unit outage probability tables).
+
+**The nearest real project is 21116, Goshen Area Strategic Solution** (p382, need date
+2030-06-01). It is on the Augusta side, near the Goshen–Vogtle corridor. It is already in
+`gpc_projects.csv`, but `build_dataset` leaves it out of `projects.csv` as `unlocated`,
+because its name has no substation to locate. It could be placed only by hand-picking
+endpoints (Goshen, plus a switching station that is not built yet). We did not do that in
+the 30-minute timebox for #52. It would need its own ticket and a team decision.
+
+**Guard:** `backend/tests/test_thomson_vogtle_finding.py` checks this section against the
+seed CSVs. If a Vogtle project is added to the seed data later, that test fails, which flags
+this finding as stale.
+
 ## Regression guard
 
 `backend/tests/test_build_dataset.py::test_audited_top10_projects_stay_where_the_audit_confirmed_them`

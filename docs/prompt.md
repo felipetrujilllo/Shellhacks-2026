@@ -26,6 +26,9 @@ historically planned in isolation.
   DISCLOSURE.pdf` (668 pages; project list in Table 2 on pp. ~177–191, per-project sheets from ~p. 220). Costs are REDACTED.
 - They share the Savannah River border, and both are in SERTP. DESC has real planned projects
   along that border that sit close to active GPC work.
+- The published challenge's Augusta example (DESC's Urquhart work vs. GPC's Thomson–Vogtle
+  line) has no Thomson–Vogtle project in the public 2025 IRP list (#52). See
+  `docs/data_audit.md`, "Thomson–Vogtle: not in the public IRP project list".
 
 ### What to build
 Ingest public future-construction data from at least two utilities and identify where their
