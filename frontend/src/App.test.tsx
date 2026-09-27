@@ -406,15 +406,18 @@ describe('App', () => {
     it('still selects a clicked card (aria-pressed) under every sort order', async () => {
       await renderApp()
       await cards()
-      for (const key of ['score', 'distance', 'time_gap', 'savings']) {
+      // The top card differs per order, so each click selects a pair that was not selected yet.
+      const topCardByOrder = [['score', 'OVL_1'], ['distance', 'OVL_4'], ['time_gap', 'OVL_5'], ['savings', 'OVL_3']]
+      for (const [key, overlapId] of topCardByOrder) {
         fireEvent.change(sortSelect(), { target: { value: key } })
         const items = await cards()
-        const target = items[1] // a different pair per order
+        const target = items[0]
+        expect(target).toHaveTextContent(`SC line ${overlapId.slice(-1)}`)
+        expect(target).toHaveAttribute('aria-pressed', 'false')
         fireEvent.click(target)
         expect(target).toHaveAttribute('aria-pressed', 'true')
-        expect(items.filter(item => item.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
-        const rank = Number(target.textContent!.match(/#(\d+)/)![1])
-        expect(screen.getByTestId('project-map')).toHaveTextContent(`selected OVL_${rank}`)
+        expect(items.filter(item => item.getAttribute('aria-pressed') === 'true')).toEqual([target])
+        expect(screen.getByTestId('project-map')).toHaveTextContent(`selected ${overlapId}`)
       }
     })
   })
