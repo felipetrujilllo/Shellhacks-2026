@@ -10,16 +10,16 @@
  * browsers where ::backdrop does not inherit from :root.
  *
  * Palette (the two golds are the Relay logo's gradient stops):
- *   #FFC928 gold (--palette-gold): primary accent and selection: primary button, closed
- *           sidebar toggle, sidebar savings figure, sort select, sidebar text links, sidebar
+ *   #FFC928 gold (--palette-gold): primary accent and selection: primary button, the top
+ *           bar menu icon while the sidebar is open, sidebar savings figure, sort select, sidebar text links, sidebar
  *           focus outline, selected tab and card bar, "new" tag, map-layer checkboxes,
  *           "data source" dot, "why" callout bar; mixed with transparent for the accent
  *           border, wash and glow.
- *   #F4A900 darker gold (--palette-gold-dark): hover/pressed accent: primary button and
- *           closed sidebar toggle hover.
+ *   #F4A900 darker gold (--palette-gold-dark): hover/pressed accent: primary button
+ *           hover.
  *   #0B1F3A navy (--palette-navy): top bar background; text on gold; workspace text, links,
  *           savings figures and the current upload step (label and bar) on light surfaces;
- *           dark surfaces (sort options, toggle border, map context chip, dialog backdrop);
+ *           dark surfaces (sort options, map context chip, dialog backdrop);
  *           mixed with white for every light surface, border and grey text of the light
  *           workspace theme, so its neutrals are cool navy tints rather than new hues.
  *   #FFFFFF white (--palette-white): text on navy, secondary button and light card
@@ -48,14 +48,14 @@
   --color-accent: var(--palette-gold); /* primary accent and selection (gold): primary button, sidebar toggle, sidebar highlights, sort select text (--accent) */
   --color-accent-border: color-mix(in srgb, var(--palette-gold) 67%, transparent); /* gold at 67%: sidebar search focus, selected card and sort select hover borders; 67% (was 55%) so the search focus border reaches 3:1 on the sidebar and search field */
   --color-accent-wash: color-mix(in srgb, var(--palette-gold) 11%, transparent); /* gold at 11%: faint fill behind the selected sidebar opportunity card */
-  --color-accent-glow: color-mix(in srgb, var(--palette-gold) 33%, transparent); /* gold at 33%: ring around the closed sidebar toggle */
-  --color-accent-ink: var(--palette-navy); /* text on gold (navy): sidebar toggle, sidebar "new" tag */
+  --color-accent-ink: var(--palette-navy); /* text on gold (navy): sidebar "new" tag */
   --color-focus-ring: color-mix(in srgb, var(--palette-navy) 58%, var(--palette-white)); /* navy at 58% over white: keyboard focus outline across the workspace; a mid tone so it reaches 3:1 on both the navy top bar and the light panels */
 
   /* Header */
   --color-header-bg: var(--palette-navy); /* top bar background (navy) */
   --color-header-text: var(--palette-white); /* top bar text (white on navy) */
   --color-header-border: color-mix(in srgb, var(--palette-white) 7%, transparent); /* white at 7%: top bar bottom border */
+  --color-header-button-hover: color-mix(in srgb, var(--palette-white) 10%, transparent); /* white at 10%: hover fill behind the top bar's icon-only menu button (#44) */
   --color-source-dot: var(--palette-gold); /* small "data source" dot (gold), in the sidebar footer and the map context chip */
 
   /* Buttons */
@@ -128,14 +128,6 @@
   --color-row-hover: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: project row hover/active background */
   --color-batch-card-bg: var(--palette-white); /* import batch card background */
   --color-flagged-text: #98632f; /* flagged-row reason in import batches */
-
-  /* Sidebar toggle (floating bottom-left) */
-  --color-toggle-border: var(--palette-navy); /* toggle border (navy) */
-  --color-toggle-shadow: #000a; /* toggle drop shadow */
-  --color-toggle-hover: var(--palette-gold-dark); /* closed toggle hover/pressed background (darker gold) */
-  --color-toggle-open-bg: var(--color-panel-bg); /* toggle background while the sidebar is open (the light panel background) */
-  --color-toggle-open-ring: color-mix(in srgb, var(--palette-white) 25%, transparent); /* ring around the toggle while the sidebar is open */
-  --color-toggle-focus-ring: var(--color-panel-bg); /* toggle keyboard focus outline (the light panel background) */
 
   /* Map overlay chips and panels */
   --color-map-context-bg: color-mix(in srgb, var(--palette-navy) 93%, transparent); /* navy at 93%: map context chip background */

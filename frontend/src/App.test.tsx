@@ -31,10 +31,11 @@ async function chooseUpload(file: File) {
 
 // The sidebar starts closed (map full screen); most tests exercise its contents, so open it.
 const renderClosedApp = () => render(<App />)
-// The menu button floats on the map, which appears once the data has loaded.
 async function renderApp() {
   const result = renderClosedApp()
-  fireEvent.click(await screen.findByRole('button', { name: 'Open menu' }))
+  // The menu button is in the top bar but stays disabled until the data (and so the sidebar) is ready.
+  await screen.findByTestId('project-map')
+  fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
   return result
 }
 
@@ -143,16 +144,49 @@ describe('App', () => {
       expect(screen.getByRole('complementary', { name: 'Workspace sidebar' })).toBe(sidebar)
     })
 
-    it('floats the menu button on the map, not in the header', async () => {
+    it('puts the menu button first in the top bar\'s left region, not on the map', async () => {
       renderClosedApp()
       await screen.findByTestId('project-map')
       const toggle = screen.getByRole('button', { name: 'Open menu' })
-      expect(within(screen.getByRole('region', { name: 'Project map' })).getByRole('button', { name: 'Open menu' })).toBe(toggle)
-      expect(within(screen.getByRole('banner')).queryByRole('button', { name: /menu/i })).not.toBeInTheDocument()
-      expect(toggle).toHaveTextContent('Open menu')
+      const left = screen.getByRole('banner').children[0] as HTMLElement
+      expect(left.firstElementChild).toBe(toggle)
+      expect(within(screen.getByRole('region', { name: 'Project map' })).queryByRole('button', { name: /menu/i })).not.toBeInTheDocument()
+      expect(toggle).toHaveAccessibleName('Open menu')
     })
 
-    it('opens from the floating menu button and stays open until closed again', async () => {
+    it('keeps the menu button disabled until the data, and so the sidebar, is ready', async () => {
+      renderClosedApp()
+      expect(screen.getByRole('button', { name: 'Open menu' })).toBeDisabled()
+      await screen.findByTestId('project-map')
+      expect(screen.getByRole('button', { name: 'Open menu' })).toBeEnabled()
+    })
+
+    it('shows an icon-only menu button: no visible text, but named "Open menu"/"Close menu" with aria-expanded', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      const toggle = screen.getByRole('button', { name: 'Open menu' })
+      expect(toggle).toHaveAttribute('aria-label', 'Open menu')
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      expect(toggle).toHaveAttribute('aria-controls', 'workspace-sidebar')
+      expect(toggle.textContent).toBe('')
+      expect(toggle.children).toHaveLength(1)
+      expect(toggle.firstElementChild?.tagName.toLowerCase()).toBe('svg')
+      expect(toggle.firstElementChild).toHaveAttribute('aria-hidden', 'true')
+      expect(screen.queryByText(/open menu|close menu/i)).not.toBeInTheDocument()
+
+      fireEvent.click(toggle)
+      expect(toggle).toHaveAccessibleName('Close menu')
+      expect(screen.getByRole('button', { name: 'Close menu' })).toBe(toggle)
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      expect(toggle.textContent).toBe('')
+      expect(screen.queryByText(/open menu|close menu/i)).not.toBeInTheDocument()
+
+      fireEvent.click(toggle)
+      expect(toggle).toHaveAccessibleName('Open menu')
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('opens from the top bar menu button and stays open until closed again', async () => {
       renderClosedApp()
       await screen.findByTestId('project-map')
       fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
@@ -207,9 +241,10 @@ describe('App', () => {
       expect(regions).toHaveLength(3)
       const [left, center, right] = regions
 
-      // Left is reserved: an empty plain div, nothing focusable.
+      // Left holds only the icon-only menu button (#44).
       expect(left.tagName).toBe('DIV')
-      expect(left).toBeEmptyDOMElement()
+      expect(left.children).toHaveLength(1)
+      expect(within(left as HTMLElement).getByRole('button', { name: 'Open menu' })).toBe(left.firstElementChild)
 
       expect(within(center as HTMLElement).getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
       expect(center.querySelector('img')).toHaveAttribute('src', '/relay-icon.svg')

@@ -224,7 +224,6 @@ describe('palette', () => {
       // Raised from the old 0x8c (55%) to 67% so the sidebar search focus border reaches 3:1 (#42).
       '--color-accent-border': ['--palette-gold', 0.67],
       '--color-accent-wash': ['--palette-gold', 0x1c / 255],
-      '--color-accent-glow': ['--palette-gold', 0x55 / 255],
       '--color-header-border': ['--palette-white', 0x12 / 255],
     }
     for (const [name, [palette, alpha]] of Object.entries(mixes)) {
@@ -366,7 +365,6 @@ const PALETTE_ROLES: Record<string, string> = {
   '--color-accent': '--palette-gold',
   '--color-sidebar-checkbox': '--palette-gold',
   '--color-primary-button-hover': '--palette-gold-dark',
-  '--color-toggle-hover': '--palette-gold-dark',
   '--color-header-bg': '--palette-navy',
   '--color-accent-ink': '--palette-navy',
   '--color-primary-button-text': '--palette-navy',
@@ -380,7 +378,6 @@ const PALETTE_ROLES: Record<string, string> = {
   '--color-step-current-bar': '--palette-navy',
   '--color-status-ready': '--palette-navy',
   '--color-sidebar-option-bg': '--palette-navy',
-  '--color-toggle-border': '--palette-navy',
   '--color-source-dot': '--palette-gold',
   '--color-why-border': '--palette-gold',
   '--color-header-text': '--palette-white',
@@ -396,9 +393,11 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'top bar text', fg: '--color-header-text', bg: ['--color-header-bg'], min: 4.5 },
   { name: 'primary button text', fg: '--color-primary-button-text', bg: ['--color-accent'], min: 4.5 },
   { name: 'primary button hover text', fg: '--color-primary-button-text', bg: ['--color-primary-button-hover'], min: 4.5 },
-  { name: 'closed sidebar toggle text', fg: '--color-accent-ink', bg: ['--color-accent'], min: 4.5 },
-  { name: 'closed sidebar toggle hover text', fg: '--color-accent-ink', bg: ['--color-toggle-hover'], min: 4.5 },
-  { name: 'open sidebar toggle text', fg: '--color-accent-ink', bg: ['--color-toggle-open-bg'], min: 4.5 },
+  // Top bar menu button (#44): icon-only, white on navy; gold while the sidebar is open.
+  { name: 'top bar menu icon', fg: '--color-header-text', bg: ['--color-header-bg'], min: 3 },
+  { name: 'top bar menu icon while hovered', fg: '--color-header-text', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
+  { name: 'top bar menu icon while the sidebar is open', fg: '--color-accent', bg: ['--color-header-bg'], min: 3 },
+  { name: 'top bar menu icon while open and hovered', fg: '--color-accent', bg: ['--color-header-bg', '--color-header-button-hover'], min: 3 },
   { name: 'sidebar "new" tag', fg: '--color-accent-ink', bg: [SIDEBAR, '--color-accent'], min: 4.5 },
   { name: 'sidebar text', fg: '--color-sidebar-text', bg: [SIDEBAR], min: 4.5 },
   { name: 'sidebar muted text', fg: '--color-sidebar-muted', bg: [SIDEBAR], min: 4.5 },
@@ -447,7 +446,6 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'focus outline on the status notice', fg: '--color-focus-ring', bg: ['--color-notice-bg'], min: 3 },
   { name: 'focus outline on the upload problem notice', fg: '--color-focus-ring', bg: ['--color-upload-problem-bg'], min: 3 },
   { name: 'focus outline over the map', fg: '--color-focus-ring', bg: ['--color-map-bg'], min: 3 },
-  { name: 'sidebar toggle focus outline over the map', fg: '--color-toggle-focus-ring', bg: ['--color-map-bg'], min: 3 },
   { name: 'text links on the upload dialog', fg: '--color-link', bg: ['--color-panel-bg'], min: 4.5 },
   { name: 'savings figure in the overlap detail', fg: '--color-savings', bg: ['--color-panel-bg'], min: 4.5 },
   { name: 'selection panel emphasized meta value', fg: '--color-panel-meta-strong', bg: ['--color-panel-bg'], min: 4.5 },

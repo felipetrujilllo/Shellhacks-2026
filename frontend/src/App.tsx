@@ -41,7 +41,7 @@ function App() {
   const [uploadProblem, setUploadProblem] = useState('')
   const [hidden, setHidden] = useState<string[]>([])
   const [notice, setNotice] = useState('')
-  // The sidebar starts closed so the map fills the screen; the floating menu button toggles it.
+  // The sidebar starts closed so the map fills the screen; the top bar's menu button toggles it.
   const [sidebarOpen, setSidebarOpen] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -120,8 +120,9 @@ function App() {
   return (
     <main className="workspace">
       <header className="workspace-header">
-        {/* Three columns (1fr auto 1fr) keep the brand centered whatever the sides hold. Left is reserved. */}
-        <div className="header-side" />
+        {/* Three columns (1fr auto 1fr) keep the brand centered whatever the sides hold. Left: the
+            icon-only menu button, right above the sidebar it opens (disabled until the data, and so the sidebar, exists). */}
+        <div className="header-side"><button type="button" className="sidebar-toggle" disabled={state.status !== 'ready'} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'} aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => setSidebarOpen(open => !open)}><Icon name={sidebarOpen ? 'close' : 'menu'} size={20} /></button></div>
         <div className="brand"><span className="brand-symbol"><img src="/relay-icon.svg" alt="" width={28} height={28} /></span><h1>Relay</h1></div>
         <div className="header-side header-actions"><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
       </header>
@@ -156,10 +157,7 @@ function App() {
         </div></aside>
         <section className="workspace-map" aria-label="Project map">
           <ProjectMap projects={visibleProjects} overlaps={visibleOverlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focusedProject} />
-          <div className="map-corner">
-            <button className="sidebar-toggle" aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => setSidebarOpen(open => !open)}><Icon name={sidebarOpen ? 'close' : 'menu'} size={18} /><span>{sidebarOpen ? 'Close menu' : 'Open menu'}</span></button>
-            <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{visibleProjects.length} mapped projects</span></div>
-          </div>
+          <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{visibleProjects.length} mapped projects</span></div>
           {uploadProblem && <div role="alert" className="workspace-notice upload-problem"><span>{uploadProblem}</span><button className="text-link" onClick={clearUploads}>Clear my uploads</button><button onClick={() => setUploadProblem('')} aria-label="Dismiss upload problem"><Icon name="close" size={14} /></button></div>}
           {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}
           {selected && <div className="selection-panel"><OverlapDetail overlap={selected} onClose={() => setSelectedId(null)} /></div>}
