@@ -586,6 +586,60 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Remove Tidewater Grid Co. uploads' })).toBeInTheDocument()
   })
 
+  describe('standing sample submissions (#62)', () => {
+    // What the server serves every visitor: a sample project as an upload (SUB- id, low confidence)
+    // and its pair with GPC_2, although this browser never uploaded it.
+    beforeEach(() => {
+      const gpc = published.projects.find(p => p.project_id === 'GPC_2')!
+      const sample = clientUpload({ project_id: 'SUB-7302', utility: 'Tallapoosa Grid Partners', state: 'AL',
+        project_name: 'Roanoke - Wedowee 115 kV Reconductor' })
+      const pair = { ...makeOverlaps(1)[0], overlap_id: 'SUB:GPC_2|SUB-7302', rank: 1, project_a: gpc, project_b: sample }
+      published = { projects: [...published.projects, sample],
+        overlaps: [pair, ...published.overlaps.map(o => ({ ...o, rank: o.rank + 1 }))] }
+    })
+
+    it('tags the sample\'s pair "Uploaded" but keeps the sample out of the visitor\'s Uploads tab', async () => {
+      await renderApp()
+
+      const items = within(screen.getByRole('list', { name: /coordination opportunities/i })).getAllByRole('button')
+      expect(items[0]).toHaveTextContent('Roanoke - Wedowee 115 kV Reconductor')
+      expect(within(items[0]).getByText('Uploaded')).toBeInTheDocument()
+      // Not "your uploads", and not "published" alone: the footer admits the samples are on the map.
+      expect(screen.getByText('Published plans + sample uploads')).toBeInTheDocument()
+      expect(screen.getByText('SC / GA + SAMPLE')).toBeInTheDocument()
+      expect(screen.queryByText('Published utility plans')).not.toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Uploads' })).toBeInTheDocument() // no count badge
+
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+      expect(screen.getByText('Your plans belong here.')).toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: 'Your uploads' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Remove/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Clear my uploads' })).not.toBeInTheDocument()
+      expect(screen.getByText('1 made-up sample project uploaded for the demo is also on the map, tagged Uploaded. It is not yours, so it is not listed here.')).toBeInTheDocument()
+    })
+
+    it('lists only the visitor\'s own uploads next to the samples, and "Clear my uploads" leaves the samples', async () => {
+      storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload()]))
+      await renderApp()
+      expect(screen.getByTestId('project-map')).toHaveTextContent('4 projects, 8 overlaps')
+
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+      expect(screen.getByRole('tab', { name: /Uploads/ })).toHaveTextContent(/^Uploads1$/) // the badge counts only the visitor's
+      const cards = uploadCardItems()
+      expect(cards).toHaveLength(1)
+      expect(cards[0].querySelector('strong')).toHaveTextContent('Savannah Water')
+      expect(screen.queryByRole('button', { name: 'Remove Tallapoosa Grid Partners uploads' })).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear my uploads' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('Your uploads were removed from this browser.')
+      expect(sentUploads(1)).toEqual([])
+      // The sample is the server's, not this browser's: it and its pair are still on the map.
+      expect(screen.getByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
+      expect(screen.getByText('Your plans belong here.')).toBeInTheDocument()
+      expect(screen.getByText(/1 made-up sample project uploaded for the demo is also on the map/)).toBeInTheDocument()
+    })
+  })
+
   describe('upload cards: one per company (#57)', () => {
     const HEADER = 'utility,project_name,lat_center,lon_center,in_service_date,est_cost_usd\n'
     /** Picks `csv` as `filename` and adds its valid rows. */

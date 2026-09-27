@@ -29,11 +29,14 @@ answer one question: which of these projects should the two utilities be talking
 - Takes your own projects as a CSV upload and ranks them with the published pairs. The
   server stores nothing; Relay keeps your uploads in your browser.
 
-The live site flags **39 pairs** among **115 located projects**. The top pair is DESC's
+From the published plans, the live site flags **39 pairs** among **115 located projects**.
+Our demo pair is DESC's
 Jasper – Okatie 230 kV #2 line and Georgia Power's McIntosh – Purrysburg 230 kV reactors:
 **5.66 mi** apart, **152 days** between in-service dates, score 83%, estimated savings
-**$709,579**. Estimates across all 39 pairs total **$4,242,766**. (Source: live
-`/api/overlaps` and `/api/projects`, 26 Sep 2026, 22:42 EDT.)
+**$709,579**. Estimates across those 39 published pairs total **$4,242,766**. (Source: live
+`/api/overlaps` and `/api/projects`, 26 Sep 2026, 22:42 EDT.) The map also shows 31 made-up
+sample uploads from a fictional "Tallapoosa Grid Partners", which add 7 more pairs; they are
+demo data, not a real filing.
 
 [SCREENSHOT: the Savannah River border with both utilities' projects, flagged pairs
 highlighted, ranked list beside the map]

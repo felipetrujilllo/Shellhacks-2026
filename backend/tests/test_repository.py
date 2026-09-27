@@ -12,6 +12,7 @@ from app import repository
 from app.config import Settings
 from app.main import create_app
 from app.repository import CONNECT_TIMEOUT_S, PROJECT_COLUMNS, PostgresRepository
+from app.samples import prepare_samples
 from app.schemas import Project, Workspace
 from pipeline.load import load, read_project_csv, to_engine_project
 from pipeline.overlap import (
@@ -194,7 +195,9 @@ def test_legacy_shared_uploads_are_never_served(legacy_db, api):
     assert api.get("/overlaps/SUB:GPC_2|SUB-legacy-1").status_code == 404
     empty = Workspace.model_validate(api.post("/workspace", json={"projects": []}).json())
     assert "SUB-legacy-1" not in {p.project_id for p in empty.projects}
-    assert "Tallapoosa Grid Partners" not in {p.utility for p in empty.projects}
+    # By name, not by utility: since #62 the standing sample submissions are served under
+    # the same made-up utility, "Tallapoosa Grid Partners", which this legacy row borrows.
+    assert "Legacy upload" not in {p.project_name for p in empty.projects}
 
 
 @requires_postgres
@@ -238,12 +241,16 @@ def test_published_plans_are_the_loaded_projects_and_their_stored_pairs(db):
 
 
 @requires_postgres
-def test_an_empty_workspace_is_exactly_the_published_data(db, api):
+def test_an_empty_workspace_is_exactly_the_published_data_plus_the_samples(db, api):
+    """Since #62 every visitor also gets the standing sample submissions, as uploads."""
     response = api.post("/workspace", json={"projects": []})
 
     assert response.status_code == 200
     workspace = Workspace.model_validate(response.json())
-    assert workspace.projects == db.list_projects()
+    published = db.list_projects()
+    samples = prepare_samples(db.sample_submissions(), published)
+    assert len(samples) == 31
+    assert workspace.projects == [*published, *samples]
     assert workspace.overlaps == db.list_overlaps()
 
 
@@ -280,6 +287,20 @@ def test_a_workspace_request_writes_nothing_to_the_database(legacy_db, api):
     assert database_snapshot() == before
     # A fresh repository (another API instance) still serves only the published plans.
     assert len(PostgresRepository(TEST_DATABASE_URL).list_projects()) == 10
+
+
+@requires_postgres
+def test_the_real_api_refuses_an_upload_repeating_a_sample_and_writes_nothing(legacy_db, api):
+    """#62: the samples are checked like published projects, and never stored either."""
+    before = database_snapshot()
+
+    response = api.post("/workspace", json={"projects": [upload_row(
+        utility="tallapoosa grid partners", project_name="Heflin 115-12.47 kV Sub: Rebuild")]})
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "project 1 ('Heflin 115-12.47 kV Sub: Rebuild' by "
+                                          "'tallapoosa grid partners') already exists"}
+    assert database_snapshot() == before
 
 
 @requires_postgres

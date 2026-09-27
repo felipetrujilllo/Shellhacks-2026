@@ -25,7 +25,7 @@ from test_load import TEST_DATABASE_URL, requires_postgres
 
 from app.config import Settings
 from app.main import create_app
-from app.repository import ranked_overlaps
+from app.repository import PostgresRepository, PublishedPlans
 from app.schemas import Project
 from pipeline.load import ENV_PATH, read_project_csv, to_engine_project
 from pipeline.overlap import detect_overlaps
@@ -65,11 +65,31 @@ def engine_overlaps(path: Path):
     return rows, detect_overlaps(to_engine_project(r) for r in rows)
 
 
+class CsvRepository(PostgresRepository):
+    """The real repository over a CSV instead of the database (never connects).
+
+    Only the two SQL reads are replaced, so list_overlaps / get_overlap run the real code: the
+    CSV's pairs plus the standing sample submissions' pairs (app/samples.py), ranked together.
+    """
+
+    def __init__(self, path: Path, samples: list | None = None) -> None:
+        super().__init__("postgresql://localhost/never-connected", samples)
+        self._path = path
+
+    def published_plans(self) -> PublishedPlans:
+        rows, overlaps = engine_overlaps(self._path)
+        return PublishedPlans([Project.model_validate(vars(r)) for r in rows], overlaps)
+
+    def list_projects(self) -> list[Project]:
+        return sorted(self.published_plans().projects, key=lambda p: p.project_id)
+
+
 def served_overlaps(path: Path) -> list[dict]:
-    """The engine's overlaps as GET /overlaps serves them (repository.ranked_overlaps, JSON)."""
-    rows, overlaps = engine_overlaps(path)
-    projects = [Project.model_validate(vars(r)) for r in rows]
-    return [o.model_dump(mode="json") for o in ranked_overlaps(overlaps, projects, [])]
+    """The overlaps GET /overlaps would serve once `path` is loaded, as JSON.
+
+    Since #62 that includes the standing sample submissions' pairs (SUB: ids).
+    """
+    return [o.model_dump(mode="json") for o in CsvRepository(path).list_overlaps()]
 
 
 # --- Offline: smoke.py will pass on projects.csv ------------------------------------------------
@@ -206,6 +226,20 @@ def test_main_ignores_uploaded_projects_and_their_pairs_but_says_so(capsys):
     assert "ignored 1 uploaded project(s) and 1 of their pair(s)" in out
 
 
+def test_main_passes_on_projects_csv_with_the_sample_submissions_pairs_and_says_so(capsys):
+    """#62: GET /overlaps also serves the samples' SUB: pairs; they are not the CSV's."""
+    overlaps = served_overlaps(PROJECTS_CSV)
+    projects = [{"project_id": r.project_id} for r in read_project_csv(PROJECTS_CSV)]
+    samples = [o for o in overlaps if o["overlap_id"].startswith("SUB:")]
+    assert len(samples) == 7
+
+    code, out, err = run_main(fake_api(projects, overlaps), capsys, csv_path=PROJECTS_CSV)
+
+    assert code == 0, err
+    assert f"demo data OK: {len(projects)} projects and {len(overlaps) - 7} overlaps" in out
+    assert "ignored 7 sample-submission pair(s)" in out
+
+
 def test_main_fails_naming_the_difference_when_the_api_serves_something_else(capsys):
     """E.g. the demo still serves the 10-row sample after a projects.csv load was meant."""
     overlaps = served_overlaps(SPONSOR_SAMPLE_CSV)
@@ -264,7 +298,12 @@ def test_rehearsal_load_reports_the_csv_rows_and_the_engine_overlaps(loaded_api)
 
 @requires_postgres
 def test_rehearsal_api_counts_match_the_csv_and_the_engine(loaded_api):
-    """AC2: GET /projects == projects.csv rows; GET /overlaps == the engine's count on it."""
+    """AC2: GET /projects == projects.csv rows; GET /overlaps == the engine's count on it.
+
+    Since #62 GET /overlaps also carries the standing sample submissions' pairs (SUB: ids,
+    never in the database): the published ones still number exactly the engine's count, and
+    the sample ones are exactly what the offline path serves.
+    """
     client, _ = loaded_api
     _, overlaps = engine_overlaps(PROJECTS_CSV)
 
@@ -273,7 +312,11 @@ def test_rehearsal_api_counts_match_the_csv_and_the_engine(loaded_api):
 
     assert projects.status_code == served.status_code == 200
     assert len(projects.json()) == csv_row_count(PROJECTS_CSV)
-    assert len(served.json()) == len(overlaps)
+    ids = [o["overlap_id"] for o in served.json()]
+    published = [i for i in ids if not i.startswith("SUB:")]
+    assert len(published) == len(overlaps)
+    assert served.json() == served_overlaps(PROJECTS_CSV)
+    assert len(ids) - len(published) == 7
 
 
 @requires_postgres
@@ -282,7 +325,24 @@ def test_rehearsal_passes_check_demo_data(loaded_api):
     client, _ = loaded_api
     expected = check_demo_data.expected_from_csv(PROJECTS_CSV)
 
-    assert check_demo_data.check_api(client, expected).startswith("demo data OK")
+    summary = check_demo_data.check_api(client, expected)
+    assert summary.startswith("demo data OK")
+    assert summary.endswith("(ignored 7 sample-submission pair(s))")
+
+
+@requires_postgres
+def test_rehearsal_serves_a_sample_pair_by_id_with_the_same_rank_as_the_list(loaded_api):
+    """#62 through the real API over the real load: the samples' top pair is #1 everywhere."""
+    client, _ = loaded_api
+    listed = client.get("/overlaps").json()
+
+    response = client.get("/overlaps/SUB:19598|SUB-7220")
+
+    assert response.status_code == 200
+    assert response.json() == listed[0]
+    assert (listed[0]["rank"], listed[0]["tier"]) == (1, "crossing")
+    assert listed[0]["project_b"]["project_id"] == "SUB-7220"
+    assert listed[0]["project_b"]["location_confidence"] == "low"
 
 
 @requires_postgres

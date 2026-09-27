@@ -267,7 +267,7 @@ doctl apps update <app-id> --spec /tmp/live.yaml && rm /tmp/live.yaml
 5. Check it, in this order (`<app>` is the assigned `*.ondigitalocean.app` host):
    ```bash
    curl https://<app>/api/health      # {"status":"ok"} — no database needed
-   curl https://<app>/api/overlaps    # 39 rows (6 on the sponsor sample); a 500 = bad secret
+   curl https://<app>/api/overlaps    # 46 rows: 39 published + 7 with the made-up sample uploads (6 on the sponsor sample); a 500 = bad secret
    open  https://<app>/               # the frontend, talking to /api
    ```
    `/api/health` passing while `/api/overlaps` fails means the app is up but the credential

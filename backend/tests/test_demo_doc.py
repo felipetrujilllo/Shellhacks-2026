@@ -4,7 +4,8 @@ Guards docs/prompt.md (the published closest-point rule, its four tiers and our 
 docs/demo.md (the clicked pair, the shipped pitch line and its figures) against drift from
 the engine. No network: every figure is recomputed offline by running the engine on
 data/seed/projects.csv — the file the demo database is loaded from — and shaping it the way
-GET /overlaps serves it (test_demo_data.served_overlaps). The live API was read by hand when
+GET /overlaps serves it (test_demo_data.served_overlaps), which since #62 includes the
+standing sample submissions' pairs. The live API was read by hand when
 the figures were written; this suite checks they still follow from the code and the seed.
 """
 
@@ -72,9 +73,15 @@ def sections(path: Path, level: str) -> dict[str, str]:
 
 
 def table_rows(text: str) -> list[list[str]]:
-    """Cells of every markdown table row in `text`, header and separator rows included."""
+    """Cells of every markdown table row in `text`, header and separator rows included.
+
+    An escaped pipe (`\\|`, e.g. in the pair id SUB:19598|SUB-7220) stays inside its cell.
+    """
     return [
-        [c.strip() for c in line.strip().strip("|").split("|")]
+        [
+            c.strip().replace("\\|", "|")
+            for c in re.split(r"(?<!\\)\|", re.sub(r"^\||(?<!\\)\|$", "", line.strip()))
+        ]
         for line in text.splitlines()
         if line.strip().startswith("|")
     ]
@@ -226,15 +233,39 @@ def test_demo_clicked_pair_is_the_engine_pair_it_names(figures, served):
     }
 
 
-def test_demo_explains_in_one_line_why_1_and_2_rank_above_it(demo_text, served):
-    assert "Why #1 and #2 rank above it" in demo_text
+def test_demo_explains_in_one_line_why_the_pairs_above_it_rank_higher(demo_text, figures, served):
+    """#62: the sample submissions put two pairs above the clicked one (it was #3, now #5)."""
+    rank = int(figures["Clicked pair rank"])
+    above = [o for o in served if o["rank"] < rank]
+    assert f"Why #1–#{rank - 1} rank above it" in demo_text
+    assert [o["tier"] for o in above].count("crossing") == 3
+    assert [o["tier"] for o in above].count("shared_land") == 1 and len(above) == 4
+    assert "three crossings and one shared-land pair" in demo_text
     assert "must be coordinated (design, outage timing) whenever each is built" in demo_text
     assert "crew/equipment savings are largest where projects are close in time" in demo_text
-    top_two = {o["project_a"]["project_name"] for o in served[:2]} | {
-        o["project_b"]["project_name"] for o in served[:2]
-    }
-    assert "Hooks - Thurmond 115kV Tie: Rebuild" in top_two
-    assert {n for n in top_two if "THURMOND DAM (USA) #5" in n or "THURMOND DAM (USA) #6" in n}
+    assert f"which is why we click #{rank}" in demo_text
+    names = {o[side]["project_name"] for o in above for side in ("project_a", "project_b")}
+    assert "Hooks - Thurmond 115kV Tie: Rebuild" in names
+    assert {n for n in names if "THURMOND DAM (USA) #5" in n or "THURMOND DAM (USA) #6" in n}
+    # The other two are the sample submissions' pairs the doc names.
+    assert sorted(o["overlap_id"] for o in above if o["overlap_id"].startswith("SUB:")) == [
+        "SUB:10222|SUB-8150", "SUB:19598|SUB-7220"
+    ]
+    assert {"Lanett - LaGrange Primary 115 kV Tie Line",
+            "Columbia - Blakely West 115 kV Interconnection"} <= names
+    assert "sample Lanett – LaGrange Primary" in demo_text
+    assert "sample Columbia – Blakely West" in demo_text
+
+
+def test_demo_figures_count_the_sample_submissions_pairs_and_savings(figures, served, demo_text):
+    """#62: how much of the headline number is the made-up sample utility, said out loud."""
+    samples = [o for o in served if o["overlap_id"].startswith("SUB:")]
+    assert samples, "the standing sample submissions no longer add any pair"
+    assert int(figures["Sample-submission pairs"]) == len(samples)
+    total = sum(o["est_savings_usd"] for o in samples)
+    assert dollars(figures["Sample-submission savings"]) == total
+    assert f"{len(samples)} of them, ${total:,}, involve the sample uploads" in demo_text
+    assert "not** a real utility's filing" in demo_text
 
 
 def test_demo_has_the_shipped_pitch_line_verbatim_not_the_fallback(demo_text):

@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.repository import Repository, ranked_overlaps
+from app.samples import prepare_samples
 from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace, WorkspaceRequest
 from app.submissions import SubmissionConflict, prepare_submission
 
@@ -55,16 +56,19 @@ def get_overlap(overlap_id: str, repository: RepositoryDep) -> Overlap:
     responses={409: {"model": ErrorDetail}},
 )
 def build_workspace(body: WorkspaceRequest, repository: RepositoryDep) -> Workspace:
-    """The published plans plus the caller's own uploads, ranked together. Stores nothing:
+    """The published plans, the sample submissions and the caller's own uploads, ranked together.
 
-    the uploads live in the caller's browser, which sends them again on every page load.
+    Stores nothing: the uploads live in the caller's browser, which sends them again on every
+    page load. They are checked against the published plans and the samples alike, so an
+    upload repeating a sample is the same readable 409 as one repeating a published project.
     """
     published, stored = repository.published_plans()
+    samples = prepare_samples(repository.sample_submissions(), published)
     try:
-        uploaded = prepare_submission(body.projects, published)
+        uploaded = prepare_submission(body.projects, [*published, *samples])
     except SubmissionConflict as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
     return Workspace(
-        projects=[*sorted(published, key=lambda p: p.project_id), *uploaded],
-        overlaps=ranked_overlaps(stored, published, uploaded),
+        projects=[*sorted(published, key=lambda p: p.project_id), *samples, *uploaded],
+        overlaps=ranked_overlaps(stored, published, [*samples, *uploaded]),
     )

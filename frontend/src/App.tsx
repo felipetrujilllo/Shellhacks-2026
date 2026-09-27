@@ -14,7 +14,7 @@ import { useTheme } from './theme'
 import { DEFAULT_SORT_KEY, SORT_OPTIONS, sortOverlaps, type SortKey } from './sortOverlaps'
 import type { Overlap, Project, Workspace } from './types'
 import { loadUploadFiles, loadUploads, saveUploadFiles, saveUploads, type UploadFiles } from './uploadCache'
-import { uploadCards } from './uploadCards'
+import { ownUploads, uploadCards } from './uploadCards'
 import './workspace.css'
 
 type LoadState =
@@ -87,7 +87,9 @@ function App() {
   }, [])
   const projects = useMemo(() => state.status === 'ready' ? state.projects : [], [state])
   const overlaps = useMemo(() => state.status === 'ready' ? state.overlaps : [], [state])
-  const submitted = projects.filter(p => p.project_id.startsWith(SUBMITTED_PROJECT_PREFIX))
+  // Only this browser's own uploads; the rest of the SUB- projects are the server's standing sample submissions (#62).
+  const submitted = ownUploads(projects, uploads)
+  const sampleCount = projects.filter(p => p.project_id.startsWith(SUBMITTED_PROJECT_PREFIX)).length - submitted.length
   // One card per company (plus one per file for flagged rows with no company to go under): uploadCards.ts.
   const cards = uploadCards(submitted, uploadFiles, batches)
   const utilities = [...new Set(projects.map(p => p.utility))]
@@ -189,9 +191,9 @@ function App() {
             {tab === 'projects' && <><div className="list-caption"><span>{filteredProjects.length} projects</span><span>All participating utilities</span></div>{filteredProjects.map(p => <button className={`project-row ${focused?.project_id === p.project_id ? 'active' : ''}`} key={p.project_id} onClick={() => { setFocusedProject(p); setSelectedId(null) }}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small><span>In service {p.in_service_date}</span></div><Icon name="arrow" size={14} /></button>)}{!filteredProjects.length && <p className="empty-state">{belowMinMatch ? `No projects in pairs at ${matchLabel(minMatch)}; lower the minimum.` : 'No projects match your search.'}</p>}</>}
             {tab === 'imports' && <>{!cards.length ? <div className="empty-state upload-empty"><Icon name="upload" size={30} /><strong>Your plans belong here.</strong><p>Add a project spreadsheet to find nearby work across utilities.</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>Upload your first file <Icon name="arrow" size={16} /></button><small>CSV spreadsheets · only you can see them</small></div> : <ul className="upload-cards" aria-label="Your uploads">{cards.map(card => card.kind === 'company'
               ? <li className="batch-card" key={`company:${card.utility}`}><i style={{ background: utilityColor(card.utility) }} /><strong>{card.utility}</strong>{card.files.map(file => <p className="batch-file" key={file}><Icon name="file" size={14} /><span>{file}</span></p>)}<p>{card.files.length ? `${plural(card.mapped, 'project')} mapped${card.flagged ? ` · ${card.flagged.length} flagged` : ''}` : plural(card.mapped, 'uploaded project')}</p>{card.flagged?.map((r, i) => <p className="flagged-reason" key={i}>Row {r.row}: {r.issues.join('; ')}</p>)}<button className="text-link" aria-label={`Remove ${card.utility} uploads`} onClick={() => removeUtility(card.utility)}><Icon name="close" size={14} /> Remove</button></li>
-              : <li className="batch-card" key={`file:${card.id}`}><strong className="batch-file"><Icon name="file" size={14} /><span>{card.filename}</span></strong><p>{card.flagged.length === 1 ? '1 row needs' : `${card.flagged.length} rows need`} attention</p>{card.flagged.map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}</li>)}</ul>}{uploads.length > 0 && <button className="secondary-button clear-uploads" onClick={clearUploads}>Clear my uploads</button>}<p className="session-note">{persisted ? 'Your uploads stay in this browser, so they are still here after a refresh. Only you can see them.' : 'This browser is not saving site data, so your uploads last until you refresh. Only you can see them.'} Published utility plans are unchanged.</p></>}
+              : <li className="batch-card" key={`file:${card.id}`}><strong className="batch-file"><Icon name="file" size={14} /><span>{card.filename}</span></strong><p>{card.flagged.length === 1 ? '1 row needs' : `${card.flagged.length} rows need`} attention</p>{card.flagged.map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}</li>)}</ul>}{uploads.length > 0 && <button className="secondary-button clear-uploads" onClick={clearUploads}>Clear my uploads</button>}<p className="session-note">{persisted ? 'Your uploads stay in this browser, so they are still here after a refresh. Only you can see them.' : 'This browser is not saving site data, so your uploads last until you refresh. Only you can see them.'} Published utility plans are unchanged.</p>{sampleCount > 0 && <p className="session-note">{plural(sampleCount, 'made-up sample project')} uploaded for the demo {sampleCount === 1 ? 'is' : 'are'} also on the map, tagged Uploaded. {sampleCount === 1 ? 'It is' : 'They are'} not yours, so {sampleCount === 1 ? 'it is' : 'they are'} not listed here.</p>}</>}
           </div>
-          <footer className="sidebar-footer"><span className="source-dot" /> {submitted.length ? 'Published plans + your uploads' : 'Published utility plans'}<span>{submitted.length ? 'PRIVATE' : 'SC / GA'}</span></footer>
+          <footer className="sidebar-footer"><span className="source-dot" /> {submitted.length ? 'Published plans + your uploads' : sampleCount ? 'Published plans + sample uploads' : 'Published utility plans'}<span>{submitted.length ? 'PRIVATE' : sampleCount ? 'SC / GA + SAMPLE' : 'SC / GA'}</span></footer>
         </div></aside>
         <section className="workspace-map" aria-label="Project map">
           <ProjectMap projects={matched.projects} overlaps={matched.overlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focused} theme={theme} onThemeChange={setTheme} minMatch={minMatch} onMinMatchChange={setMinMatch} />

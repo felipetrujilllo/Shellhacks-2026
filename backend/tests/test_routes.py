@@ -14,7 +14,7 @@ from app.config import Settings
 from app.main import create_app
 from app.repository import CONNECT_TIMEOUT_S, PublishedPlans, ranked_overlaps
 from app.routes import get_repository
-from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace
+from app.schemas import ErrorDetail, Health, Overlap, Project, UploadedProject, Workspace
 from pipeline.overlap import (
     TIER_ORDER,
     closest_approach_miles,
@@ -118,6 +118,11 @@ class FixtureRepository:
 
     def published_plans(self) -> PublishedPlans:
         return PublishedPlans(list(reversed(self.projects)), fixture_engine_overlaps())
+
+    def sample_submissions(self) -> list[UploadedProject]:
+        # None: these tests pin the sponsor's six pairs alone. The samples are tested with the
+        # real repository code in test_sample_submissions.py.
+        return []
 
 
 @pytest.fixture
@@ -566,6 +571,9 @@ class RaisingRepository:
 
     def published_plans(self) -> PublishedPlans:
         raise self.error
+
+    def sample_submissions(self) -> list[UploadedProject]:
+        return []  # read from a file, not the database: never the failing part
 
 
 def raising_client(error: Exception) -> TestClient:

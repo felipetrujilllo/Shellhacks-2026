@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ImportBatch, ImportRow } from './importProjects'
 import type { Project } from './types'
-import { uploadCards } from './uploadCards'
+import { ownUploads, uploadCards } from './uploadCards'
 
 /** An upload as the server serves it (SUB-<client id>). */
 const served = (clientId: string, utility: string) => ({ project_id: `SUB-${clientId}`, utility, project_name: clientId }) as Project
@@ -58,5 +58,23 @@ describe('uploadCards', () => {
 
   it('makes no cards when nothing was uploaded', () => {
     expect(uploadCards([], {}, [])).toEqual([])
+  })
+})
+
+describe('ownUploads (#62)', () => {
+  const client = (clientId: string) => ({ project_id: clientId, utility: 'A' }) as Project
+  const published = { project_id: 'GPC_2', utility: 'Georgia Power' } as Project
+
+  it('keeps only this browser\'s uploads, not the server\'s standing sample submissions', () => {
+    const projects = [published, served('7302', 'Tallapoosa Grid Partners'), served('5512-A', 'Tallapoosa Grid Partners'), served('b1-1', 'A')]
+    expect(ownUploads(projects, [client('b1-1')]).map(p => p.project_id)).toEqual(['SUB-b1-1'])
+  })
+
+  it('is empty for a browser with no uploads, whatever the server serves', () => {
+    expect(ownUploads([published, served('7302', 'Tallapoosa Grid Partners')], [])).toEqual([])
+  })
+
+  it('never takes a published project, even one whose id equals a client id', () => {
+    expect(ownUploads([{ project_id: 'b1-1' } as Project, served('b1-1', 'A')], [client('b1-1')]).map(p => p.project_id)).toEqual(['SUB-b1-1'])
   })
 })

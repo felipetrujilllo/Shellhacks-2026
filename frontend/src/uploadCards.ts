@@ -27,6 +27,17 @@ export interface FileCard {
 export type UploadCard = CompanyCard | FileCard
 
 /**
+ * This browser's own uploads as the server serves them (SUB-<client id>), in the server's order.
+ * The server also serves standing sample submissions with SUB- ids (#62, docs/api.md); those are
+ * not in `uploads`, so they are left out: this browser cannot remove them.
+ * @param uploads this browser's uploads as kept (client ids, uploadCache.ts)
+ */
+export function ownUploads(projects: Project[], uploads: Project[]): Project[] {
+  const own = new Set(uploads.map(u => `${SUBMITTED_PROJECT_PREFIX}${u.project_id}`))
+  return projects.filter(p => own.has(p.project_id))
+}
+
+/**
  * @param submitted the uploads as the server serves them (SUB-<client id>), in upload order
  * @param files client id -> file name (uploadCache.ts)
  * @param batches the files uploaded in this tab, with their flagged rows

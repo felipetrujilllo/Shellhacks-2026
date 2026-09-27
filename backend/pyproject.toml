@@ -32,6 +32,10 @@ dev = [
 [tool.setuptools]
 packages = ["app", "pipeline"]
 
+[tool.setuptools.package-data]
+# The standing sample submissions (app/samples.py) ship with the app wherever it is installed.
+app = ["sample_submissions.csv"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

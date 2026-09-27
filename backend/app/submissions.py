@@ -4,6 +4,8 @@ Pure functions, no database, nothing stored: uploads live in the visitor's own b
 sends them with every POST /workspace. `prepare_submission` validates them and gives them
 their served ids, and `submitted_overlaps` finds the pairs they form, using the same engine the
 batch load runs (pipeline/overlap.py), so an uploaded pair is scored exactly like a published one.
+The standing sample submissions (app/samples.py) go through these same functions, as uploads
+every visitor gets.
 """
 
 from __future__ import annotations
@@ -50,10 +52,13 @@ def prepare_submission(submitted: Sequence[Project], existing: Sequence[Project]
       be flagged as overlapping Georgia Power.
     - Every project is marked location_confidence 'low' (SUBMITTED_CONFIDENCE).
     - The same utility + project name (ignoring case) may not already exist or appear twice
-      in the upload, and no client id may appear twice: raises SubmissionConflict.
+      in the upload, and no client id may appear twice or give an id that already exists
+      (`existing` may hold served uploads, e.g. the sample submissions, app/samples.py):
+      raises SubmissionConflict.
     """
     utilities = {_fold(p.utility): p.utility for p in existing}
     stored = {(_fold(p.utility), _fold(p.project_name)) for p in existing}
+    stored_ids = {p.project_id for p in existing}
     seen: set[tuple[str, str]] = set()
     seen_ids: set[str] = set()
 
@@ -65,7 +70,7 @@ def prepare_submission(submitted: Sequence[Project], existing: Sequence[Project]
             raise SubmissionConflict(f"{label} already exists")
         if key in seen:
             raise SubmissionConflict(f"{label} appears twice in this upload")
-        if project.project_id in seen_ids:
+        if project.project_id in seen_ids or submitted_id(project.project_id) in stored_ids:
             raise SubmissionConflict(f"{label} reuses the id {project.project_id!r}")
         seen.add(key)
         seen_ids.add(project.project_id)

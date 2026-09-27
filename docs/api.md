@@ -18,7 +18,7 @@ One utility's planned transmission project — one row of `data/seed/projects_se
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `project_id` | string | unique; `SUB-<client id>` for an uploaded project (`POST /workspace` only) |
+| `project_id` | string | unique; `SUB-<client id>` for an uploaded project (`POST /workspace`) or a [standing sample submission](#standing-sample-submissions) |
 | `utility` | string | e.g. `Dominion Energy South Carolina`, `Georgia Power` |
 | `state` | string | `SC`, `GA` |
 | `project_name` | string | |
@@ -35,7 +35,7 @@ One flagged cross-utility pair (project centers < 25 mi apart).
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order); `SUB:<project_id_a>\|<project_id_b>` for a pair involving an uploaded project (`POST /workspace` only) |
+| `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order); `SUB:<project_id_a>\|<project_id_b>` for a pair involving an uploaded project (`POST /workspace`) or a standing sample submission (every overlap endpoint) |
 | `rank` | integer ≥ 1 | position **tier first** (`crossing` → `shared_land` → `site_logistics` → `crews`), then by descending `score` (ties: smaller `distance_mi`, then `overlap_id`); 1 = best opportunity |
 | `score` | number 0–1 | `0.6·(1 − distance/25) + 0.4·(1 − min(gap, 1825)/1825)` (`pipeline/overlap.py`) |
 | `distance_mi` | number 0–25 | haversine between centers, R = 3958.8 mi, 2 decimals — the < 25 mi gate that flags the pair |
@@ -80,8 +80,10 @@ Liveness check: never touches the database, so it stays **200** while the databa
 
 ### `GET /projects`
 
-Every **published** project, for the map layers. Uploaded projects are never here: they live in
-the uploader's browser and are scored through `POST /workspace`. Response: `Project[]`.
+Every **published** project. Uploaded projects are never here: they live in the uploader's
+browser and are scored through `POST /workspace`. Neither are the
+[standing sample submissions](#standing-sample-submissions): they are not published plans, and
+the map's layers come from `POST /workspace`, which carries them. Response: `Project[]`.
 
 <!-- example: projects -->
 ```json
@@ -93,11 +95,13 @@ the uploader's browser and are scored through `POST /workspace`. Response: `Proj
 
 ### `GET /overlaps`
 
-Every flagged pair between published projects, **ranked: `rank` 1 first** (tier first, then
-descending `score`), from the `project_overlaps` table the batch load writes. Response:
-`Overlap[]`. Pairs involving an upload are only in the `POST /workspace` response. Abridged
-here to the top two on the sponsor's sample: `OVL_1` scores lower than `OVL_2` but ranks
-first, because the two lines touch at Thurmond (`crossing`).
+Every flagged pair between published projects (the `project_overlaps` table the batch load
+writes) plus every pair involving a [standing sample submission](#standing-sample-submissions)
+(`SUB:` ids), **ranked together: `rank` 1 first** (tier first, then descending `score`), so a
+sample pair can outrank a published one. Response: `Overlap[]`. Pairs involving a visitor's
+own upload are only in the `POST /workspace` response. Abridged here to the top two on the
+sponsor's sample (the sample submissions add no pair to it): `OVL_1` scores lower than `OVL_2`
+but ranks first, because the two lines touch at Thurmond (`crossing`).
 
 <!-- example: overlaps -->
 ```json
@@ -119,7 +123,9 @@ first, because the two lines touch at Thurmond (`crossing`).
 
 ### `GET /overlaps/{overlap_id}`
 
-One published pair, for the detail panel. Response: `Overlap`. A `SUB:` pair is never found here (404).
+One pair of `GET /overlaps`, for the detail panel, with the same `rank` as in the list.
+Response: `Overlap`. A standing sample submission's `SUB:` pair is found here; a pair involving
+a visitor's own upload never is (404).
 
 <!-- example: overlap -->
 ```json
@@ -143,8 +149,8 @@ Database unreachable → **503** `{"detail": "database unavailable"}` (see the t
 
 ### `POST /workspace`
 
-The published plans **plus the caller's own uploads**, scored and ranked together. Nothing is
-stored: each visitor's uploads live in their own browser (`localStorage` key
+The published plans, the [standing sample submissions](#standing-sample-submissions) **and the
+caller's own uploads**, scored and ranked together. Nothing is stored: each visitor's uploads live in their own browser (`localStorage` key
 `relay.uploads.v1`, see `frontend/src/uploadCache.ts`), which sends them with every page load and
 every new upload. Nobody else ever sees them; clearing the browser's site data loses them.
 
@@ -165,10 +171,12 @@ each validated like a published one, except `project_id`:
 ]}
 ```
 
-**200** with `projects` = every published project (as `GET /projects`) followed by the uploads
-in the order sent, and `overlaps` = the published pairs plus every pair involving an upload
+**200** with `projects` = every published project (as `GET /projects`), then the 31 standing
+sample submissions in file order, then the caller's uploads in the order sent; and `overlaps` =
+the published pairs plus every pair involving a sample or an upload
 (`SUB:<project_id_a>|<project_id_b>`, computed by the same engine, `pipeline/overlap.py`),
-ranked in one list exactly like `GET /overlaps`, so an upload can take rank 1. An upload with
+ranked in one list exactly like `GET /overlaps`, so an upload can take rank 1. With no uploads,
+`overlaps` is exactly `GET /overlaps`. An upload with
 no endpoints is measured from its center for `closest_mi` / `tier`. Abridged here to one
 project of each kind and the upload's closest pair — rank 2, behind the published `OVL_1`
 (`crossing`) despite its higher score:
@@ -191,8 +199,10 @@ project of each kind and the upload's closest pair — rank 2, behind the publis
 }
 ```
 
-A utility + project name (ignoring case) that is already published or appears twice in the
-uploads, or a `project_id` used twice → **409** with a readable reason:
+A utility + project name (ignoring case) that is already published, is already a sample
+submission, or appears twice in the uploads, or a `project_id` used twice or equal to a sample
+submission's → **409** with a readable reason (a utility matching the samples' ignoring case and
+spacing takes their spelling, like a published one):
 
 <!-- example: conflict -->
 ```json
@@ -205,7 +215,28 @@ An invalid body (more than 1000 projects, a bad `project_id`, coordinate or date
 **Old shared uploads.** Before this endpoint, `POST /submissions` stored uploads for everyone
 in a `submitted_projects` table. That endpoint is gone and **no code reads the table any
 more**; it is left untouched in the demo database (its rows are hidden, not deleted, and its
-DDL is in git history as `backend/db/submissions.sql`).
+DDL is in git history as `backend/db/submissions.sql`). The standing sample submissions below
+are a different thing: a fixed file, not stored uploads.
+
+### Standing sample submissions
+
+**Sample data, not a real utility's public filing.** "Tallapoosa Grid Partners" is a made-up
+utility: 31 Alabama projects in `backend/app/sample_submissions.csv` (#62), which every visitor
+gets as if someone had already uploaded them. They are not in `data/seed/projects.csv` and never
+loaded into the database; the CSV sits in `backend/app/` because the deployed API is built from
+`backend/` alone (`.do/app.yaml` `source_dir`).
+
+- Read and validated once, when the app starts (`app/samples.py`); a bad row stops the app.
+- Merged in as uploads on every request, through the same path as a visitor's own
+  (`prepare_submission` → `submitted_overlaps` → `ranked_overlaps`): served as
+  `SUB-<project_id>`, `location_confidence` `low`, pairs `SUB:<a>|<b>`. No new fields: a sample
+  project looks exactly like an upload, and the frontend tags its pairs "Uploaded" too.
+- In `GET /overlaps`, `GET /overlaps/{overlap_id}` and `POST /workspace` (projects and pairs);
+  not in `GET /projects`.
+- The file's ids are the given ones with the space replaced by a hyphen (`5512 A` → `5512-A`),
+  so they fit the upload id pattern; substations leave `name_b` / `lat_b` / `lon_b` empty.
+- Nobody can remove them: "Clear my uploads" only clears the browser's own uploads, and the
+  Uploads tab lists only those (it says the samples are on the map but not the visitor's).
 
 ## Repository functions
 
@@ -213,11 +244,13 @@ What the route handlers call (`backend/app/repository.py`). Read-only; each retu
 validated models, and the routes stay thin.
 
 ```python
-def list_projects() -> list[Project]: ...
-def list_overlaps() -> list[Overlap]:  # ranked, rank 1 first
+def list_projects() -> list[Project]: ...  # published only
+def list_overlaps() -> list[Overlap]:  # published + sample-submission pairs, rank 1 first
     ...
 def get_overlap(overlap_id: str) -> Overlap | None:  # None -> route returns 404
     ...
 def published_plans() -> PublishedPlans:  # projects + stored engine pairs, one snapshot,
     ...                                        # scored with the caller's uploads by POST /workspace
+def sample_submissions() -> list[UploadedProject]:  # the standing samples, client ids, read once
+    ...
 ```

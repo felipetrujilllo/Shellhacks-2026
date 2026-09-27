@@ -124,10 +124,11 @@ def _get_list(client: httpx.Client, path: str) -> list[dict]:
 def check_api(client: httpx.Client, expected: ExpectedData) -> str:
     """Compare `client`'s API with `expected`; return a PASS summary or raise SmokeFailure.
 
-    GET /projects and /overlaps serve only the published plans now (uploads stay in each
-    visitor's browser, POST /workspace). A deployed API still on the old shared-uploads code
-    served uploads (SUB- ids) there too; those are not from the CSV, so they are left out of the
-    comparison and only counted in the summary.
+    GET /projects serves only the published plans; GET /overlaps also serves the standing
+    sample submissions' pairs (SUB: ids, #62: never in the database, see backend/app/samples.py).
+    A deployed API still on the old shared-uploads code served uploads (SUB- ids) on both. None
+    of those come from the CSV, so they are left out of the comparison and only counted in the
+    summary.
     """
     served_projects = _get_list(client, "/projects")
     served_overlaps = _get_list(client, "/overlaps")
@@ -142,9 +143,12 @@ def check_api(client: httpx.Client, expected: ExpectedData) -> str:
     summary = (f"demo data OK: {len(projects)} projects and {len(overlaps)} overlaps, "
                f"matching the CSV and the engine")
     uploaded = len(served_projects) - len(projects)
+    uploaded_pairs = len(served_overlaps) - len(overlaps)
     if uploaded:
         summary += (f" (ignored {uploaded} uploaded project(s) and "
-                    f"{len(served_overlaps) - len(overlaps)} of their pair(s))")
+                    f"{uploaded_pairs} of their pair(s))")
+    elif uploaded_pairs:
+        summary += f" (ignored {uploaded_pairs} sample-submission pair(s))"
     return summary
 
 

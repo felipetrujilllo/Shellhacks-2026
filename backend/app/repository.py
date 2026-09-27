@@ -1,8 +1,10 @@
 """Data access for the API: read the published projects and ranked overlaps out of Postgres.
 
 Read-only: nothing here writes. Uploads never reach the database (they live in each visitor's
-browser, see app/submissions.py). The legacy `submitted_projects` table from the old shared
-uploads may still exist in the demo database; it is deliberately never read.
+browser, see app/submissions.py). The standing sample submissions (app/samples.py) are not in
+the database either: they are read from their CSV once, and their pairs are ranked in with the
+published ones here. The legacy `submitted_projects` table from the old shared uploads may
+still exist in the demo database; it is deliberately never read.
 
 Routes depend on the `Repository` protocol, never on psycopg, so tests can swap in fixtures.
 """
@@ -16,7 +18,8 @@ from typing import NamedTuple, Protocol
 import psycopg
 from psycopg.rows import dict_row
 
-from app.schemas import Overlap, Project
+from app.samples import load_sample_submissions, prepare_samples
+from app.schemas import Overlap, Project, UploadedProject
 from app.submissions import submitted_overlaps
 from pipeline.overlap import (
     LatLon,
@@ -48,18 +51,32 @@ class PublishedPlans(NamedTuple):
 class Repository(Protocol):
     def list_projects(self) -> list[Project]: ...  # published only
 
-    def list_overlaps(self) -> list[Overlap]: ...  # published pairs, ranked, rank 1 first
+    # Published pairs plus the sample submissions' pairs, ranked, rank 1 first.
+    def list_overlaps(self) -> list[Overlap]: ...
 
     def get_overlap(self, overlap_id: str) -> Overlap | None: ...  # None -> 404
 
     def published_plans(self) -> PublishedPlans: ...  # what POST /workspace scores uploads on
 
+    # The standing sample uploads, unprepared (client ids): every visitor gets them.
+    def sample_submissions(self) -> list[UploadedProject]: ...
+
 
 class PostgresRepository:
-    """Reads the tables pipeline/load.py writes. One short-lived connection per call."""
+    """Reads the tables pipeline/load.py writes. One short-lived connection per call.
 
-    def __init__(self, database_url: str) -> None:
+    The sample submissions are read once, here, so a broken sample file stops the app at
+    startup instead of failing requests later. `samples` replaces them (tests).
+    """
+
+    def __init__(
+        self, database_url: str, samples: Sequence[UploadedProject] | None = None
+    ) -> None:
         self._database_url = database_url
+        self._samples = list(load_sample_submissions() if samples is None else samples)
+
+    def sample_submissions(self) -> list[UploadedProject]:
+        return list(self._samples)
 
     def _connect(self) -> psycopg.Connection:
         return psycopg.connect(
@@ -81,7 +98,7 @@ class PostgresRepository:
 
     def list_overlaps(self) -> list[Overlap]:
         projects, stored = self.published_plans()
-        return ranked_overlaps(stored, projects, [])
+        return ranked_overlaps(stored, projects, prepare_samples(self._samples, projects))
 
     def get_overlap(self, overlap_id: str) -> Overlap | None:
         # A rank is a position in the whole list, so there is no cheaper way to get one right.
