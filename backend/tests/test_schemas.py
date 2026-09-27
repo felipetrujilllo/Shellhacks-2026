@@ -5,13 +5,22 @@ import json
 import re
 from datetime import date
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace, WorkspaceRequest
 from pipeline.load import REQUIRED_COLUMNS
-from pipeline.overlap import haversine_miles, opportunity_score, time_gap_days
+from pipeline.overlap import (
+    TIER_ORDER,
+    closest_approach_miles,
+    coordination_tier,
+    footprint,
+    haversine_miles,
+    opportunity_score,
+    time_gap_days,
+)
 from pipeline.savings import estimate_savings
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -125,6 +134,8 @@ def test_overlap_has_exactly_the_contract_fields():
         "rank",
         "score",
         "distance_mi",
+        "closest_mi",
+        "tier",
         "time_gap_days",
         "project_a",
         "project_b",
@@ -135,14 +146,45 @@ def test_overlap_has_exactly_the_contract_fields():
     assert Overlap.model_fields["project_b"].annotation is Project
 
 
+def test_tier_names_are_exactly_the_engines_tier_order():
+    """One source of truth: the schema's allowed tiers are the engine's, in its order."""
+    assert get_args(Overlap.model_fields["tier"].annotation) == TIER_ORDER
+    assert TIER_ORDER == ("crossing", "shared_land", "site_logistics", "crews")
+
+
+@pytest.mark.parametrize("field", ["closest_mi", "tier"])
+def test_closest_mi_and_tier_are_required(field):
+    example = doc_examples()["overlap"]
+    without = {k: v for k, v in example.items() if k != field}
+    with pytest.raises(ValidationError, match=field):
+        Overlap.model_validate(without)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("rank", 0), ("score", 1.2), ("distance_mi", 25.5), ("time_gap_days", -1)],
+    [
+        ("rank", 0),
+        ("score", 1.2),
+        ("distance_mi", 25.5),
+        ("time_gap_days", -1),
+        ("closest_mi", -0.01),
+        ("closest_mi", 25.01),
+        ("tier", "nearby"),
+        ("tier", "Crossing"),
+        ("tier", None),
+    ],
 )
 def test_overlap_rejects_values_the_engine_cannot_produce(field, value):
     example = doc_examples()["overlap"]
     with pytest.raises(ValidationError, match=field):
         Overlap.model_validate({**example, field: value})
+
+
+@pytest.mark.parametrize(("closest_mi", "tier"), [(0.0, "crossing"), (25.0, "crews")])
+def test_overlap_accepts_closest_mi_at_both_bounds(closest_mi, tier):
+    example = doc_examples()["overlap"]
+    overlap = Overlap.model_validate({**example, "closest_mi": closest_mi, "tier": tier})
+    assert (overlap.closest_mi, overlap.tier) == (closest_mi, tier)
 
 
 # --- docs/api.md examples -----------------------------------------------------------------
@@ -162,7 +204,30 @@ def test_overlaps_example_is_ranked_rank_one_first():
     overlaps = TypeAdapter(list[Overlap]).validate_python(doc_examples()["overlaps"])
 
     assert [o.rank for o in overlaps] == list(range(1, len(overlaps) + 1))
-    assert [o.score for o in overlaps] == sorted((o.score for o in overlaps), reverse=True)
+    # Tier first, then descending score: the example's rank 1 is the crossing OVL_1, which
+    # scores lower than the site_logistics pairs after it.
+    assert overlaps == sorted(
+        overlaps, key=lambda o: (TIER_ORDER.index(o.tier), -o.score, o.distance_mi, o.overlap_id)
+    )
+    assert (overlaps[0].overlap_id, overlaps[0].tier) == ("OVL_1", "crossing")
+    assert overlaps[0].score < overlaps[1].score
+
+
+def test_doc_defines_rank_as_tier_first_then_score():
+    doc = API_DOC.read_text(encoding="utf-8")
+    [rank_row] = [line for line in doc.splitlines() if line.startswith("| `rank` |")]
+
+    assert "tier first" in rank_row
+    assert "`crossing` → `shared_land` → `site_logistics` → `crews`" in rank_row
+    assert "then by descending `score`" in rank_row
+    for field in ("closest_mi", "tier"):
+        assert any(line.startswith(f"| `{field}` |") for line in doc.splitlines()), field
+
+
+@pytest.mark.parametrize("tag", ["overlaps", "overlap", "workspace"])
+def test_every_overlap_example_carries_closest_mi_and_tier(tag):
+    for overlap in overlap_examples(tag):
+        assert "closest_mi" in overlap and "tier" in overlap, overlap["overlap_id"]
 
 
 def overlap_examples(tag: str) -> list:
@@ -182,6 +247,12 @@ def test_overlap_examples_agree_with_the_engine(tag):
         assert round(distance, 2) == overlap.distance_mi
         assert time_gap_days(a.in_service_date, b.in_service_date) == overlap.time_gap_days
         assert opportunity_score(overlap.distance_mi, overlap.time_gap_days) == overlap.score
+        shapes = [
+            footprint(p.lat_a, p.lon_a, p.lat_b, p.lon_b, p.lat_center, p.lon_center)
+            for p in (a, b)
+        ]
+        assert closest_approach_miles(*shapes) == overlap.closest_mi, overlap.overlap_id
+        assert coordination_tier(overlap.closest_mi) == overlap.tier, overlap.overlap_id
 
 
 @pytest.mark.parametrize("tag", ["overlaps", "overlap", "workspace"])

@@ -18,8 +18,14 @@ from psycopg.rows import dict_row
 
 from app.schemas import Overlap, Project
 from app.submissions import submitted_overlaps
+from pipeline.overlap import (
+    LatLon,
+    closest_approach_miles,
+    coordination_tier,
+    footprint,
+    rank_opportunities,
+)
 from pipeline.overlap import Overlap as EngineOverlap
-from pipeline.overlap import rank_by_score
 from pipeline.savings import estimate_savings
 
 # Column names are the model's field names (schema.sql uses the same vocabulary).
@@ -94,18 +100,46 @@ def ranked_overlaps(
 ) -> list[Overlap]:
     """Stored published pairs plus every pair involving an uploaded project, ranked together.
 
-    `rank` is not stored: it is the position by rank_by_score, so an uploaded pair can take
-    rank 1 and pushes the published pairs down.
+    `rank` is not stored: it is the position by rank_opportunities (tier first, then score),
+    so an uploaded pair can take rank 1 and pushes the published pairs down. Each pair's
+    closest approach is computed once here and used both to rank it and to serve it.
+
+    The closest approach is capped at the center distance: the centers are two points of
+    the pair that are already that close. Published centers lie on their own segments, so
+    the cap only bites when an upload's endpoints sit far from its own center, which would
+    otherwise push closest_mi past the 25 mi bound and fail the whole response.
     """
     projects = {p.project_id: p for p in [*published, *submitted]}
-    ranked = rank_by_score([*stored, *submitted_overlaps(published, submitted)])
-    return [build_overlap(o, rank, projects) for rank, o in enumerate(ranked, start=1)]
+    pairs = [*stored, *submitted_overlaps(published, submitted)]
+    closest = {
+        o.overlap_id: min(
+            closest_mi(projects[o.project_id_a], projects[o.project_id_b]), o.distance_mi
+        )
+        for o in pairs
+    }
+    ranked = rank_opportunities(pairs, lambda o: coordination_tier(closest[o.overlap_id]))
+    return [
+        build_overlap(o, rank, projects, closest[o.overlap_id])
+        for rank, o in enumerate(ranked, start=1)
+    ]
 
 
-def build_overlap(overlap: EngineOverlap, rank: int, projects: dict[str, Project]) -> Overlap:
-    """An engine overlap plus its rank and two projects, as the API serves it.
+def closest_mi(project_a: Project, project_b: Project) -> float:
+    """Miles between the closest points of two projects' footprints (segment, else center)."""
+    return closest_approach_miles(_footprint(project_a), _footprint(project_b))
 
-    The savings estimate is derived here from the projects' costs, never stored.
+
+def _footprint(p: Project) -> tuple[LatLon, ...]:
+    return footprint(p.lat_a, p.lon_a, p.lat_b, p.lon_b, p.lat_center, p.lon_center)
+
+
+def build_overlap(
+    overlap: EngineOverlap, rank: int, projects: dict[str, Project], closest: float
+) -> Overlap:
+    """An engine overlap plus its rank, two projects and closest approach, as the API serves it.
+
+    The tier follows from `closest` (see ranked_overlaps); the savings estimate is derived
+    here from the projects' costs. Neither is stored.
     """
     project_a = projects[overlap.project_id_a]
     project_b = projects[overlap.project_id_b]
@@ -121,6 +155,8 @@ def build_overlap(overlap: EngineOverlap, rank: int, projects: dict[str, Project
         rank=rank,
         score=overlap.score,
         distance_mi=overlap.distance_mi,
+        closest_mi=closest,
+        tier=coordination_tier(closest),
         time_gap_days=overlap.time_gap_days,
         project_a=project_a,
         project_b=project_b,

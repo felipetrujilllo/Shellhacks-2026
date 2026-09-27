@@ -105,6 +105,8 @@ describe('overlapsToGeoJSON', () => {
       rank: 3,
       score: 0.5,
       distance_mi: 10,
+      closest_mi: 6,
+      tier: 'crews',
       time_gap_days: 30,
       project_a: project({ project_id: 'A', lat_center: 32.0, lon_center: -81.0 }),
       project_b: project({ project_id: 'B', lat_center: 33.0, lon_center: -82.0 }),
@@ -161,13 +163,14 @@ describe('docs/api.md examples', () => {
     const overlaps = apiExample('overlaps') as unknown[]
     overlaps.forEach(expectOverlap)
     const fc = overlapsToGeoJSON(overlaps as Overlap[])
+    // Rank is tier first (#49): the crossing OVL_1 leads, then OVL_2 (DESC_3 x GPC_2).
     expect(fc.features.map((f) => f.properties)).toEqual([
-      { overlap_id: 'OVL_2', rank: 1 },
-      { overlap_id: 'OVL_3', rank: 2 },
+      { overlap_id: 'OVL_1', rank: 1 },
+      { overlap_id: 'OVL_2', rank: 2 },
     ])
     expect(fc.features[1].geometry.coordinates).toEqual([
       [-81.0785475, 32.346439],
-      [-81.1957885, 32.3004085],
+      [-81.175112, 32.352116],
     ])
   })
 

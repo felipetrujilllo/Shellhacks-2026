@@ -14,9 +14,31 @@ from app.main import create_app
 from app.repository import CONNECT_TIMEOUT_S, PROJECT_COLUMNS, PostgresRepository
 from app.schemas import Project, Workspace
 from pipeline.load import load, read_project_csv, to_engine_project
+from pipeline.overlap import (
+    TIER_ORDER,
+    closest_approach_miles,
+    coordination_tier,
+    detect_overlaps,
+    footprint,
+    opportunity_score,
+    rank_opportunities,
+)
 from pipeline.overlap import Overlap as EngineOverlap
-from pipeline.overlap import detect_overlaps, opportunity_score, rank_by_score
 from pipeline.savings import estimate_savings
+
+# The sponsor's six pairs tier first, then by score: OVL_1 touches at Thurmond (crossing),
+# OVL_2 / OVL_3 are site_logistics, the rest crews. The starter and seed tables are the same
+# ten projects, so this holds for both.
+TIER_FIRST_ORDER = ["OVL_1", "OVL_2", "OVL_3", "OVL_5", "OVL_6", "OVL_4"]
+
+
+def engine_closest_mi(project_a: Project, project_b: Project) -> float:
+    """closest_mi straight from the engine's functions, independently of the repository."""
+    shapes = [
+        footprint(p.lat_a, p.lon_a, p.lat_b, p.lon_b, p.lat_center, p.lon_center)
+        for p in (project_a, project_b)
+    ]
+    return closest_approach_miles(*shapes)
 
 
 def test_connect_uses_a_timeout_so_an_unreachable_db_fails_fast(monkeypatch):
@@ -160,11 +182,8 @@ def test_legacy_shared_uploads_are_never_served(legacy_db, api):
     """Other people's old uploads stay in the table but no endpoint shows them any more."""
     ids = [p.project_id for p in legacy_db.list_projects()]
     assert len(ids) == 10 and "SUB-legacy-1" not in ids
-    assert [o.overlap_id for o in legacy_db.list_overlaps()] == [
-        o.overlap_id for o in rank_by_score(detect_overlaps(
-            to_engine_project(r) for r in read_project_csv(STARTER_CSV)
-        ))
-    ]
+    # Exactly the starter table's six pairs, in the published (tier-first) order.
+    assert [o.overlap_id for o in legacy_db.list_overlaps()] == TIER_FIRST_ORDER
     assert legacy_db.get_overlap("SUB:GPC_2|SUB-legacy-1") is None
     assert "SUB-legacy-1" not in {p.project_id for p in legacy_db.published_plans().projects}
 
@@ -190,7 +209,8 @@ def test_legacy_rows_are_left_in_place(legacy_db, api):
 
 
 @requires_postgres
-def test_published_ranking_matches_the_old_sql_row_number_order(db):
+def test_published_ranking_is_the_old_sql_score_order_regrouped_tier_first(db):
+    """Within a tier the order is still the old SQL row_number order (score, distance, id)."""
     with psycopg.connect(TEST_DATABASE_URL) as conn:
         sql_order = [
             row[0]
@@ -199,7 +219,15 @@ def test_published_ranking_matches_the_old_sql_row_number_order(db):
                 'overlap_id COLLATE "C"'
             )
         ]
-    assert [o.overlap_id for o in db.list_overlaps()] == sql_order
+    served = db.list_overlaps()
+    tier = {o.overlap_id: o.tier for o in served}
+    # sorted() is stable: regrouping by tier keeps the SQL order inside each tier.
+    assert [o.overlap_id for o in served] == sorted(
+        sql_order, key=lambda i: TIER_ORDER.index(tier[i])
+    )
+    assert [o.overlap_id for o in served] == TIER_FIRST_ORDER
+    # The regrouping really moves something: the score order alone had OVL_2 first.
+    assert sql_order[0] == "OVL_2"
 
 
 @requires_postgres
@@ -230,6 +258,9 @@ def test_a_workspace_upload_adds_its_pairs_to_the_ranking(db, api):
     assert ranked[0].overlap_id == "SUB:GPC_2|SUB-b1-1"
     assert (ranked[0].distance_mi, ranked[0].time_gap_days) == (0.0, 0)
     assert ranked[0].est_savings_usd == 100_000
+    # On GPC_2's center, neither with endpoints: a crossing that outscores OVL_1's.
+    assert (ranked[0].closest_mi, ranked[0].tier) == (0.0, "crossing")
+    assert ranked[1].overlap_id == "OVL_1"
     assert [o.rank for o in ranked] == list(range(1, len(ranked) + 1))
     assert {f"OVL_{n}" for n in range(1, 7)} <= {o.overlap_id for o in ranked}
     # Deterministic: the same uploads give the same ids and ranks next time.
@@ -372,13 +403,18 @@ def test_every_overlap_carries_the_savings_estimate_for_its_two_projects(seed_db
 
 
 @requires_postgres
-def test_the_repository_rank_order_equals_rank_by_score(seed_db):
+def test_the_repository_rank_order_is_the_engines_tier_first_order(seed_db):
     served = seed_db.list_overlaps()
 
     assert [o.rank for o in served] == list(range(1, len(served) + 1))
-    # The engine's own ranking of the same seed projects...
+    assert [o.overlap_id for o in served] == TIER_FIRST_ORDER
+    # The engine's own tier-first ranking of the same seed projects...
+    def seed_tier(o: EngineOverlap) -> str:
+        a, b = SEED_PROJECTS[o.project_id_a], SEED_PROJECTS[o.project_id_b]
+        return coordination_tier(engine_closest_mi(a, b))
+
     assert [o.overlap_id for o in served] == [
-        o.overlap_id for o in rank_by_score(SEED_ENGINE_OVERLAPS)
+        o.overlap_id for o in rank_opportunities(SEED_ENGINE_OVERLAPS, seed_tier)
     ]
     # ...and of the values the repository itself served (the order is not just the input's).
     as_engine = [
@@ -392,6 +428,37 @@ def test_the_repository_rank_order_equals_rank_by_score(seed_db):
         )
         for o in reversed(served)
     ]
-    assert [o.overlap_id for o in served] == [o.overlap_id for o in rank_by_score(as_engine)]
+    served_tier = {o.overlap_id: o.tier for o in served}
+    assert [o.overlap_id for o in served] == [
+        o.overlap_id for o in rank_opportunities(as_engine, lambda o: served_tier[o.overlap_id])
+    ]
     # get_overlap reports the same rank as the list.
     assert [seed_db.get_overlap(o.overlap_id).rank for o in served] == [o.rank for o in served]
+
+
+@requires_postgres
+def test_every_served_pair_carries_closest_mi_and_tier_from_its_two_projects(seed_db):
+    for listed in seed_db.list_overlaps():
+        fetched = seed_db.get_overlap(listed.overlap_id)
+        a = SEED_PROJECTS[listed.project_a.project_id]
+        b = SEED_PROJECTS[listed.project_b.project_id]
+        expected_closest = engine_closest_mi(a, b)
+        for overlap in (listed, fetched):
+            assert overlap.closest_mi == expected_closest, overlap.overlap_id
+            assert overlap.tier == coordination_tier(expected_closest), overlap.overlap_id
+    top = seed_db.get_overlap("OVL_1")
+    assert (top.rank, top.tier, top.closest_mi) == (1, "crossing", 0.0)
+
+
+@requires_postgres
+def test_the_real_api_serves_closest_mi_and_tier_everywhere(db, api):
+    listed = api.get("/overlaps").json()
+    fetched = api.get("/overlaps/OVL_1").json()
+    workspace = api.post("/workspace", json={"projects": [upload_row()]}).json()["overlaps"]
+
+    assert listed[0]["overlap_id"] == "OVL_1"
+    for body in [*listed, fetched, *workspace]:
+        assert isinstance(body["closest_mi"], float), body["overlap_id"]
+        assert body["tier"] in TIER_ORDER, body["overlap_id"]
+    assert (fetched["rank"], fetched["tier"], fetched["closest_mi"]) == (1, "crossing", 0.0)
+    assert any(o["overlap_id"].startswith("SUB:") for o in workspace)

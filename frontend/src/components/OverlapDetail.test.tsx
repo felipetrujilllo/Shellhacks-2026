@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { apiExample, expectOverlap } from '../test/apiExamples'
 import OverlapDetail from './OverlapDetail'
 
-// The docs/api.md contract example: OVL_2, rank 1, score 0.8311, 5.65 mi, 152 days, $709,900.
+// The docs/api.md contract example: OVL_2, rank 2 (tier-first, behind the crossing OVL_1),
+// score 0.8311, 5.65 mi, 152 days, $709,900.
 function overlapExample() {
   const overlap = apiExample('overlap')
   expectOverlap(overlap)
@@ -33,19 +34,19 @@ describe('OverlapDetail', () => {
 
     expect(screen.getByText('5.7 mi')).toBeInTheDocument() // distance_mi 5.65
     expect(screen.getByText('152 days')).toBeInTheDocument()
-    const heading = screen.getByRole('heading', { name: /opportunity #1/i })
-    expect(heading).toHaveTextContent('Opportunity #1')
+    const heading = screen.getByRole('heading', { name: /opportunity #2/i })
+    expect(heading).toHaveTextContent('Opportunity #2')
     expect(heading).toHaveTextContent('83% match') // score 0.8311
-    expect(screen.getByRole('region', { name: /opportunity #1/i })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /opportunity #2/i })).toBeInTheDocument()
   })
 
   it('shows the score as a whole-number percentage, not the raw 0-1 decimal', () => {
     render(<OverlapDetail overlap={{ ...overlapExample(), score: 0.7055 }} onClose={() => {}} />)
 
-    const heading = screen.getByRole('heading', { name: /opportunity #1/i })
+    const heading = screen.getByRole('heading', { name: /opportunity #2/i })
     expect(heading).toHaveTextContent('71% match')
     expect(heading).not.toHaveTextContent('0.71')
-    const panel = screen.getByRole('region', { name: /opportunity #1/i })
+    const panel = screen.getByRole('region', { name: /opportunity #2/i })
     expect(panel).not.toHaveTextContent('0.7055')
     expect(panel).not.toHaveTextContent('0.71')
   })

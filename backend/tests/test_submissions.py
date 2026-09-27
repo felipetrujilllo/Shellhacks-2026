@@ -8,9 +8,15 @@ import pytest
 from app.repository import ranked_overlaps
 from app.schemas import Project
 from app.submissions import SubmissionConflict, prepare_submission, submitted_overlaps
+from pipeline.overlap import (
+    TIER_ORDER,
+    closest_approach_miles,
+    coordination_tier,
+    detect_overlaps,
+    footprint,
+)
 from pipeline.overlap import Overlap as EngineOverlap
 from pipeline.overlap import Project as EngineProject
-from pipeline.overlap import detect_overlaps
 
 STARTER_CSV = Path(__file__).parent / "fixtures" / "starter_projects.csv"
 STARTER_OVERLAPS_CSV = Path(__file__).parent / "fixtures" / "starter_overlaps.csv"
@@ -169,13 +175,23 @@ def test_two_uploads_from_different_utilities_pair_with_each_other():
 # --- ranked_overlaps ------------------------------------------------------------------------
 
 
-def test_without_uploads_the_ranking_is_the_sponsors_six_ordered_by_score():
+def test_without_uploads_the_ranking_is_the_sponsors_six_tier_first_then_by_score():
     ranked = ranked_overlaps(stored_overlaps(), published(), [])
     assert [o.rank for o in ranked] == [1, 2, 3, 4, 5, 6]
     with open(STARTER_OVERLAPS_CSV, newline="", encoding="utf-8") as f:
         assert {o.overlap_id for o in ranked} == {row["overlap_id"] for row in csv.DictReader(f)}
-    scores = [o.score for o in ranked]
-    assert scores == sorted(scores, reverse=True)
+    # Tier first (OVL_1 touches at Thurmond), then by descending score within each tier.
+    assert [(o.overlap_id, o.tier) for o in ranked] == [
+        ("OVL_1", "crossing"),
+        ("OVL_2", "site_logistics"),
+        ("OVL_3", "site_logistics"),
+        ("OVL_5", "crews"),
+        ("OVL_6", "crews"),
+        ("OVL_4", "crews"),
+    ]
+    for tier in TIER_ORDER:
+        scores = [o.score for o in ranked if o.tier == tier]
+        assert scores == sorted(scores, reverse=True), tier
 
 
 def test_an_upload_right_on_a_published_project_ranks_first_and_keeps_every_published_pair():
@@ -193,3 +209,57 @@ def test_an_uploaded_pair_with_a_cost_carries_a_savings_estimate():
     top = ranked_overlaps(stored_overlaps(), published(), submitted)[0]
     # 5% of the known cost at 0 mi and a 0-day gap (pipeline/savings.py): nothing discounted.
     assert top.est_savings_usd == 100_000
+
+
+def test_every_ranked_pair_carries_closest_mi_and_tier_from_the_engine():
+    submitted = prepare_submission([upload(project_id="b1-1")], published())
+    ranked = ranked_overlaps(stored_overlaps(), published(), submitted)
+
+    assert any(o.overlap_id.startswith("SUB:") for o in ranked)
+    for o in ranked:
+        shapes = [
+            footprint(p.lat_a, p.lon_a, p.lat_b, p.lon_b, p.lat_center, p.lon_center)
+            for p in (o.project_a, o.project_b)
+        ]
+        assert o.closest_mi == closest_approach_miles(*shapes), o.overlap_id
+        assert o.tier == coordination_tier(o.closest_mi), o.overlap_id
+
+
+def test_an_upload_without_endpoints_is_measured_from_its_center_and_ranked_tier_first():
+    # 1.04 mi from GPC_2's center: the best score of any pair, but not a crossing.
+    near = upload(project_id="b1-1", lat_center=32.36, lon_center=-81.16)
+    assert None in (near.lat_a, near.lon_a, near.lat_b, near.lon_b)
+    submitted = prepare_submission([near], published())
+
+    ranked = ranked_overlaps(stored_overlaps(), published(), submitted)
+    pair = next(o for o in ranked if o.overlap_id == "SUB:GPC_2|SUB-b1-1")
+
+    assert (pair.closest_mi, pair.tier) == (1.04, "site_logistics")
+    assert pair.score == max(o.score for o in ranked)
+    assert ranked[0].overlap_id == "OVL_1" and ranked[0].tier == "crossing"
+    assert pair.rank == 2
+    tiers = [TIER_ORDER.index(o.tier) for o in ranked]
+    assert tiers == sorted(tiers)
+
+
+def test_an_upload_with_endpoints_crossing_a_published_line_ranks_as_a_crossing():
+    # A short line cutting straight across DESC_3's Jasper-Okatie segment (north to south at
+    # its midpoint). Its center sits just off DESC_3's, so only the segments touch: measured
+    # center to center it would not be a crossing.
+    near = upload(
+        project_id="b1-1",
+        lat_a=32.39, lon_a=-81.0785475, lat_b=32.30, lon_b=-81.0785475,
+        lat_center=32.345, lon_center=-81.0785475,
+    )
+    submitted = prepare_submission([near], published())
+
+    ranked = ranked_overlaps(stored_overlaps(), published(), submitted)
+    pair = next(o for o in ranked if o.overlap_id == "SUB:DESC_3|SUB-b1-1")
+
+    assert (pair.closest_mi, pair.tier) == (0.0, "crossing")
+    assert pair.distance_mi > 0
+    # Two crossings now (it and OVL_1); its far higher score puts it first.
+    assert [o.overlap_id for o in ranked if o.tier == "crossing"] == [
+        "SUB:DESC_3|SUB-b1-1", "OVL_1"
+    ]
+    assert pair.rank == 1

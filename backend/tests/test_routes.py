@@ -12,11 +12,17 @@ from pydantic import TypeAdapter
 
 from app.config import Settings
 from app.main import create_app
-from app.repository import CONNECT_TIMEOUT_S, PublishedPlans, build_overlap
+from app.repository import CONNECT_TIMEOUT_S, PublishedPlans, ranked_overlaps
 from app.routes import get_repository
 from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace
+from pipeline.overlap import (
+    TIER_ORDER,
+    closest_approach_miles,
+    coordination_tier,
+    footprint,
+    opportunity_score,
+)
 from pipeline.overlap import Overlap as EngineOverlap
-from pipeline.overlap import opportunity_score, rank_by_score
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FRONTEND_ORIGIN = "http://localhost:5173"
@@ -50,15 +56,45 @@ def fixture_engine_overlaps() -> list[EngineOverlap]:
 
 
 def fixture_overlaps(projects: list[Project] | None = None) -> list[Overlap]:
-    """The sponsor's six pairs, ranked by the engine's rule — as the real repository would.
+    """The sponsor's six pairs, ranked as the real repository ranks them.
 
-    Built with the repository's own `build_overlap`, so savings come from the real estimator.
+    Built with the repository's own `ranked_overlaps`, so rank, closest_mi / tier and savings
+    come from the real code path.
     """
-    by_id = {p.project_id: p for p in (projects or fixture_projects())}
-    return [
-        build_overlap(o, rank, by_id)
-        for rank, o in enumerate(rank_by_score(fixture_engine_overlaps()), start=1)
+    return ranked_overlaps(fixture_engine_overlaps(), projects or fixture_projects(), [])
+
+
+# The sponsor's six pairs tier first, then by score: OVL_1 touches at Thurmond (crossing),
+# OVL_2 / OVL_3 are site_logistics, the rest crews. Worked out from the fixture coordinates.
+STARTER_TIER_FIRST_ORDER = ["OVL_1", "OVL_2", "OVL_3", "OVL_5", "OVL_6", "OVL_4"]
+# The sponsor's reference distance and gap for each pair (tests/fixtures/starter_overlaps.csv).
+REFERENCE_PAIRS = {
+    row["overlap_id"]: (float(row["distance_mi"]), int(row["time_gap_days"]))
+    for row in read_csv("starter_overlaps.csv")
+}
+
+
+def tier_first_key(overlap: Overlap) -> tuple:
+    """The contract's ordering, written out independently of the engine's sort."""
+    return (TIER_ORDER.index(overlap.tier), -overlap.score, overlap.distance_mi,
+            overlap.overlap_id)
+
+
+def expected_closest_mi(overlap: Overlap) -> float:
+    """closest_mi recomputed from the two served projects with the engine's own functions."""
+    shapes = [
+        footprint(p.lat_a, p.lon_a, p.lat_b, p.lon_b, p.lat_center, p.lon_center)
+        for p in (overlap.project_a, overlap.project_b)
     ]
+    return closest_approach_miles(*shapes)
+
+
+def assert_closest_and_tier_served(body: dict) -> None:
+    """The raw JSON carries both fields, and they are what the engine computes for the pair."""
+    assert "closest_mi" in body and "tier" in body, body["overlap_id"]
+    overlap = Overlap.model_validate(body)
+    assert overlap.closest_mi == expected_closest_mi(overlap), overlap.overlap_id
+    assert overlap.tier == coordination_tier(overlap.closest_mi), overlap.overlap_id
 
 
 class FixtureRepository:
@@ -142,16 +178,63 @@ def test_overlaps_sorted_by_rank_even_when_repository_is_not(client, repository)
     assert response.status_code == 200
     overlaps = TypeAdapter(list[Overlap]).validate_python(response.json())
     assert [o.rank for o in overlaps] == list(range(1, 7))
-    assert [o.score for o in overlaps] == sorted((o.score for o in overlaps), reverse=True)
+    # Rank is tier first, then score (docs/api.md), so scores alone need not descend.
+    assert overlaps == sorted(overlaps, key=tier_first_key)
     assert {o.overlap_id for o in overlaps} == {f"OVL_{n}" for n in range(1, 7)}
 
 
 def test_overlaps_rank_one_is_the_contract_example(client):
     top = client.get("/overlaps").json()[0]
 
-    assert top["overlap_id"] == "OVL_2"
-    assert top["project_a"]["project_id"] == "DESC_3"
-    assert top["project_b"]["project_id"] == "GPC_2"
+    # OVL_1 scores lowest of the top three, but Hooks-Thurmond and Evans-Thurmond Dam touch
+    # at Thurmond, so the crossing tier puts it first.
+    assert top["overlap_id"] == "OVL_1"
+    assert top["project_a"]["project_id"] == "DESC_2"
+    assert top["project_b"]["project_id"] == "GPC_1"
+    assert (top["tier"], top["closest_mi"]) == ("crossing", 0.0)
+
+
+def test_overlaps_serve_closest_mi_and_tier_on_every_pair(client):
+    body = client.get("/overlaps").json()
+
+    assert len(body) == 6
+    for overlap in body:
+        assert_closest_and_tier_served(overlap)
+    served = {o["overlap_id"]: (o["closest_mi"], o["tier"]) for o in body}
+    assert served["OVL_1"] == (0.0, "crossing")
+    assert served["OVL_2"] == (2.99, "site_logistics")
+    assert served["OVL_3"] == (3.39, "site_logistics")
+    assert {served[i][1] for i in ("OVL_4", "OVL_5", "OVL_6")} == {"crews"}
+
+
+def test_overlaps_are_ranked_tier_first_then_by_score(client):
+    body = client.get("/overlaps").json()
+
+    assert [o["overlap_id"] for o in body] == STARTER_TIER_FIRST_ORDER
+    assert [o["tier"] for o in body] == [
+        "crossing", "site_logistics", "site_logistics", "crews", "crews", "crews"
+    ]
+    # Within a tier, higher score first; across tiers the tier wins even over a higher score.
+    by_id = {o["overlap_id"]: o for o in body}
+    assert by_id["OVL_2"]["score"] > by_id["OVL_3"]["score"]
+    assert by_id["OVL_5"]["score"] > by_id["OVL_6"]["score"] > by_id["OVL_4"]["score"]
+    assert by_id["OVL_1"]["score"] < by_id["OVL_2"]["score"]
+    assert by_id["OVL_1"]["rank"] == 1
+
+
+def test_overlaps_keep_distance_score_and_savings_for_the_six_reference_pairs(costed_client):
+    body = {o["overlap_id"]: o for o in costed_client.get("/overlaps").json()}
+
+    assert set(body) == set(REFERENCE_PAIRS)
+    for overlap_id, (distance_mi, gap_days) in REFERENCE_PAIRS.items():
+        served = body[overlap_id]
+        assert served["distance_mi"] == distance_mi, overlap_id
+        assert served["time_gap_days"] == gap_days, overlap_id
+        assert served["score"] == opportunity_score(distance_mi, gap_days), overlap_id
+    # The estimator's figures from before tiers existed (see the savings tests below).
+    assert body["OVL_2"]["est_savings_usd"] == 709_900
+    assert body["OVL_3"]["est_savings_usd"] == 324_472
+    assert all(body[i]["est_savings_usd"] is None for i in ("OVL_1", "OVL_4", "OVL_5", "OVL_6"))
 
 
 # --- /overlaps/{overlap_id} ---------------------------------------------------------------
@@ -167,6 +250,21 @@ def test_get_known_overlap_returns_it(client):
     assert overlap.project_b.project_id == "GPC_3"
     assert overlap.distance_mi == 7.55
     assert overlap.time_gap_days == 517
+
+
+@pytest.mark.parametrize("overlap_id", [f"OVL_{n}" for n in range(1, 7)])
+def test_get_overlap_serves_closest_mi_tier_and_the_same_rank_as_the_list(client, overlap_id):
+    listed = {o["overlap_id"]: o for o in client.get("/overlaps").json()}
+
+    response = client.get(f"/overlaps/{overlap_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert_closest_and_tier_served(body)
+    assert (body["closest_mi"], body["tier"], body["rank"]) == (
+        listed[overlap_id]["closest_mi"], listed[overlap_id]["tier"], listed[overlap_id]["rank"]
+    )
+    assert body["rank"] == STARTER_TIER_FIRST_ORDER.index(overlap_id) + 1
 
 
 def test_get_unknown_overlap_is_404_with_contract_error_body(client):
@@ -289,16 +387,64 @@ def test_a_workspace_is_the_published_data_plus_the_uploads_with_their_pairs_ran
 
     ranked = workspace.overlaps
     assert [o.rank for o in ranked] == list(range(1, len(ranked) + 1))
-    assert [o.score for o in ranked] == sorted((o.score for o in ranked), reverse=True)
-    # Sitting on GPC_2: a 0 mi, 0 day pair, so it takes rank 1 above every published pair.
+    assert ranked == sorted(ranked, key=tier_first_key)
+    # Sitting on GPC_2's center (both without endpoints): a 0 mi, 0 day crossing pair, so it
+    # takes rank 1 above every published pair, OVL_1's crossing included.
     top = ranked[0]
     assert top.overlap_id == "SUB:GPC_2|SUB-b1-1"
     assert (top.distance_mi, top.time_gap_days, top.score) == (0.0, 0, 1.0)
+    assert (top.closest_mi, top.tier) == (0.0, "crossing")
     assert top.est_savings_usd == 100_000  # 5% of $2M, nothing discounted
     # DESC_3 is 5.65 mi from GPC_2, so also from the upload; still ranked among the rest.
     assert "SUB:DESC_3|SUB-b1-1" in {o.overlap_id for o in ranked}
     assert {f"OVL_{n}" for n in range(1, 7)} <= {o.overlap_id for o in ranked}
     assert not any("SUB-b1-2" in o.overlap_id for o in ranked)
+
+
+def test_workspace_serves_closest_mi_and_tier_on_every_pair(client):
+    response = post_workspace(client, upload_row())
+
+    assert response.status_code == 200
+    overlaps = response.json()["overlaps"]
+    assert any(o["overlap_id"].startswith("SUB:") for o in overlaps)
+    for overlap in overlaps:
+        assert_closest_and_tier_served(overlap)
+
+
+def test_an_upload_without_endpoints_gets_closest_mi_and_tier_and_is_ranked_tier_first(client):
+    # 1.04 mi from GPC_2's center, no endpoints: the docs/api.md workspace example's upload.
+    near = upload_row(lat_center=32.36, lon_center=-81.16, in_service_date="2026-09-01",
+                      est_cost_usd=2_500_000)
+    assert "lat_a" not in near and "lat_b" not in near
+
+    ranked = Workspace.model_validate(post_workspace(client, near).json()).overlaps
+    by_id = {o.overlap_id: o for o in ranked}
+
+    pair = by_id["SUB:GPC_2|SUB-b1-1"]
+    # Measured from the upload's center (the fallback), which here equals the center distance.
+    assert (pair.closest_mi, pair.tier) == (1.04, "site_logistics")
+    assert pair.closest_mi == pair.distance_mi
+    # The best score of all, but a site_logistics pair: second, behind OVL_1's crossing.
+    assert pair.score == max(o.score for o in ranked)
+    assert [o.overlap_id for o in ranked[:2]] == ["OVL_1", "SUB:GPC_2|SUB-b1-1"]
+    assert pair.rank == 2
+    assert ranked == sorted(ranked, key=tier_first_key)
+    assert [o.rank for o in ranked] == list(range(1, len(ranked) + 1))
+
+
+def test_an_upload_whose_endpoints_sit_far_from_its_center_is_capped_not_a_500(client):
+    # Center on GPC_2 (flagged at 0 mi), but its own A-B segment ~80 mi away: the segments
+    # alone would give ~81 mi, past the 25 mi bound, which used to fail the whole response.
+    far = upload_row(lat_a=33.0, lon_a=-80.0, lat_b=33.1, lon_b=-80.1)
+
+    response = client.post("/workspace", json={"projects": [far]})
+
+    assert response.status_code == 200
+    pair = {o.overlap_id: o for o in Workspace.model_validate(response.json()).overlaps}[
+        "SUB:GPC_2|SUB-b1-1"
+    ]
+    assert pair.distance_mi == 0.0
+    assert (pair.closest_mi, pair.tier) == (0.0, "crossing")
 
 
 def test_the_same_workspace_request_gets_the_same_ids_every_time(client):

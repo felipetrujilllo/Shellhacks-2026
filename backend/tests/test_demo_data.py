@@ -25,10 +25,10 @@ from test_load import TEST_DATABASE_URL, requires_postgres
 
 from app.config import Settings
 from app.main import create_app
-from app.repository import build_overlap
+from app.repository import ranked_overlaps
 from app.schemas import Project
 from pipeline.load import ENV_PATH, read_project_csv, to_engine_project
-from pipeline.overlap import detect_overlaps, rank_by_score
+from pipeline.overlap import detect_overlaps
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = REPO_ROOT / "backend"
@@ -66,13 +66,10 @@ def engine_overlaps(path: Path):
 
 
 def served_overlaps(path: Path) -> list[dict]:
-    """The engine's overlaps as GET /overlaps serves them (repository.build_overlap, JSON)."""
+    """The engine's overlaps as GET /overlaps serves them (repository.ranked_overlaps, JSON)."""
     rows, overlaps = engine_overlaps(path)
-    projects = {r.project_id: Project.model_validate(vars(r)) for r in rows}
-    return [
-        build_overlap(o, rank, projects).model_dump(mode="json")
-        for rank, o in enumerate(rank_by_score(overlaps), start=1)
-    ]
+    projects = [Project.model_validate(vars(r)) for r in rows]
+    return [o.model_dump(mode="json") for o in ranked_overlaps(overlaps, projects, [])]
 
 
 # --- Offline: smoke.py will pass on projects.csv ------------------------------------------------

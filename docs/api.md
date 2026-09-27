@@ -36,13 +36,19 @@ One flagged cross-utility pair (project centers < 25 mi apart).
 | Field | Type | Notes |
 |-------|------|-------|
 | `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order); `SUB:<project_id_a>\|<project_id_b>` for a pair involving an uploaded project (`POST /workspace` only) |
-| `rank` | integer ≥ 1 | position by descending `score`; 1 = best opportunity |
+| `rank` | integer ≥ 1 | position **tier first** (`crossing` → `shared_land` → `site_logistics` → `crews`), then by descending `score` (ties: smaller `distance_mi`, then `overlap_id`); 1 = best opportunity |
 | `score` | number 0–1 | `0.6·(1 − distance/25) + 0.4·(1 − min(gap, 1825)/1825)` (`pipeline/overlap.py`) |
-| `distance_mi` | number 0–25 | haversine between centers, R = 3958.8 mi, 2 decimals |
+| `distance_mi` | number 0–25 | haversine between centers, R = 3958.8 mi, 2 decimals — the < 25 mi gate that flags the pair |
+| `closest_mi` | number 0–25 | miles between the closest points of the two projects, 2 decimals; `0` when they cross or touch. Each project is its A→B segment, or its center when an endpoint is unknown |
+| `tier` | `"crossing"` \| `"shared_land"` \| `"site_logistics"` \| `"crews"` | Sperry's coordination tier from `closest_mi`: `crossing` = 0, `shared_land` < 1 mi, `site_logistics` < 5 mi, `crews` otherwise |
 | `time_gap_days` | integer ≥ 0 | absolute gap between the two in-service dates |
 | `project_a`, `project_b` | `Project` | the pair, full records |
 | `est_savings_usd` | integer ≥ 0 \| null | rough shared-mobilization savings, whole dollars; null when neither project's cost is known (never invented) |
 | `savings_basis` | string | plain-English explanation of the figure, or why there is none (e.g. "cost redacted in Georgia Power IRP"); shown verbatim in the detail panel |
+
+`closest_mi` and `tier` are derived at request time, not stored (`backend/app/repository.py`,
+with `closest_approach_miles` / `coordination_tier` from `backend/pipeline/overlap.py`). They
+only order pairs: which pairs are flagged is still decided by `distance_mi` < 25.
 
 `est_savings_usd` is derived, not stored (`backend/pipeline/savings.py`):
 `0.05 · known_cost · (1 − 0.9·distance/25) · 0.5^(gap/365)`, where `known_cost` is the
@@ -87,24 +93,26 @@ the uploader's browser and are scored through `POST /workspace`. Response: `Proj
 
 ### `GET /overlaps`
 
-Every flagged pair between published projects, **ranked: `rank` 1 first** (descending
-`score`), from the `project_overlaps` table the batch load writes. Response: `Overlap[]`.
-Pairs involving an upload are only in the `POST /workspace` response.
+Every flagged pair between published projects, **ranked: `rank` 1 first** (tier first, then
+descending `score`), from the `project_overlaps` table the batch load writes. Response:
+`Overlap[]`. Pairs involving an upload are only in the `POST /workspace` response. Abridged
+here to the top two on the sponsor's sample: `OVL_1` scores lower than `OVL_2` but ranks
+first, because the two lines touch at Thurmond (`crossing`).
 
 <!-- example: overlaps -->
 ```json
 [
   {
-    "overlap_id": "OVL_2", "rank": 1, "score": 0.8311, "distance_mi": 5.65, "time_gap_days": 152,
+    "overlap_id": "OVL_1", "rank": 1, "score": 0.5018, "distance_mi": 4.09, "closest_mi": 0.0, "tier": "crossing", "time_gap_days": 3074,
+    "project_a": {"project_id": "DESC_2", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Hooks - Thurmond 115 kV Tie: Rebuild", "name_a": "Hooks Sub", "lat_a": null, "lon_a": null, "name_b": "Thurmond Sub", "lat_b": 33.660127, "lon_b": -82.195931, "lat_center": 33.660127, "lon_center": -82.195931, "in_service_date": "2024-12-31", "est_cost_usd": null, "location_confidence": "confirmed"},
+    "project_b": {"project_id": "GPC_1", "utility": "Georgia Power", "state": "GA", "project_name": "EVANS PRIMARY - THURMOND DAM (USA) #5 115KV REBUILD", "name_a": "EVANS PRIMARY", "lat_a": 33.543994, "lon_a": -82.168648, "name_b": "THURMOND DAM #5", "lat_b": 33.660127, "lon_b": -82.195931, "lat_center": 33.6020605, "lon_center": -82.1822895, "in_service_date": "2033-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
+    "est_savings_usd": null, "savings_basis": "No estimate: neither project has a known cost (the Dominion Energy South Carolina project: no published cost; the Georgia Power project: cost redacted in Georgia Power IRP)."
+  },
+  {
+    "overlap_id": "OVL_2", "rank": 2, "score": 0.8311, "distance_mi": 5.65, "closest_mi": 2.99, "tier": "site_logistics", "time_gap_days": 152,
     "project_a": {"project_id": "DESC_3", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Jasper - Okatie 230 kV #2: Construct", "name_a": "Jasper Sub", "lat_a": 32.35912, "lon_a": -81.1246, "name_b": "Okatie Sub", "lat_b": 32.333758, "lon_b": -81.032495, "lat_center": 32.346439, "lon_center": -81.0785475, "in_service_date": "2025-12-31", "est_cost_usd": 23787423, "location_confidence": "confirmed"},
     "project_b": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
     "est_savings_usd": 709900, "savings_basis": "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's $23,787,423 cost, x0.80 for 5.65 mi apart and x0.75 for 152 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
-  },
-  {
-    "overlap_id": "OVL_3", "rank": 2, "score": 0.7055, "distance_mi": 7.55, "time_gap_days": 517,
-    "project_a": {"project_id": "DESC_3", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Jasper - Okatie 230 kV #2: Construct", "name_a": "Jasper Sub", "lat_a": 32.35912, "lon_a": -81.1246, "name_b": "Okatie Sub", "lat_b": 32.333758, "lon_b": -81.032495, "lat_center": 32.346439, "lon_center": -81.0785475, "in_service_date": "2025-12-31", "est_cost_usd": 23787423, "location_confidence": "confirmed"},
-    "project_b": {"project_id": "GPC_3", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: GOSHEN (SAV) - MCINTOSH 115KV LINE REBUILD", "name_a": "GOSHEN", "lat_a": 32.248701, "lon_a": -81.209472, "name_b": "MCINTOSH", "lat_b": 32.352116, "lon_b": -81.182105, "lat_center": 32.3004085, "lon_center": -81.1957885, "in_service_date": "2027-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
-    "est_savings_usd": 324472, "savings_basis": "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's $23,787,423 cost, x0.73 for 7.55 mi apart and x0.37 for 517 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
   }
 ]
 ```
@@ -116,7 +124,7 @@ One published pair, for the detail panel. Response: `Overlap`. A `SUB:` pair is 
 <!-- example: overlap -->
 ```json
 {
-  "overlap_id": "OVL_2", "rank": 1, "score": 0.8311, "distance_mi": 5.65, "time_gap_days": 152,
+  "overlap_id": "OVL_2", "rank": 2, "score": 0.8311, "distance_mi": 5.65, "closest_mi": 2.99, "tier": "site_logistics", "time_gap_days": 152,
   "project_a": {"project_id": "DESC_3", "utility": "Dominion Energy South Carolina", "state": "SC", "project_name": "Jasper - Okatie 230 kV #2: Construct", "name_a": "Jasper Sub", "lat_a": 32.35912, "lon_a": -81.1246, "name_b": "Okatie Sub", "lat_b": 32.333758, "lon_b": -81.032495, "lat_center": 32.346439, "lon_center": -81.0785475, "in_service_date": "2025-12-31", "est_cost_usd": 23787423, "location_confidence": "confirmed"},
   "project_b": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
   "est_savings_usd": 709900, "savings_basis": "Assumed shared mobilization of 5% of the Dominion Energy South Carolina project's $23,787,423 cost, x0.80 for 5.65 mi apart and x0.75 for 152 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
@@ -160,8 +168,10 @@ each validated like a published one, except `project_id`:
 **200** with `projects` = every published project (as `GET /projects`) followed by the uploads
 in the order sent, and `overlaps` = the published pairs plus every pair involving an upload
 (`SUB:<project_id_a>|<project_id_b>`, computed by the same engine, `pipeline/overlap.py`),
-ranked in one list exactly like `GET /overlaps`, so an upload can take rank 1. Abridged here to
-one project of each kind and the upload's pair:
+ranked in one list exactly like `GET /overlaps`, so an upload can take rank 1. An upload with
+no endpoints is measured from its center for `closest_mi` / `tier`. Abridged here to one
+project of each kind and the upload's closest pair — rank 2, behind the published `OVL_1`
+(`crossing`) despite its higher score:
 
 <!-- example: workspace -->
 ```json
@@ -172,7 +182,7 @@ one project of each kind and the upload's pair:
   ],
   "overlaps": [
     {
-      "overlap_id": "SUB:GPC_2|SUB-3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "rank": 1, "score": 0.9549, "distance_mi": 1.04, "time_gap_days": 92,
+      "overlap_id": "SUB:GPC_2|SUB-3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "rank": 2, "score": 0.9549, "distance_mi": 1.04, "closest_mi": 1.04, "tier": "site_logistics", "time_gap_days": 92,
       "project_a": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
       "project_b": {"project_id": "SUB-3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"},
       "est_savings_usd": 101033, "savings_basis": "Assumed shared mobilization of 5% of the Tidewater Grid Co. project's $2,500,000 cost, x0.96 for 1.04 mi apart and x0.84 for 92 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."

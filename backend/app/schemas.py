@@ -13,10 +13,14 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 # The overlap engine's radius; project_overlaps bounds distance_mi the same way.
-from pipeline.overlap import OVERLAP_RADIUS_MI
+from pipeline.overlap import OVERLAP_RADIUS_MI, TIER_ORDER
 
 Latitude = Annotated[float, Field(ge=-90, le=90)]
 Longitude = Annotated[float, Field(ge=-180, le=180)]
+
+# Sperry's coordination tiers, best first: built from the engine's TIER_ORDER, so the names
+# live in one place (subscripting Literal with a tuple lists each of its items).
+CoordinationTier = Literal[TIER_ORDER]  # type: ignore[valid-type]
 
 
 class Project(BaseModel):
@@ -71,15 +75,21 @@ class Project(BaseModel):
 class Overlap(BaseModel):
     """One flagged cross-utility pair, ranked for the 'top coordination opportunities' list.
 
-    `score`, `distance_mi` and `time_gap_days` mean exactly what the overlap engine
-    (pipeline/overlap.py) computes; `rank` is the 1-based position by descending score.
-    `est_savings_usd` / `savings_basis` are derived by pipeline/savings.py (not stored).
+    `score`, `distance_mi`, `time_gap_days`, `closest_mi` and `tier` mean exactly what the
+    overlap engine (pipeline/overlap.py) computes; `rank` is the 1-based position tier first
+    (crossing -> shared_land -> site_logistics -> crews), then by descending score.
+    `closest_mi` / `tier` and `est_savings_usd` / `savings_basis` are derived at request time
+    (app/repository.py, pipeline/savings.py), never stored.
     """
 
     overlap_id: str = Field(min_length=1)
     rank: int = Field(ge=1)
     score: float = Field(ge=0, le=1)
     distance_mi: float = Field(ge=0, le=OVERLAP_RADIUS_MI)
+    # Miles between the closest points of the two projects (A->B segment, or center when an
+    # endpoint is unknown); orders pairs only — the 25 mi center gate still flags them.
+    closest_mi: float = Field(ge=0, le=OVERLAP_RADIUS_MI)
+    tier: CoordinationTier
     time_gap_days: int = Field(ge=0)
     project_a: Project
     project_b: Project

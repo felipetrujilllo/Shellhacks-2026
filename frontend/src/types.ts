@@ -3,6 +3,9 @@
 
 export type LocationConfidence = 'confirmed' | 'low'
 
+/** Sperry's coordination tier, best first (backend: TIER_ORDER in pipeline/overlap.py). */
+export type CoordinationTier = 'crossing' | 'shared_land' | 'site_logistics' | 'crews'
+
 export interface Project {
   project_id: string
   utility: string
@@ -26,10 +29,13 @@ export interface Project {
 
 export interface Overlap {
   overlap_id: string
-  /** 1 = best opportunity. */
+  /** 1 = best opportunity: tier first, then by descending score. */
   rank: number
   score: number
   distance_mi: number
+  /** Miles between the projects' closest points (segment, or center without endpoints). */
+  closest_mi: number
+  tier: CoordinationTier
   time_gap_days: number
   project_a: Project
   project_b: Project
