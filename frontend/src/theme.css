@@ -103,6 +103,7 @@
   --color-sidebar-scrollbar: color-mix(in srgb, var(--palette-white) 20%, transparent); /* sidebar list scrollbar thumb */
   --color-sidebar-list-caption: #d9dce0; /* sidebar list caption count */
   --color-sidebar-card-bg: color-mix(in srgb, var(--palette-white) 4%, transparent); /* sidebar opportunity and import batch cards */
+  --color-swatch-ring: #0000; /* ring around the utility swatch dots in the sidebar card (--shadow-swatch-ring): none (fully transparent) here, the dots already reach 3:1 on the grey card */
   --color-sidebar-card-border: color-mix(in srgb, var(--palette-white) 8%, transparent); /* sidebar card borders and the divider inside opportunity cards */
   --color-sidebar-card-hover-bg: color-mix(in srgb, var(--palette-white) 8%, transparent); /* sidebar opportunity card hover background */
   --color-sidebar-card-hover-border: color-mix(in srgb, var(--palette-white) 19%, transparent); /* sidebar opportunity card hover border */
@@ -161,6 +162,7 @@
   --color-floating-shadow: #0003; /* unused since #46 (the notice and selection panel now cast --shadow-panel); kept because theme.test.ts pins the pre-#45 dark token set */
   --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* navy at 2% over white: selection panel and upload dialog background */
   --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* navy at 17% over white: selection panel border */
+  --color-panel-swatch-ring: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: ring around the utility swatch dots on the light selection/detail panel (--shadow-panel-swatch-ring), in both themes; at least 3:1 on the panel and against every dot fill */
   --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel heading; at least 4.5:1 on the panel */
   --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel project meta line; at least 4.5:1 on the panel */
   --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: emphasized value in the selection panel meta line */
@@ -200,9 +202,9 @@
   --color-utility-other: #22d3ee; /* projects of any other utility (e.g. uploaded proposals), cyan: not green, and apart from the blue, red, amber and violet lines */
   --color-overlap: #f59e0b; /* dashed overlap connectors and their legend swatch */
   --color-overlap-selected: #c4b5fd; /* the selected overlap connector and its legend swatch */
-  --color-point-stroke: #ffffff; /* outline of confirmed single-point projects */
+  --color-point-stroke: #ffffff; /* outline of confirmed single-point projects on the dark and satellite basemaps (basemaps.ts pointStroke) */
   --color-legend-low-confidence: #cbd5e1; /* neutral low-confidence legend swatch */
-  --color-halo-dark: #020617; /* casing under project lines and connectors on the dark and light vector basemaps (basemaps.ts) */
+  --color-halo-dark: #020617; /* casing under project lines and connectors on the dark and light vector basemaps, and the outline of single-point projects on the light basemap: the one dark casing color (basemaps.ts) */
   --color-halo-light: #ffffff; /* casing under project lines and connectors on the satellite basemap */
 }
 
@@ -263,6 +265,7 @@
   --color-sidebar-scrollbar: color-mix(in srgb, var(--palette-navy) 22%, transparent); /* navy at 22%: sidebar list scrollbar thumb */
   --color-sidebar-list-caption: color-mix(in srgb, var(--palette-navy) 78%, var(--palette-white)); /* navy at 78% over white: sidebar list caption count */
   --color-sidebar-card-bg: color-mix(in srgb, var(--palette-navy) 2%, transparent); /* navy at 2%: sidebar opportunity and import batch cards */
+  --color-swatch-ring: var(--color-panel-swatch-ring); /* ring around the utility swatch dots on the white card (--shadow-swatch-ring): the panel swatches' navy ring, since the dots alone are under 3:1 on white */
   --color-sidebar-card-border: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar card borders and the divider inside opportunity cards */
   --color-sidebar-card-hover-bg: color-mix(in srgb, var(--palette-navy) 5%, transparent); /* navy at 5%: sidebar opportunity card hover background */
   --color-sidebar-card-hover-border: color-mix(in srgb, var(--palette-navy) 30%, transparent); /* navy at 30%: sidebar opportunity card hover border */
@@ -321,6 +324,7 @@
   --color-floating-shadow: #0003; /* same as dark */
   --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* same as dark */
   --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* same as dark */
+  --color-panel-swatch-ring: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* same as dark */
   --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
   --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
   --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* same as dark */
@@ -371,6 +375,8 @@
   --radius-lg: 16px; /* floating panels: sidebar card, selection/detail panel, notice, upload dialog, map toolbar controls, legend popover, map tooltip */
   --shadow-panel: 0 18px 50px var(--color-sidebar-shadow), 0 2px 8px var(--color-sidebar-shadow-near); /* floating panels: sidebar card (plus its inset highlight), selection/detail panel, notice, upload dialog, legend popover, map tooltip */
   --shadow-control: 0 4px 14px var(--color-sidebar-shadow-near), 0 1px 3px var(--color-sidebar-shadow-near); /* floating map controls: basemap picker, Fit to data, Legend button, map context chip, and the pressed basemap button */
+  --shadow-swatch-ring: 0 0 0 1px var(--color-swatch-ring); /* 1px ring hugging the utility swatch dots in the sidebar card: filters, opportunity cards, project rows, upload batches (#47) */
+  --shadow-panel-swatch-ring: 0 0 0 1px var(--color-panel-swatch-ring); /* 1px ring hugging the utility swatch dots on the selection/detail panel (#47) */
   --blur-panel: 12px; /* backdrop blur behind the translucent map surfaces: toolbar controls, legend popover, tooltip, map context chip */
   --space-1: 4px; /* basemap picker padding and gap (its inner buttons' md radius sits inside its lg radius) */
   --space-2: 8px; /* map toolbar gap, legend popover offset, map context chip gap and vertical padding */

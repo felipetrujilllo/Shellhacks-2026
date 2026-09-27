@@ -25,6 +25,7 @@ import {
   OVERLAP_COLOR,
   OVERLAP_DASH,
   OVERLAP_LINE_WIDTH,
+  POINT_STROKE_COLORS,
   PROJECT_LINES_ID,
   PROJECT_LOW_LINES_ID,
   PROJECT_POINTS_ID,
@@ -66,6 +67,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
   const hoveredProject = projects.find((p) => p.project_id === hoveredId)
   const bounds = useMemo(() => dataBounds(projects), [projects])
   const haloColor = BASEMAPS[basemap].halo === 'dark' ? HALO_COLOR_DARK : HALO_COLOR_LIGHT
+  const pointStrokeColor = POINT_STROKE_COLORS[BASEMAPS[basemap].pointStroke]
 
   function fitData() {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 11, duration: 600 })
@@ -102,6 +104,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
   const project = projectLayers(
     selectedOverlap ? [selectedOverlap.project_a.project_id, selectedOverlap.project_b.project_id] : null,
     haloColor,
+    pointStrokeColor,
   )
   const overlapOpacity: ExpressionSpecification = selectedOverlap
     ? ['case', ['==', ['get', 'overlap_id'], selected], 1, 0.2]
@@ -162,6 +165,7 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
           <Layer {...project.casing} />
           <Layer {...project.lines} />
           <Layer {...project.lowLines} />
+          <Layer {...project.lowPointRing} />
           <Layer {...project.points} />
         </Source>
         <Source id="overlaps" type="geojson" data={overlapData}>

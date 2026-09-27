@@ -12,8 +12,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import BasemapToggle from './components/BasemapToggle'
 import { BASEMAPS } from './components/basemaps'
 import MapLegend from './components/MapLegend'
+import OverlapDetail from './components/OverlapDetail'
+import { HALO_COLOR_DARK, POINT_STROKE_COLORS, projectLayers } from './components/mapStyle'
 import { projectsToGeoJSON } from './geo'
 import { THEME_STORAGE_KEY, applyTheme, currentTheme, getInitialTheme, storeTheme, themeColor, type Theme } from './theme'
+import { makeOverlaps } from './test/overlapFixtures'
 import type { Project } from './types'
 
 // Path-based on purpose: jsdom replaces the global URL, which node:fs rejects.
@@ -557,9 +560,13 @@ describe('dark theme unchanged by #45', () => {
     expect(Object.keys(DARK_BEFORE_45)).toHaveLength(133)
   })
 
-  it('adds only the sidebar accent tokens, which resolve to the gold accent the sidebar painted before', () => {
+  it('adds only the sidebar accent tokens, which resolve to the gold accent the sidebar painted before (and, since #47, the swatch rings)', () => {
     const added = [...darkDeclarations.keys()].filter((name) => !(name in DARK_BEFORE_45))
-    expect(added).toEqual(['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border'])
+    // #47 added the two utility swatch ring tokens after #45; 'utility swatch rings (#47)' checks them
+    // (the sidebar ring is transparent in the dark theme, so the sidebar looks as before).
+    const swatchRings47 = ['--color-swatch-ring', '--color-panel-swatch-ring']
+    expect(added.filter((name) => swatchRings47.includes(name)).sort()).toEqual([...swatchRings47].sort())
+    expect(added.filter((name) => !swatchRings47.includes(name))).toEqual(['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border'])
     expect(darkDeclarations.get('--color-sidebar-accent-text')?.value).toBe('var(--color-accent)')
     expect(darkDeclarations.get('--color-sidebar-accent-line')?.value).toBe('var(--color-accent)')
     expect(darkDeclarations.get('--color-sidebar-accent-border')?.value).toBe('var(--color-accent-border)')
@@ -573,6 +580,136 @@ describe('dark theme unchanged by #45', () => {
     for (const token of ['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border']) {
       expect(css, token).toContain(`var(${token})`)
     }
+  })
+})
+
+// #47: points and utility swatches on light backgrounds. The utility colors stay as they are (they are
+// the legend, and they work on dark); an outline that contrasts with the background does the work.
+// CARTO Positron's land color: the stand-in background for the light basemap. Not a theme token: the
+// basemap draws it, the app never paints it.
+const POSITRON_BG = '#f2f3f0'
+const UTILITY_DOTS = ['--color-utility-desc', '--color-utility-gpc', '--color-utility-other']
+
+describe('point outline on each basemap (#47)', () => {
+  const point = (location_confidence: Project['location_confidence'], utility: string): Project =>
+    ({ ...projectFixture, utility, lat_b: null, lon_b: null, location_confidence })
+  const utilities = ['Dominion Energy South Carolina', 'Georgia Power', 'Santee Cooper'] // DESC, GPC, other
+  /** The layers ProjectMap draws on `basemap`: the outline is that basemap's pointStroke color. */
+  const layersOn = (basemap: keyof typeof BASEMAPS) => projectLayers(null, HALO_COLOR_DARK, POINT_STROKE_COLORS[BASEMAPS[basemap].pointStroke])
+  /** `layer`'s stroke over `bg` for `project`, as drawn: color times stroke opacity. */
+  function strokeOver(layer: ReturnType<typeof projectLayers>['points'], project: Project, bg: Rgba): Rgba {
+    const paint = (layer as { paint: Record<string, unknown> }).paint
+    const color = circlePaint(paint['circle-stroke-color'], 'circle-stroke-color', project) as Color
+    const opacity = circlePaint(paint['circle-stroke-opacity'], 'circle-stroke-opacity', project) as number
+    const rgba = colorToRgba(color)
+    return composite([bg, { ...rgba, a: rgba.a * opacity }])
+  }
+
+  it('outlines confirmed points at least 3:1 against Positron, with the one dark casing color, and keeps white on Dark Matter and satellite', () => {
+    const positron = parseColor(POSITRON_BG)
+    for (const utility of utilities) {
+      const stroke = strokeOver(layersOn('light').points, point('confirmed', utility), positron)
+      expect(contrast(stroke, positron), utility).toBeGreaterThanOrEqual(3)
+      expectColor(stroke, resolveToken('--color-halo-dark'), 6, utility)
+      for (const basemap of ['dark', 'satellite'] as const) {
+        expectColor(strokeOver(layersOn(basemap).points, point('confirmed', utility), positron), resolveToken('--color-point-stroke'), 6, `${basemap} ${utility}`)
+      }
+    }
+    // White really is unreadable on Positron (1.1:1): the reason for the dark outline there.
+    expect(contrast(resolveToken('--color-point-stroke'), positron)).toBeLessThan(3)
+    // And white on Dark Matter (--color-map-bg stands in for its near-black land) is unchanged and well above 3:1.
+    expect(contrast(resolveToken('--color-point-stroke'), resolveToken('--color-map-bg'))).toBeGreaterThanOrEqual(3)
+  })
+
+  it('rings low-confidence points at least 3:1 against Positron, outside their faded utility-colored stroke', () => {
+    const positron = parseColor(POSITRON_BG)
+    const { points, lowPointRing } = layersOn('light')
+    expect((lowPointRing as { layout?: { visibility?: string } }).layout?.visibility).toBe('visible')
+    for (const utility of utilities) {
+      const low = point('low', utility)
+      // Their own stroke (the utility color, faded) is under 3:1 on Positron: the reason for the ring.
+      const own = strokeOver(points, low, positron)
+      expect(contrast(own, positron), utility).toBeLessThan(3)
+      // The ring, drawn just outside that stroke, is the dark outline at full opacity.
+      const ring = strokeOver(lowPointRing, low, positron)
+      expect(contrast(ring, positron), utility).toBeGreaterThanOrEqual(3)
+      expectColor(ring, resolveToken('--color-halo-dark'), 6, utility)
+      // The ring edge stays visible against the utility-colored stroke it wraps.
+      expect(contrast(ring, own), utility).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
+
+describe('utility swatch rings (#47)', () => {
+  // Where each swatch dot sits. Sidebar dots (filters, opportunity cards, project rows, upload batches)
+  // sit on the sidebar card; panel dots (selection panel, OverlapDetail) on the selection panel.
+  const SIDEBAR_SWATCHES = ['.utility-filters label i', '.project-pair i', '.project-row>i', '.batch-card>i']
+  const PANEL_SWATCHES = ['.selection-project>i']
+  // Layers bottom to top behind a sidebar dot: the card, its opportunity/batch cards (plain, hovered,
+  // selected) and the project rows' hover.
+  const SIDEBAR_BACKGROUNDS = [
+    [SIDEBAR],
+    [SIDEBAR, '--color-sidebar-card-bg'],
+    [SIDEBAR, '--color-sidebar-card-hover-bg'],
+    [SIDEBAR, '--color-accent-wash'],
+    [SIDEBAR, '--color-sidebar-row-hover'],
+  ]
+  const PANEL_BACKGROUNDS = [['--color-panel-bg']]
+
+  it('rings every sidebar dot with --shadow-swatch-ring and every panel dot with --shadow-panel-swatch-ring, each a 1px ring in its color token', () => {
+    for (const selector of SIDEBAR_SWATCHES) expect(workspaceDeclarations(selector).get('box-shadow'), selector).toBe('var(--shadow-swatch-ring)')
+    for (const selector of PANEL_SWATCHES) expect(workspaceDeclarations(selector).get('box-shadow'), selector).toBe('var(--shadow-panel-swatch-ring)')
+    const shapes = shapeTokens()
+    expect(shapes.get('--shadow-swatch-ring')?.value).toBe('0 0 0 1px var(--color-swatch-ring)')
+    expect(shapes.get('--shadow-panel-swatch-ring')?.value).toBe('0 0 0 1px var(--color-panel-swatch-ring)')
+    // Every dot is a 7px circle, so the ring is a circle too (the upload batch dot had no size before #47).
+    for (const selector of [...SIDEBAR_SWATCHES, ...PANEL_SWATCHES]) {
+      const decls = workspaceDeclarations(selector)
+      expect([decls.get('width'), decls.get('height'), decls.get('border-radius')], selector).toEqual(['7px', '7px', '50%'])
+    }
+    expect(workspaceDeclarations('.batch-card>i').get('display')).toBe('block')
+  })
+
+  it('renders OverlapDetail\'s swatch dots where the panel ring applies', () => {
+    const { container } = render(createElement(OverlapDetail, { overlap: makeOverlaps(1)[0], onClose: () => {} }))
+    const dots = [...container.querySelectorAll('i')].filter((i) => i.style.background)
+    expect(dots).toHaveLength(2)
+    for (const dot of dots) expect(dot.matches(PANEL_SWATCHES.join(','))).toBe(true)
+  })
+
+  it('in the dark theme, leaves the sidebar dots exactly as before: no ring, and the dots alone reach 3:1 on the grey card', () => {
+    expect(resolveToken('--color-swatch-ring', 'dark').a).toBe(0)
+    for (const dot of UTILITY_DOTS) expect(pairContrast(dot, [SIDEBAR], 'dark'), dot).toBeGreaterThanOrEqual(3)
+  })
+
+  it('in the light theme, rings the sidebar dots at least 3:1 against every background they sit on and against every dot fill', () => {
+    expect(resolveToken('--color-swatch-ring', 'light').a).toBe(1)
+    for (const bg of SIDEBAR_BACKGROUNDS) {
+      expect(pairContrast('--color-swatch-ring', bg, 'light'), bg.join(' + ')).toBeGreaterThanOrEqual(3)
+      // The dots alone are under 3:1 on the white card (the other-utility cyan is 1.8:1): the reason for the ring.
+      expect(Math.min(...UTILITY_DOTS.map((dot) => pairContrast(dot, bg, 'light'))), bg.join(' + ')).toBeLessThan(3)
+    }
+    for (const dot of UTILITY_DOTS) {
+      expect(contrast(resolveToken('--color-swatch-ring', 'light'), resolveToken(dot, 'light')), dot).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it.each(THEMES)('in the %s theme, rings the panel dots at least 3:1 against the light panel and against every dot fill', (theme) => {
+    // The selection/detail panel is light in both themes, where the dots alone are under 3:1.
+    for (const bg of PANEL_BACKGROUNDS) {
+      expect(pairContrast('--color-panel-swatch-ring', bg, theme), bg.join(' + ')).toBeGreaterThanOrEqual(3)
+      expect(Math.min(...UTILITY_DOTS.map((dot) => pairContrast(dot, bg, theme)))).toBeLessThan(3)
+    }
+    for (const dot of UTILITY_DOTS) {
+      expect(contrast(resolveToken('--color-panel-swatch-ring', theme), resolveToken(dot, theme)), dot).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('leaves the map legend alone: its swatches sit on the dark slate legend panel in both themes', () => {
+    render(createElement(MapLegend))
+    const panel = screen.getByText('Coordination opportunity').closest('.map-legend-panel')
+    expect(panel?.className).toMatch(/(?:^|\s)bg-slate-950\/95(?:\s|$)/)
+    expect(panel?.className).not.toMatch(/(?:^|\s)(?:dark|light):/) // no theme variant: the same panel in both themes
   })
 })
 
@@ -864,6 +1001,9 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'sidebar secondary button text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-bg'], min: 4.5 },
   { name: 'sidebar project row hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-row-hover'], min: 4.5 },
   { name: 'sidebar hovered card text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-card-hover-bg'], min: 4.5 },
+  // #47: the ring around the utility swatch dots on the selection/detail panel, light in both themes.
+  // The sidebar card's ring is transparent in the dark theme by design: see 'utility swatch rings (#47)'.
+  { name: 'utility swatch ring on the selection/detail panel', fg: '--color-panel-swatch-ring', bg: ['--color-panel-bg'], min: 3 },
 ]
 
 type Rgba = { r: number; g: number; b: number; a: number } // channels 0-255, alpha 0-1
@@ -982,6 +1122,20 @@ const projectFixture: Project = {
   location_confidence: 'confirmed',
 }
 
+/** Evaluate a circle paint value (`prop`) for `project`'s map feature with MapLibre's own evaluator. */
+function circlePaint(value: unknown, prop: string, project: Project): unknown {
+  const feature = projectsToGeoJSON([project]).features[0]
+  const spec = (latest as unknown as Record<string, Record<string, never>>).paint_circle[prop]
+  const expr = normalizePropertyExpression(value as never, prop, spec)
+  return expr.evaluate({ zoom: 8 }, { type: feature.geometry.type, properties: feature.properties })
+}
+
+/** A MapLibre Color (premultiplied channels, 0-1) as this file's Rgba. */
+function colorToRgba(color: Color): Rgba {
+  const unpremultiply = (c: number) => (color.a === 0 ? 0 : (c / color.a) * 255)
+  return { r: unpremultiply(color.r), g: unpremultiply(color.g), b: unpremultiply(color.b), a: color.a }
+}
+
 /** Evaluate a line-color paint value for `project`'s map feature with MapLibre's own evaluator. */
 function lineColor(value: unknown, project: Project): string {
   const feature = projectsToGeoJSON([project]).features[0]
@@ -1046,6 +1200,7 @@ describe('shape tokens (#46)', () => {
     expect([...tokens.keys()]).toEqual([
       '--radius-sm', '--radius-md', '--radius-lg',
       '--shadow-panel', '--shadow-control',
+      '--shadow-swatch-ring', '--shadow-panel-swatch-ring', // #47: the 1px ring around utility swatch dots
       '--blur-panel',
       '--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6',
     ])
@@ -1074,7 +1229,10 @@ describe('shape tokens (#46)', () => {
 
   it('builds shadows from offsets, blur and theme.css color tokens only, so each theme keeps its own shadow colors', () => {
     const tokens = shapeTokens()
-    for (const name of ['--shadow-panel', '--shadow-control']) {
+    // Every shadow token (#47 added the swatch rings), not just the two #46 started with.
+    const shadows = [...tokens.keys()].filter((name) => name.startsWith('--shadow-'))
+    expect(shadows).toEqual(expect.arrayContaining(['--shadow-panel', '--shadow-control']))
+    for (const name of shadows) {
       const value = tokens.get(name)?.value ?? ''
       expect(value.replace(/var\(--[\w-]+\)/g, '').match(COLOR_LITERAL), name).toBeNull()
       for (const layer of splitTopLevel(value)) {

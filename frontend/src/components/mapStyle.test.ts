@@ -14,7 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OTHER_UTILITY_COLOR, UTILITY_COLORS, utilityColor } from '../colors'
 import { projectsToGeoJSON } from '../geo'
 import type { LocationConfidence, Project } from '../types'
-import { LOW_CONFIDENCE_DASH, OVERLAP_DASH, projectLayers, utilityColorExpression } from './mapStyle'
+import { BASEMAPS, type BasemapId } from './basemaps'
+import { LOW_CONFIDENCE_DASH, OVERLAP_DASH, POINT_STROKE_COLORS, projectLayers, utilityColorExpression } from './mapStyle'
 
 type Feature = ReturnType<typeof projectsToGeoJSON>['features'][number]
 type LayerType = 'line' | 'circle'
@@ -154,6 +155,74 @@ describe('projectLayers: low-confidence styling', () => {
       version: 8 as const,
       sources: { projects: { type: 'geojson' as const, data: { type: 'FeatureCollection' as const, features: [] } } },
       layers: [casing, lines, lowLines, points].map((l) => ({ ...l, source: 'projects' }) as LayerSpecification),
+    }
+    expect(validateStyleMin(style)).toEqual([])
+  })
+})
+
+describe('projectLayers: point outline per basemap (#47)', () => {
+  // The colors ProjectMap passes: the basemap's pointStroke tone, resolved by POINT_STROKE_COLORS.
+  const layersFor = (id: BasemapId, selectedPair: readonly string[] | null = null) =>
+    projectLayers(selectedPair, '#020617', POINT_STROKE_COLORS[BASEMAPS[id].pointStroke])
+  // Today's white on Dark Matter and satellite; --color-halo-dark on Positron (theme.test.ts: 18:1 there).
+  const EXPECTED_OUTLINE: Record<BasemapId, string> = { dark: '#ffffff', light: '#020617', satellite: '#ffffff' }
+  const RING_VISIBILITY: Record<BasemapId, string> = { dark: 'none', light: 'visible', satellite: 'none' }
+  const IDS = Object.keys(BASEMAPS) as BasemapId[]
+
+  const confirmedPoint = featureOf(project('POINT_OK', 'confirmed', { lat_b: null, lon_b: null }))
+  const lowPoint = featureOf(project('POINT_LOW', 'low', { lat_b: null, lon_b: null }))
+  const lowLine = featureOf(project('LINE_LOW', 'low'))
+  const color = (hex: string) => Color.parse(hex)!.toString()
+
+  it.each(IDS)('%s: outlines confirmed points in the basemap\'s outline color', (id) => {
+    const { points } = layersFor(id)
+    expect(paint(points, 'circle-stroke-color', confirmedPoint)).toBe(color(EXPECTED_OUTLINE[id]))
+    // Low-confidence points keep their utility-colored stroke on every basemap.
+    expect(paint(points, 'circle-stroke-color', lowPoint)).toBe(color(UTILITY_COLORS['Georgia Power']))
+  })
+
+  it.each(IDS)('%s: rings low-confidence points in the outline color only on the light basemap', (id) => {
+    const { lowPointRing, points } = layersFor(id)
+    expect((lowPointRing.layout as { visibility?: string } | undefined)?.visibility).toBe(RING_VISIBILITY[id])
+    expect(paint(lowPointRing, 'circle-stroke-color', lowPoint)).toBe(color(EXPECTED_OUTLINE[id]))
+    // Only low-confidence points get the ring, never confirmed points or lines.
+    expect(matches(lowPointRing, lowPoint)).toBe(true)
+    expect(matches(lowPointRing, confirmedPoint)).toBe(false)
+    expect(matches(lowPointRing, lowLine)).toBe(false)
+    // A ring, not a disc: no fill, and it starts where the point's own stroke ends (strokes sit outside circle-radius).
+    expect(paint(lowPointRing, 'circle-opacity', lowPoint)).toBe(0)
+    expect(paint(lowPointRing, 'circle-radius', lowPoint))
+      .toBe((paint(points, 'circle-radius', lowPoint) as number) + (paint(points, 'circle-stroke-width', lowPoint) as number))
+    expect(paint(lowPointRing, 'circle-stroke-width', lowPoint)).toBeGreaterThan(0)
+    // Not faded like the utility stroke: it is what carries the 3:1 on Positron.
+    expect(paint(lowPointRing, 'circle-stroke-opacity', lowPoint)).toBe(1)
+  })
+
+  it('keeps low-confidence points visibly different from confirmed ones on the light basemap', () => {
+    const { lowPointRing, points } = layersFor('light')
+    const confirmed = styleOf([points], confirmedPoint, CIRCLE_PROPS)
+    const low = styleOf([points], lowPoint, CIRCLE_PROPS)
+    expect(low['circle-opacity']).toBeLessThan(confirmed['circle-opacity'] as number) // faded, nearly hollow fill
+    expect(low['circle-stroke-color']).not.toBe(confirmed['circle-stroke-color']) // utility color vs dark outline
+    expect(low['circle-stroke-width']).not.toBe(confirmed['circle-stroke-width'])
+    expect(low['circle-stroke-opacity']).toBeLessThan(confirmed['circle-stroke-opacity'] as number)
+    // Confirmed points have no extra ring.
+    expect(matches(lowPointRing, confirmedPoint)).toBe(false)
+  })
+
+  it('dims the ring with the rest of a project outside the selected pair', () => {
+    const { lowPointRing } = layersFor('light', ['POINT_OK'])
+    expect(paint(lowPointRing, 'circle-stroke-opacity', lowPoint)).toBeLessThan(1)
+    const selected = layersFor('light', ['POINT_LOW'])
+    expect(paint(selected.lowPointRing, 'circle-stroke-opacity', lowPoint)).toBe(1)
+  })
+
+  it.each(IDS)('%s: is a valid MapLibre style with the ring layer', (id) => {
+    const { casing, lines, lowLines, lowPointRing, points } = layersFor(id)
+    const style = {
+      version: 8 as const,
+      sources: { projects: { type: 'geojson' as const, data: { type: 'FeatureCollection' as const, features: [] } } },
+      layers: [casing, lines, lowLines, lowPointRing, points].map((l) => ({ ...l, source: 'projects' }) as LayerSpecification),
     }
     expect(validateStyleMin(style)).toEqual([])
   })

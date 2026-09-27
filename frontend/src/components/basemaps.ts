@@ -19,16 +19,20 @@ export const SATELLITE_STYLE: StyleSpecification = {
   },
   layers: [{ id: 'esri-imagery', type: 'raster', source: 'esri-imagery' }],
 }
+/** A casing tone: 'dark' or 'light' (mapStyle.ts has the colors). */
+export type Tone = 'dark' | 'light'
 /**
  * Every basemap. `halo` is the casing color drawn under project lines and overlap connectors:
  * dark on both vector styles (on the near-white light style it is what keeps the lines at 3:1),
- * light on satellite imagery.
+ * light on satellite imagery. `pointStroke` outlines single-point projects (#47): white on Dark
+ * Matter and satellite, as before; dark on Positron, where white is 1.1:1 against the land. On
+ * a dark outline, low-confidence points get it as an outer ring too (mapStyle.ts).
  */
-export const BASEMAPS: Record<BasemapId, { label: string; style: string | StyleSpecification; halo: 'dark' | 'light' }> = {
-  dark: { label: 'Dark', style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', halo: 'dark' },
+export const BASEMAPS: Record<BasemapId, { label: string; style: string | StyleSpecification; halo: Tone; pointStroke: Tone }> = {
+  dark: { label: 'Dark', style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', halo: 'dark', pointStroke: 'light' },
   // CARTO Positron: free, no key, and the same vector tiles as Dark Matter.
-  light: { label: 'Light', style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', halo: 'dark' },
-  satellite: { label: 'Satellite', style: SATELLITE_STYLE, halo: 'light' },
+  light: { label: 'Light', style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', halo: 'dark', pointStroke: 'dark' },
+  satellite: { label: 'Satellite', style: SATELLITE_STYLE, halo: 'light', pointStroke: 'light' },
 }
 
 // Each theme's own vector basemap: the one in the "Dark" slot of the basemap picker.

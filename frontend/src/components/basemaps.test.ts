@@ -35,6 +35,7 @@ describe('basemaps per theme (#45)', () => {
       label: 'Light',
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       halo: 'dark',
+      pointStroke: 'dark', // #47: dark point outline on the near-white style (see 'point outline per basemap')
     })
   })
 
@@ -71,6 +72,14 @@ describe('basemaps per theme (#45)', () => {
     expect(BASEMAPS.dark.halo).toBe('dark')
     expect(BASEMAPS.light.halo).toBe('dark')
     expect(BASEMAPS.satellite.halo).toBe('light')
+  })
+})
+
+describe('point outline per basemap (#47)', () => {
+  it('outlines points white on Dark Matter and satellite, as before, and dark on Positron', () => {
+    // mapStyle.test.ts checks the colors projectLayers draws from these; theme.test.ts the ratios.
+    expect(Object.fromEntries(Object.entries(BASEMAPS).map(([id, b]) => [id, b.pointStroke])))
+      .toEqual({ dark: 'light', light: 'dark', satellite: 'light' })
   })
 })
 

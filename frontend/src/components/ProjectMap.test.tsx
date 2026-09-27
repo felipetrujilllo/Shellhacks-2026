@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import { Color, latest, normalizePropertyExpression } from '@maplibre/maplibre-gl-style-spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Theme } from '../theme'
 import ProjectMap from './ProjectMap'
 import { BASEMAPS } from './basemaps'
-import { HALO_COLOR_DARK, HALO_COLOR_LIGHT } from './mapStyle'
+import { HALO_COLOR_DARK, HALO_COLOR_LIGHT, POINT_STROKE_COLOR } from './mapStyle'
 
 // Props of every <Layer> rendered, in order (the MapLibre boundary is mocked below).
-const layers = vi.hoisted(() => ({ rendered: [] as { id: string; paint?: Record<string, unknown> }[] }))
+type RenderedLayer = { id: string; paint?: Record<string, unknown>; layout?: Record<string, unknown> }
+const layers = vi.hoisted(() => ({ rendered: [] as RenderedLayer[] }))
 
 // jsdom has no WebGL: replace only the MapLibre boundary. ProjectMap, BasemapToggle and
 // MapLegend stay real, so the map's own controls are exercised as rendered.
@@ -19,10 +21,17 @@ vi.mock('react-map-gl/maplibre', () => ({
   NavigationControl: () => null,
   AttributionControl: () => null,
   Source: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Layer: (props: { id: string; paint?: Record<string, unknown> }) => { layers.rendered.push(props); return null },
+  Layer: (props: RenderedLayer) => { layers.rendered.push(props); return null },
 }))
 vi.mock('maplibre-gl', () => ({ setWorkerUrl: vi.fn() }))
 vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: '' }))
+
+/** The layers of the latest render, by id. */
+function latestLayers() {
+  const last = new Map<string, RenderedLayer>()
+  for (const layer of layers.rendered) last.set(layer.id, layer)
+  return last
+}
 
 function renderMap(theme: Theme = 'dark') {
   return render(<ProjectMap projects={[]} overlaps={[]} selectedId={null} onSelect={() => {}} focusedProject={null} theme={theme} />)
@@ -55,13 +64,9 @@ describe('ProjectMap follows the theme (#45)', () => {
   const mapStyle = () => screen.getByTestId('maplibre').getAttribute('data-map-style')
   const picker = () => screen.getByRole('group', { name: 'Basemap' })
   const pickerLabels = () => within(picker()).getAllByRole('button').map((b) => b.textContent)
-  /** The layers of the latest render, by id. */
-  function latestLayers() {
-    const last = new Map<string, { id: string; paint?: Record<string, unknown> }>()
-    for (const layer of layers.rendered) last.set(layer.id, layer)
-    return last
-  }
-  const ALL_LAYERS = ['project-casing', 'project-lines', 'project-lines-low', 'project-points', 'overlap-casing', 'overlap-lines']
+  // #47 added 'project-points-low-ring' (the dark ring around low-confidence points on the light
+  // basemap, hidden on the others), under the points so their own stroke draws on top of it.
+  const ALL_LAYERS = ['project-casing', 'project-lines', 'project-lines-low', 'project-points-low-ring', 'project-points', 'overlap-casing', 'overlap-lines']
 
   it('in the dark theme, shows Dark Matter with the dark casing and offers Dark and Satellite, as before', () => {
     renderMap('dark')
@@ -110,5 +115,65 @@ describe('ProjectMap follows the theme (#45)', () => {
 
     fireEvent.click(within(picker()).getByRole('button', { name: 'Light' }))
     expect(mapStyle()).toBe(BASEMAPS.light.style)
+  })
+})
+
+describe('ProjectMap point outline follows the basemap (#47)', () => {
+  beforeEach(() => { layers.rendered = [] })
+
+  const picker = () => screen.getByRole('group', { name: 'Basemap' })
+  /** The latest render's point outline: the confirmed point's circle-stroke-color, evaluated by MapLibre's own evaluator. */
+  function confirmedPointStroke() {
+    const value = latestLayers().get('project-points')?.paint?.['circle-stroke-color']
+    const spec = (latest as unknown as Record<string, Record<string, never>>).paint_circle['circle-stroke-color']
+    const feature = { type: 'Point' as const, properties: { utility: 'Georgia Power', location_confidence: 'confirmed' } }
+    const result = normalizePropertyExpression(value as never, 'circle-stroke-color', spec).evaluate({ zoom: 8 }, feature)
+    return (result as Color).toString()
+  }
+  const colorOf = (hex: string) => Color.parse(hex)!.toString()
+  /** The low-confidence ring as rendered: its color, and whether MapLibre draws it. */
+  function lowRing() {
+    const ring = latestLayers().get('project-points-low-ring')
+    return { color: ring?.paint?.['circle-stroke-color'], visibility: ring?.layout?.visibility }
+  }
+
+  it('outlines points white on Dark Matter, dark on Positron, and white on satellite, with the low-confidence ring only on Positron', () => {
+    const props = { projects: [], overlaps: [], selectedId: null, onSelect: () => {}, focusedProject: null }
+    const { rerender } = render(<ProjectMap {...props} theme="dark" />)
+    expect(confirmedPointStroke()).toBe(colorOf(POINT_STROKE_COLOR))
+    expect(lowRing().visibility).toBe('none')
+
+    // Theme switch: Dark Matter -> Positron. No stale white outline.
+    layers.rendered = []
+    rerender(<ProjectMap {...props} theme="light" />)
+    expect(confirmedPointStroke()).toBe(colorOf(HALO_COLOR_DARK))
+    expect(confirmedPointStroke()).not.toBe(colorOf(POINT_STROKE_COLOR))
+    expect(lowRing()).toEqual({ color: HALO_COLOR_DARK, visibility: 'visible' })
+
+    // Basemap switch: Positron -> satellite -> Positron.
+    layers.rendered = []
+    fireEvent.click(within(picker()).getByRole('button', { name: 'Satellite' }))
+    expect(confirmedPointStroke()).toBe(colorOf(POINT_STROKE_COLOR))
+    expect(lowRing().visibility).toBe('none')
+
+    layers.rendered = []
+    fireEvent.click(within(picker()).getByRole('button', { name: 'Light' }))
+    expect(confirmedPointStroke()).toBe(colorOf(HALO_COLOR_DARK))
+    expect(lowRing()).toEqual({ color: HALO_COLOR_DARK, visibility: 'visible' })
+
+    // And back to the dark theme: white again, ring hidden.
+    layers.rendered = []
+    rerender(<ProjectMap {...props} theme="dark" />)
+    expect(confirmedPointStroke()).toBe(colorOf(POINT_STROKE_COLOR))
+    expect(lowRing().visibility).toBe('none')
+  })
+
+  it('keeps white as the outline on Dark Matter and satellite (unchanged) and uses the one dark casing color on Positron', () => {
+    expect(POINT_STROKE_COLOR).toBe('#ffffff')
+    expect(HALO_COLOR_DARK).toBe('#020617')
+    renderMap('light')
+    // The outline on Positron is the same color as the line casing there.
+    expect(latestLayers().get('project-casing')?.paint?.['line-color']).toBe(HALO_COLOR_DARK)
+    expect(confirmedPointStroke()).toBe(colorOf(HALO_COLOR_DARK))
   })
 })
