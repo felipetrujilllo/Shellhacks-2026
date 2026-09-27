@@ -10,17 +10,19 @@ interface BasemapToggleProps {
 /**
  * The map's basemap picker: one pressed button per option. Dark and Light are also the app theme
  * (ProjectMap turns those picks into a theme change); Satellite only swaps the map.
+ * Colors (idle, hover, pressed, focus) come from workspace.css (.map-control, .map-segmented button), which reads
+ * theme.css, so the picker follows the light/dark theme (#63).
  */
 export default function BasemapToggle({ options, value, onChange }: BasemapToggleProps) {
   return (
-    <div role="group" aria-label="Basemap" className="map-control map-segmented border border-white/15 bg-slate-950/90">
+    <div role="group" aria-label="Basemap" className="map-control map-segmented">
       {options.map((id) => (
         <button
           key={id}
           type="button"
           aria-pressed={value === id}
           onClick={() => onChange(id)}
-          className={`flex min-h-10 items-center gap-2 px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${value === id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+          className="flex min-h-10 items-center gap-2 px-3 text-xs font-semibold"
         >
           <svg aria-hidden="true" data-icon={id === 'dark' ? 'moon' : id === 'light' ? 'sun' : 'layers'} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             {id === 'dark' ? <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" />

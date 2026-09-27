@@ -194,16 +194,18 @@ describe('MatchSlider placement and style (workspace.css, #54)', () => {
     expect(atRules(/@container \(max-width:\d+px\)/).has('.workspace-notice')).toBe(false)
   })
 
-  it('reads its colors from theme tokens: the navy map chip, and the gold accent for the thumb and the active track', () => {
+  // #63: the thumb and active track moved from --color-accent to --color-map-accent (gold in the dark theme, a darker
+  // gold in the light one, where the chip is now white and plain gold is 1.5:1); theme.test.ts checks the contrast.
+  it('reads its colors from theme tokens: the map chip, and the map accent (gold) for the thumb and the active track', () => {
     const rule = baseRule('.match-slider')
     expect(rule.get('background')).toBe('var(--color-map-context-bg)')
     expect(rule.get('color')).toBe('var(--color-map-context-text)')
     expect(baseRule('.match-slider input::-webkit-slider-runnable-track').get('background'))
-      .toBe('linear-gradient(to right,var(--color-accent) var(--match-fill),var(--color-map-context-divider) var(--match-fill))')
-    expect(baseRule('.match-slider input::-moz-range-progress').get('background')).toBe('var(--color-accent)')
+      .toBe('linear-gradient(to right,var(--color-map-accent) var(--match-fill),var(--color-map-context-divider) var(--match-fill))')
+    expect(baseRule('.match-slider input::-moz-range-progress').get('background')).toBe('var(--color-map-accent)')
     for (const thumb of ['.match-slider input::-webkit-slider-thumb', '.match-slider input::-moz-range-thumb']) {
       const t = baseRule(thumb)
-      expect(t.get('background'), thumb).toBe('var(--color-accent)')
+      expect(t.get('background'), thumb).toBe('var(--color-map-accent)')
       expect(t.get('border-radius'), thumb).toBe('50%')
     }
   })

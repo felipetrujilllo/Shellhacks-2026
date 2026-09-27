@@ -1,0 +1,32 @@
+project_id,utility,project_name,lat_center,lon_center,in_service_date,est_cost_usd,name_a,lat_a,lon_a,name_b,lat_b,lon_b
+7302,Tallapoosa Grid Partners,Roanoke - Wedowee 115 kV Reconductor,33.23,-85.4285,2027-06-01,8900000,Roanoke,33.151,-85.372,Wedowee,33.309,-85.485
+5512 A,Tallapoosa Grid Partners,Anniston - Oxford 115 kV Line Upgrade,33.637,-85.833,2026-08-31,5250000,Anniston,33.66,-85.831,Oxford,33.614,-85.835
+7215 A,Tallapoosa Grid Partners,Lanett - Valley 115 kV Line Rebuild,32.844,-85.1845,2026-09-30,7900000,Lanett,32.869,-85.19,Valley,32.819,-85.179
+7390,Tallapoosa Grid Partners,Fredonia - Five Points 115 kV Line Rebuild,33.0,-85.3225,2026-10-31,4600000,Fredonia,32.98,-85.29,Five Points,33.02,-85.355
+6781,Tallapoosa Grid Partners,Auburn - Opelika 115 kV Reconductor,32.6275,-85.4295,2026-05-31,5250000,Auburn,32.61,-85.481,Opelika,32.645,-85.378
+6620,Tallapoosa Grid Partners,Phenix City - Smiths Station 115 kV Line Rebuild,32.5055,-85.05,2025-11-30,7200000,Phenix City,32.471,-85.001,Smiths Station,32.54,-85.099
+6390,Tallapoosa Grid Partners,Tuskegee 115 kV Sub: Capacitor Bank Addition,32.424,-85.691,2026-04-30,2300000,Tuskegee,32.424,-85.691,,,
+6033,Tallapoosa Grid Partners,Alexander City - Dadeville 115 kV Rebuild,32.8875,-85.859,2028-06-30,5400000,Alexander City,32.944,-85.954,Dadeville,32.831,-85.764
+5720,Tallapoosa Grid Partners,Wetumpka - Tallassee 115 kV Reconductor,32.54,-86.0525,2026-07-31,4600000,Wetumpka,32.544,-86.212,Tallassee,32.536,-85.893
+5904 C,Tallapoosa Grid Partners,Montgomery - Prattville 230 kV Line Upgrade,32.4155,-86.3795,2027-12-31,20500000,Montgomery,32.367,-86.3,Prattville,32.464,-86.459
+6244,Tallapoosa Grid Partners,Troy - Union Springs 115 kV Line Rebuild,31.9765,-85.8425,2028-12-31,15600000,Troy,31.809,-85.97,Union Springs,32.144,-85.715
+6955,Tallapoosa Grid Partners,Eufaula 115-12.47 kV Sub: Rebuild,31.891,-85.145,2027-04-30,4650000,Eufaula,31.891,-85.145,,,
+8215,Tallapoosa Grid Partners,Shorterville 115 kV Switching Station,31.56,-85.1,2029-09-30,6000000,Shorterville,31.56,-85.1,,,
+7488,Tallapoosa Grid Partners,Dothan - Headland 115 kV Line Rebuild,31.287,-85.366,2028-10-31,7550000,Dothan,31.223,-85.39,Headland,31.351,-85.342
+7602,Tallapoosa Grid Partners,Enterprise - Ozark 115 kV Line Rebuild,31.387,-85.7475,2027-09-30,8050000,Enterprise,31.315,-85.855,Ozark,31.459,-85.64
+3988,Tallapoosa Grid Partners,Andalusia - Opp 115 kV Reconductor,31.2955,-86.3685,2027-10-31,5350000,Andalusia,31.308,-86.482,Opp,31.283,-86.255
+3655,Tallapoosa Grid Partners,Bay Minette 230-115 kV Sub: New Autotransformer,30.883,-87.773,2027-12-31,16900000,Bay Minette,30.883,-87.773,,,
+3740,Tallapoosa Grid Partners,Foley - Gulf Shores 115 kV Line Rebuild,30.3265,-87.6925,2027-04-30,8400000,Foley,30.407,-87.684,Gulf Shores,30.246,-87.701
+3701 A,Tallapoosa Grid Partners,Mobile - Saraland 115 kV Line Upgrade,30.758,-88.0555,2026-09-30,9000000,Mobile,30.695,-88.04,Saraland,30.821,-88.071
+7220,Tallapoosa Grid Partners,Lanett - LaGrange Primary 115 kV Tie Line,32.9466,-85.1028,2026-06-01,11500000,Lanett,32.869,-85.19,LaGrange Primary,33.024106,-85.01568
+7410,Tallapoosa Grid Partners,Ranburne - Bowdon 115 kV Tie Line,33.531,-85.298,2027-08-31,8600000,Ranburne,33.524,-85.343,Bowdon,33.538,-85.253
+5530,Tallapoosa Grid Partners,Heflin 115-12.47 kV Sub: Rebuild,33.649,-85.587,2027-04-30,3000000,Heflin,33.649,-85.587,,,
+8150,Tallapoosa Grid Partners,Columbia - Blakely West 115 kV Interconnection,31.3323,-85.015,2029-03-31,14400000,Columbia,31.293,-85.112,Blakely West,31.3716,-84.918
+8162,Tallapoosa Grid Partners,Gordon - Early County 115 kV Tie Line,31.2365,-85.0235,2028-12-31,16800000,Gordon,31.143,-85.097,Early County Tie,31.33,-84.95
+8305,Tallapoosa Grid Partners,Cottonwood 115-12.47 kV Sub: Rebuild,31.049,-85.305,2027-10-31,3500000,Cottonwood,31.049,-85.305,,,
+8321,Tallapoosa Grid Partners,Hartford - Slocomb 115 kV Line Rebuild,31.1055,-85.6455,2028-06-30,5600000,Hartford,31.103,-85.697,Slocomb,31.108,-85.594
+8340,Tallapoosa Grid Partners,Geneva - Samson 115 kV Reconductor,31.073,-85.955,2027-03-31,3850000,Geneva,31.033,-85.864,Samson,31.113,-86.046
+3990,Tallapoosa Grid Partners,Florala 115-12.47 kV Sub: Expansion,31.004,-86.328,2026-11-30,2600000,Florala,31.004,-86.328,,,
+3622,Tallapoosa Grid Partners,Brewton - Flomaton 115 kV Line Rebuild,31.0525,-87.1665,2028-06-30,9200000,Brewton,31.105,-87.072,Flomaton,31.0,-87.261
+3641,Tallapoosa Grid Partners,Atmore 115 kV Breaker Station,31.024,-87.494,2027-12-31,4800000,Atmore,31.024,-87.494,,,
+3760,Tallapoosa Grid Partners,Lillian 115-12.47 kV Sub: New Substation,30.411,-87.438,2028-05-31,5050000,Lillian,30.411,-87.438,,,

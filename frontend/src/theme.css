@@ -4,8 +4,9 @@
  * var(--color-…), and the MapLibre map reads them through themeColor() in theme.ts (its
  * fallbacks must equal the values here; theme.test.ts checks that). The map reads its tokens
  * once at page load, so reload the page after editing a map token.
- * Tailwind utility classes on the map controls (bg-slate-950/90, text-sky-300, …) are not
- * tokenized yet.
+ * The floating surfaces (upload dialog, selection panel, notices, map controls, legend, tooltip,
+ * match slider) read these tokens too, through workspace.css classes: no Tailwind color utility
+ * or hex literal in their components (#63; theme.test.ts checks it).
  * Three rules, and where a new token goes:
  *   1. :root, ::backdrop                     dark colors (the default): --palette-* and --color-*
  *   2. :root[data-theme="light"] …           the light theme's --color-* overrides (#45); every
@@ -28,7 +29,8 @@
  *           hover.
  *   #0B1F3A navy (--palette-navy): top bar background; text on gold; workspace text, links,
  *           savings figures and the current upload step (label and bar) on light surfaces;
- *           dark surfaces (sort options, map context chip, dialog backdrop);
+ *           dark surfaces (sort options, map chips and controls, dialog backdrop, and the dark
+ *           theme's selection panel, notice and upload dialog);
  *           mixed with white for every light surface, border and grey text of the light
  *           workspace theme, so its neutrals are cool navy tints rather than new hues.
  *   #FFFFFF white (--palette-white): text on navy, secondary button and light card
@@ -47,6 +49,9 @@
  * except the map's for the light theme (white sidebar card; the top bar stays navy). The
  * sidebar's gold text and lines read --color-sidebar-accent-* so the light theme can swap them
  * for navy and a darker gold. Edit both rules when a token's role changes.
+ * Modals and floating surfaces (#63): the upload dialog, selection panel, notices and map
+ * controls are navy with white text and gold accents in the dark theme, and white/near-white
+ * with navy text in the light one (theme.test.ts checks the two sets differ for these tokens).
  */
 :root, ::backdrop {
   /* Palette: the only base colors; everything below that uses them derives from these four */
@@ -55,11 +60,11 @@
   --palette-navy: #0B1F3A; /* navy: top bar, text on gold and light surfaces, and the base of the light theme's tints */
   --palette-white: #FFFFFF; /* white: text on navy, light backgrounds, translucent white tints */
 
-  /* Workspace base (light) — aliased in workspace.css as --paper/--ink/--muted/--rule/--accent */
-  --color-surface: color-mix(in srgb, var(--palette-navy) 4%, var(--palette-white)); /* navy at 4% over white: workspace page background (--paper) */
-  --color-text: var(--palette-navy); /* default workspace text (--ink), navy */
-  --color-muted: color-mix(in srgb, var(--palette-navy) 65%, var(--palette-white)); /* navy at 65% over white: secondary/meta text (--muted); at least 4.5:1 on the light surfaces */
-  --color-rule: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: hairline dividers and borders (--rule) */
+  /* Workspace base (navy in the dark theme since #63) — aliased in workspace.css as --paper/--ink/--muted/--rule/--accent */
+  --color-surface: color-mix(in srgb, var(--palette-navy) 96%, var(--palette-white)); /* navy at 96% over white: workspace page background (--paper), dark like the top bar (#63) */
+  --color-text: var(--palette-white); /* default workspace text (--ink): white on the navy selection panel and upload dialog (#63) */
+  --color-muted: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: secondary/meta text (--muted); at least 4.5:1 on the navy panels */
+  --color-rule: color-mix(in srgb, var(--palette-navy) 78%, var(--palette-white)); /* navy at 78% over white: hairline dividers and borders (--rule) on the navy panels */
   --color-accent: var(--palette-gold); /* primary accent and selection (gold): primary button, sidebar toggle, sidebar highlights, sort select text (--accent) */
   --color-accent-border: color-mix(in srgb, var(--palette-gold) 67%, transparent); /* gold at 67%: sidebar search focus, selected card and sort select hover borders; 67% (was 55%) so the search focus border reaches 3:1 on the sidebar and search field */
   --color-accent-wash: color-mix(in srgb, var(--palette-gold) 11%, transparent); /* gold at 11%: faint fill behind the selected sidebar opportunity card */
@@ -76,11 +81,11 @@
   /* Buttons */
   --color-primary-button-text: var(--palette-navy); /* text on the primary (gold) button (navy) */
   --color-primary-button-hover: var(--palette-gold-dark); /* primary button hover/pressed background (darker gold) */
-  --color-secondary-button-bg: var(--palette-white); /* secondary button background */
-  --color-secondary-button-border: color-mix(in srgb, var(--palette-navy) 23%, var(--palette-white)); /* navy at 23% over white: secondary button border */
-  --color-secondary-button-hover: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* navy at 7% over white: secondary button hover background */
-  --color-icon-button-hover: #00000008; /* icon button hover wash */
-  --color-link: var(--palette-navy); /* inline text links on light surfaces (navy) */
+  --color-secondary-button-bg: var(--palette-navy); /* secondary button background (navy, like the panels; the sidebar has its own) */
+  --color-secondary-button-border: color-mix(in srgb, var(--palette-navy) 65%, var(--palette-white)); /* navy at 65% over white: secondary button border */
+  --color-secondary-button-hover: color-mix(in srgb, var(--palette-navy) 88%, var(--palette-white)); /* navy at 88% over white: secondary button hover background */
+  --color-icon-button-hover: color-mix(in srgb, var(--palette-white) 10%, transparent); /* white at 10%: icon button hover wash (close buttons on the navy panel and dialog) */
+  --color-link: var(--palette-gold); /* inline text links on the navy panel and upload dialog (gold) */
 
   /* Layout backdrops */
   --color-body-bg: #1c1d20; /* dark area behind the sidebar card */
@@ -122,7 +127,7 @@
   --color-sidebar-accent-border: var(--color-accent-border); /* sidebar search focus, selected card and "Sort:" select hover borders (the gold accent border) */
 
   /* Sidebar contents (light variant, used outside the dark card) */
-  --color-savings: var(--palette-navy); /* savings figures on light surfaces (navy; the sidebar shows them in gold) */
+  --color-savings: var(--palette-gold); /* savings figure on the navy selection panel (gold, as in the sidebar) */
   --color-checkbox: var(--palette-navy); /* map-layer checkboxes (navy) */
   --color-tab-underline: var(--palette-navy); /* selected tab underline (navy) */
   --color-tab-count-bg: color-mix(in srgb, var(--palette-navy) 11%, var(--palette-white)); /* navy at 11% over white: tab count badge */
@@ -149,52 +154,57 @@
   --color-flagged-text: #98632f; /* flagged-row reason in import batches */
 
   /* Map overlay chips and panels */
-  --color-map-context-bg: color-mix(in srgb, var(--palette-navy) 93%, transparent); /* navy at 93%: map context chip background */
-  --color-map-context-border: color-mix(in srgb, var(--palette-white) 12%, transparent); /* map context chip border */
-  --color-map-context-text: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: map context chip text */
-  --color-map-context-muted: color-mix(in srgb, var(--palette-navy) 40%, var(--palette-white)); /* navy at 40% over white: map context chip secondary text */
-  --color-map-context-divider: color-mix(in srgb, var(--palette-white) 12.5%, transparent); /* divider inside the map context chip */
-  --color-notice-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: status notice background */
-  --color-notice-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: status notice text */
-  --color-upload-problem-bg: #f4e2d4; /* notice background when saved uploads could not be added */
-  --color-upload-problem-text: #5b3419; /* notice text when saved uploads could not be added */
-  --color-upload-problem-link: #7a3f14; /* Clear my uploads link inside that notice */
+  --color-map-context-bg: color-mix(in srgb, var(--palette-navy) 93%, transparent); /* navy at 93%: map context chip, map controls, legend, tooltip and match slider background */
+  --color-map-context-border: color-mix(in srgb, var(--palette-white) 12%, transparent); /* border of the map context chip and the map controls */
+  --color-map-context-text: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: map context chip and map control text */
+  --color-map-context-muted: color-mix(in srgb, var(--palette-navy) 40%, var(--palette-white)); /* navy at 40% over white: secondary text on the map chips and controls */
+  --color-map-context-divider: color-mix(in srgb, var(--palette-white) 12.5%, transparent); /* divider inside the map context chip, and the match slider's inactive track */
+  --color-map-control-hover: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: hovered map control (Fit to data, an unpressed basemap option) */
+  --color-map-control-pressed-bg: var(--palette-gold); /* the pressed basemap option (gold accent on the navy picker) */
+  --color-map-control-pressed-text: var(--palette-navy); /* text of the pressed basemap option (navy on gold) */
+  --color-map-accent: var(--color-accent); /* accent on the map chips: the match slider thumb and active track (gold) */
+  --color-legend-low-confidence: #cbd5e1; /* neutral low-confidence legend swatch (a legend-only color: the map layer uses each utility's color, so MapLibre never reads this) */
+  --color-notice-bg: color-mix(in srgb, var(--palette-navy) 94%, var(--palette-white)); /* navy at 94% over white: status notice background */
+  --color-notice-text: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: status notice text */
+  --color-upload-problem-bg: color-mix(in srgb, var(--color-status-flagged) 12%, var(--color-panel-bg)); /* the flagged amber at 12% over the navy panel: notice background when saved uploads could not be added */
+  --color-upload-problem-text: var(--color-sidebar-flagged-text); /* notice text when saved uploads could not be added (the light amber of the dark sidebar) */
+  --color-upload-problem-link: var(--color-text); /* Clear my uploads link inside that notice (white) */
   --color-floating-shadow: #0003; /* unused since #46 (the notice and selection panel now cast --shadow-panel); kept because theme.test.ts pins the pre-#45 dark token set */
-  --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* navy at 2% over white: selection panel and upload dialog background */
-  --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* navy at 17% over white: selection panel border */
-  --color-panel-swatch-ring: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: ring around the utility swatch dots on the light selection/detail panel (--shadow-panel-swatch-ring), in both themes; at least 3:1 on the panel and against every dot fill */
-  --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel heading; at least 4.5:1 on the panel */
-  --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel project meta line; at least 4.5:1 on the panel */
-  --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: emphasized value in the selection panel meta line */
-  --color-why-bg: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* navy at 7% over white: overlap detail "why" callout background */
+  --color-panel-bg: var(--palette-navy); /* selection/detail panel and upload dialog background (navy, #63) */
+  --color-panel-border: color-mix(in srgb, var(--palette-navy) 72%, var(--palette-white)); /* navy at 72% over white: selection panel border */
+  --color-panel-swatch-ring: #0000; /* ring around the utility swatch dots on the selection/detail panel (--shadow-panel-swatch-ring): none (fully transparent) here, the dots already reach 3:1 on the navy panel */
+  --color-panel-heading: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: selection panel heading; at least 4.5:1 on the panel */
+  --color-panel-meta: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: selection panel project meta line; at least 4.5:1 on the panel */
+  --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 10%, var(--palette-white)); /* navy at 10% over white: emphasized value in the selection panel meta line */
+  --color-why-bg: color-mix(in srgb, var(--palette-navy) 88%, var(--palette-white)); /* navy at 88% over white: overlap detail "why" callout background */
   --color-why-border: var(--palette-gold); /* overlap detail "why" callout left border (gold accent) */
-  --color-why-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: overlap detail "why" callout text */
+  --color-why-text: color-mix(in srgb, var(--palette-navy) 8%, var(--palette-white)); /* navy at 8% over white: overlap detail "why" callout text */
 
   /* Upload dialog */
-  --color-dialog-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog border */
+  --color-dialog-border: color-mix(in srgb, var(--palette-navy) 72%, var(--palette-white)); /* navy at 72% over white: upload dialog border */
   --color-dialog-shadow: #0005; /* unused since #46 (the upload dialog now casts --shadow-panel); kept because theme.test.ts pins the pre-#45 dark token set */
   --color-dialog-backdrop: color-mix(in srgb, var(--palette-navy) 66%, transparent); /* navy at 66%: dimmed backdrop behind the upload dialog */
-  --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: upload dialog icon tile background */
-  --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog icon tile border */
-  --color-upload-symbol-icon: color-mix(in srgb, var(--palette-navy) 66%, var(--palette-white)); /* navy at 66% over white: upload dialog icon */
-  --color-step: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload step labels; at least 4.5:1 on the dialog */
-  --color-step-current: var(--palette-navy); /* current upload step label (navy) */
-  --color-step-current-bar: var(--palette-navy); /* current upload step underline (navy: gold would be under 3:1 on the light dialog) */
-  --color-drop-zone-bg: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: file drop zone background */
-  --color-drop-zone-border: color-mix(in srgb, var(--palette-navy) 30%, var(--palette-white)); /* navy at 30% over white: file drop zone dashed border */
-  --color-drop-zone-text: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: file drop zone text and icon; at least 4.5:1 on the drop zone, hovered or not */
-  --color-drop-zone-title: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: file drop zone title */
-  --color-drop-zone-hint: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: file drop zone hint; at least 4.5:1 on the drop zone, hovered or not */
-  --color-drop-zone-hover-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: file drop zone hover/dragging background */
-  --color-drop-zone-hover-border: color-mix(in srgb, var(--palette-navy) 56%, var(--palette-white)); /* navy at 56% over white: file drop zone hover/dragging border */
-  --color-upload-footer-text: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload dialog footer note; at least 4.5:1 on the dialog */
-  --color-error-bg: #fff4e9; /* upload error box background */
-  --color-error-border: #e5c7b1; /* upload error box border */
-  --color-error-text: #a05225; /* upload error box text */
-  --color-review-divider: color-mix(in srgb, var(--palette-navy) 10%, var(--palette-white)); /* navy at 10% over white: divider between upload review rows */
-  --color-status-ready: var(--palette-navy); /* "ready" status dot in upload review (navy; "flagged" stays amber) */
+  --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 86%, var(--palette-white)); /* navy at 86% over white: upload dialog icon tile background */
+  --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 72%, var(--palette-white)); /* navy at 72% over white: upload dialog icon tile border */
+  --color-upload-symbol-icon: var(--palette-gold); /* upload dialog icon (gold accent) */
+  --color-step: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: upload step labels; at least 4.5:1 on the dialog */
+  --color-step-current: var(--palette-white); /* current upload step label (white) */
+  --color-step-current-bar: var(--palette-gold); /* current upload step underline (gold accent) */
+  --color-drop-zone-bg: color-mix(in srgb, var(--palette-navy) 92%, var(--palette-white)); /* navy at 92% over white: file drop zone background */
+  --color-drop-zone-border: color-mix(in srgb, var(--palette-navy) 55%, var(--palette-white)); /* navy at 55% over white: file drop zone dashed border */
+  --color-drop-zone-text: color-mix(in srgb, var(--palette-navy) 25%, var(--palette-white)); /* navy at 25% over white: file drop zone text and icon; at least 4.5:1 on the drop zone, hovered or not */
+  --color-drop-zone-title: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: file drop zone title */
+  --color-drop-zone-hint: color-mix(in srgb, var(--palette-navy) 30%, var(--palette-white)); /* navy at 30% over white: file drop zone hint; at least 4.5:1 on the drop zone, hovered or not */
+  --color-drop-zone-hover-bg: color-mix(in srgb, var(--palette-navy) 84%, var(--palette-white)); /* navy at 84% over white: file drop zone hover/dragging background */
+  --color-drop-zone-hover-border: var(--palette-gold); /* file drop zone hover/dragging border (gold accent) */
+  --color-upload-footer-text: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: upload dialog footer note; at least 4.5:1 on the dialog */
+  --color-error-bg: color-mix(in srgb, var(--color-status-flagged) 18%, transparent); /* the flagged amber at 18%, over the dialog: upload error box background */
+  --color-error-border: color-mix(in srgb, var(--color-status-flagged) 60%, transparent); /* the flagged amber at 60%, over the dialog: upload error box border */
+  --color-error-text: var(--color-sidebar-flagged-text); /* upload error box text (the light amber of the dark sidebar) */
+  --color-review-divider: color-mix(in srgb, var(--palette-navy) 82%, var(--palette-white)); /* navy at 82% over white: divider between upload review rows */
+  --color-status-ready: var(--palette-white); /* "ready" status dot in upload review (white; "flagged" stays amber) */
   --color-status-flagged: #cc964c; /* "flagged" status dot in upload review */
-  --color-review-note: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload review footnote; at least 4.5:1 on the dialog */
+  --color-review-note: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: upload review footnote; at least 4.5:1 on the dialog */
 
   /* Map (MapLibre reads these through themeColor() in theme.ts) */
   --color-utility-desc: #60a5fa; /* Dominion Energy SC projects on the map, legend and sidebar swatches */
@@ -203,7 +213,6 @@
   --color-overlap: #f59e0b; /* dashed overlap connectors and their legend swatch */
   --color-overlap-selected: #c4b5fd; /* the selected overlap connector and its legend swatch */
   --color-point-stroke: #ffffff; /* outline of confirmed single-point projects on the dark and satellite basemaps (basemaps.ts pointStroke) */
-  --color-legend-low-confidence: #cbd5e1; /* neutral low-confidence legend swatch */
   --color-halo-dark: #020617; /* casing under project lines and connectors on the dark and light vector basemaps, and the outline of single-point projects on the light basemap: the one dark casing color (basemaps.ts) */
   --color-halo-light: #ffffff; /* casing under project lines and connectors on the satellite basemap */
 }
@@ -217,11 +226,11 @@
  * The top bar stays navy in both themes. "same as dark" marks a value the dark theme shares.
  */
 :root[data-theme="light"], [data-theme="light"] ::backdrop {
-  /* Workspace base (light in both themes) */
-  --color-surface: color-mix(in srgb, var(--palette-navy) 4%, var(--palette-white)); /* same as dark */
-  --color-text: var(--palette-navy); /* same as dark */
-  --color-muted: color-mix(in srgb, var(--palette-navy) 65%, var(--palette-white)); /* same as dark */
-  --color-rule: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* same as dark */
+  /* Workspace base (light) */
+  --color-surface: color-mix(in srgb, var(--palette-navy) 4%, var(--palette-white)); /* navy at 4% over white: workspace page background (--paper) */
+  --color-text: var(--palette-navy); /* default workspace text (--ink), navy */
+  --color-muted: color-mix(in srgb, var(--palette-navy) 65%, var(--palette-white)); /* navy at 65% over white: secondary/meta text (--muted); at least 4.5:1 on the light surfaces */
+  --color-rule: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: hairline dividers and borders (--rule) */
   --color-accent: var(--palette-gold); /* same as dark */
   --color-accent-border: color-mix(in srgb, var(--palette-gold) 67%, transparent); /* same as dark */
   --color-accent-wash: color-mix(in srgb, var(--palette-gold) 11%, transparent); /* same as dark */
@@ -233,16 +242,16 @@
   --color-header-text: var(--palette-white); /* same as dark */
   --color-header-border: color-mix(in srgb, var(--palette-white) 7%, transparent); /* same as dark */
   --color-header-button-hover: color-mix(in srgb, var(--palette-white) 10%, transparent); /* same as dark */
-  --color-source-dot: var(--color-sidebar-accent-line); /* the dark gold of the light sidebar's accent lines: gold is under 3:1 on the white sidebar, and this also reaches 3:1 on the navy map chip */
+  --color-source-dot: var(--color-sidebar-accent-line); /* the dark gold of the light sidebar's accent lines: gold is under 3:1 on the white sidebar, and this also reaches 3:1 on the white map chip */
 
   /* Buttons */
   --color-primary-button-text: var(--palette-navy); /* same as dark */
   --color-primary-button-hover: var(--palette-gold-dark); /* same as dark */
-  --color-secondary-button-bg: var(--palette-white); /* same as dark */
-  --color-secondary-button-border: color-mix(in srgb, var(--palette-navy) 23%, var(--palette-white)); /* same as dark */
-  --color-secondary-button-hover: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* same as dark */
-  --color-icon-button-hover: #00000008; /* same as dark */
-  --color-link: var(--palette-navy); /* same as dark */
+  --color-secondary-button-bg: var(--palette-white); /* secondary button background (white) */
+  --color-secondary-button-border: color-mix(in srgb, var(--palette-navy) 23%, var(--palette-white)); /* navy at 23% over white: secondary button border */
+  --color-secondary-button-hover: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* navy at 7% over white: secondary button hover background */
+  --color-icon-button-hover: color-mix(in srgb, var(--palette-navy) 4%, transparent); /* navy at 4%: icon button hover wash on the light panel and dialog */
+  --color-link: var(--palette-navy); /* inline text links on the light panel and upload dialog (navy) */
 
   /* Layout backdrops */
   --color-body-bg: color-mix(in srgb, var(--palette-navy) 8%, var(--palette-white)); /* navy at 8% over white: light area behind the white sidebar card */
@@ -284,7 +293,7 @@
   --color-sidebar-accent-border: var(--color-sidebar-accent-line); /* sidebar search focus, selected card and "Sort:" select hover borders (the dark gold accent line) */
 
   /* Sidebar contents (light variant, used outside the dark card) */
-  --color-savings: var(--palette-navy); /* same as dark */
+  --color-savings: var(--palette-navy); /* savings figure on the light selection panel (navy: gold is about 1.5:1 on white) */
   --color-checkbox: var(--palette-navy); /* same as dark */
   --color-tab-underline: var(--palette-navy); /* same as dark */
   --color-tab-count-bg: color-mix(in srgb, var(--palette-navy) 11%, var(--palette-white)); /* same as dark */
@@ -311,52 +320,57 @@
   --color-flagged-text: #98632f; /* same as dark */
 
   /* Map overlay chips and panels */
-  --color-map-context-bg: color-mix(in srgb, var(--palette-navy) 93%, transparent); /* same as dark */
-  --color-map-context-border: color-mix(in srgb, var(--palette-white) 12%, transparent); /* same as dark */
-  --color-map-context-text: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* same as dark */
-  --color-map-context-muted: color-mix(in srgb, var(--palette-navy) 40%, var(--palette-white)); /* same as dark */
-  --color-map-context-divider: color-mix(in srgb, var(--palette-white) 12.5%, transparent); /* same as dark */
-  --color-notice-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
-  --color-notice-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* same as dark */
-  --color-upload-problem-bg: #f4e2d4; /* same as dark */
-  --color-upload-problem-text: #5b3419; /* same as dark */
-  --color-upload-problem-link: #7a3f14; /* same as dark */
+  --color-map-context-bg: color-mix(in srgb, var(--palette-white) 93%, transparent); /* white at 93%: map context chip, map controls, legend, tooltip and match slider background */
+  --color-map-context-border: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: border of the map context chip and the map controls */
+  --color-map-context-text: var(--palette-navy); /* map context chip and map control text (navy) */
+  --color-map-context-muted: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: secondary text on the map chips and controls */
+  --color-map-context-divider: color-mix(in srgb, var(--palette-navy) 15%, transparent); /* navy at 15%: divider inside the map context chip, and the match slider's inactive track */
+  --color-map-control-hover: color-mix(in srgb, var(--palette-navy) 6%, var(--palette-white)); /* navy at 6% over white: hovered map control (Fit to data, an unpressed basemap option) */
+  --color-map-control-pressed-bg: var(--palette-navy); /* the pressed basemap option (navy on the white picker: gold would be under 3:1 there) */
+  --color-map-control-pressed-text: var(--palette-white); /* text of the pressed basemap option (white on navy) */
+  --color-map-accent: var(--color-sidebar-accent-line); /* accent on the white map chips: the match slider thumb and active track (the dark gold that reaches 3:1 on white) */
+  --color-legend-low-confidence: color-mix(in srgb, var(--palette-navy) 45%, var(--palette-white)); /* navy at 45% over white: neutral low-confidence legend swatch on the white legend */
+  --color-notice-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: status notice background */
+  --color-notice-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: status notice text */
+  --color-upload-problem-bg: color-mix(in srgb, var(--color-status-flagged) 20%, var(--color-panel-bg)); /* the flagged amber at 20% over the light panel: notice background when saved uploads could not be added */
+  --color-upload-problem-text: color-mix(in srgb, var(--color-flagged-text) 55%, var(--color-text)); /* the flagged brown darkened with the navy text: notice text when saved uploads could not be added */
+  --color-upload-problem-link: color-mix(in srgb, var(--color-flagged-text) 70%, var(--color-text)); /* the flagged brown darkened with the navy text: Clear my uploads link inside that notice */
   --color-floating-shadow: #0003; /* same as dark */
-  --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* same as dark */
-  --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* same as dark */
-  --color-panel-swatch-ring: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* same as dark */
-  --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
-  --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
-  --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* same as dark */
-  --color-why-bg: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* same as dark */
+  --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* navy at 2% over white: selection panel and upload dialog background */
+  --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* navy at 17% over white: selection panel border */
+  --color-panel-swatch-ring: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: ring around the utility swatch dots on the light selection/detail panel (--shadow-panel-swatch-ring); at least 3:1 on the panel and against every dot fill */
+  --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel heading; at least 4.5:1 on the panel */
+  --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel project meta line; at least 4.5:1 on the panel */
+  --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: emphasized value in the selection panel meta line */
+  --color-why-bg: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* navy at 7% over white: overlap detail "why" callout background */
   --color-why-border: var(--palette-gold); /* same as dark */
-  --color-why-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* same as dark */
+  --color-why-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: overlap detail "why" callout text */
 
   /* Upload dialog */
-  --color-dialog-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* same as dark */
+  --color-dialog-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog border */
   --color-dialog-shadow: #0005; /* same as dark */
-  --color-dialog-backdrop: color-mix(in srgb, var(--palette-navy) 66%, transparent); /* same as dark */
-  --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
-  --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* same as dark */
-  --color-upload-symbol-icon: color-mix(in srgb, var(--palette-navy) 66%, var(--palette-white)); /* same as dark */
-  --color-step: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
-  --color-step-current: var(--palette-navy); /* same as dark */
-  --color-step-current-bar: var(--palette-navy); /* same as dark */
-  --color-drop-zone-bg: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* same as dark */
-  --color-drop-zone-border: color-mix(in srgb, var(--palette-navy) 30%, var(--palette-white)); /* same as dark */
-  --color-drop-zone-text: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* same as dark */
-  --color-drop-zone-title: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* same as dark */
-  --color-drop-zone-hint: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* same as dark */
-  --color-drop-zone-hover-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* same as dark */
-  --color-drop-zone-hover-border: color-mix(in srgb, var(--palette-navy) 56%, var(--palette-white)); /* same as dark */
-  --color-upload-footer-text: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
-  --color-error-bg: #fff4e9; /* same as dark */
-  --color-error-border: #e5c7b1; /* same as dark */
-  --color-error-text: #a05225; /* same as dark */
-  --color-review-divider: color-mix(in srgb, var(--palette-navy) 10%, var(--palette-white)); /* same as dark */
-  --color-status-ready: var(--palette-navy); /* same as dark */
+  --color-dialog-backdrop: color-mix(in srgb, var(--palette-navy) 30%, transparent); /* navy at 30%: lighter dimmed backdrop behind the light upload dialog */
+  --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: upload dialog icon tile background */
+  --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog icon tile border */
+  --color-upload-symbol-icon: color-mix(in srgb, var(--palette-navy) 66%, var(--palette-white)); /* navy at 66% over white: upload dialog icon */
+  --color-step: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload step labels; at least 4.5:1 on the dialog */
+  --color-step-current: var(--palette-navy); /* current upload step label (navy) */
+  --color-step-current-bar: var(--palette-navy); /* current upload step underline (navy: gold would be under 3:1 on the light dialog) */
+  --color-drop-zone-bg: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: file drop zone background */
+  --color-drop-zone-border: color-mix(in srgb, var(--palette-navy) 30%, var(--palette-white)); /* navy at 30% over white: file drop zone dashed border */
+  --color-drop-zone-text: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: file drop zone text and icon; at least 4.5:1 on the drop zone, hovered or not */
+  --color-drop-zone-title: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: file drop zone title */
+  --color-drop-zone-hint: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: file drop zone hint; at least 4.5:1 on the drop zone, hovered or not */
+  --color-drop-zone-hover-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: file drop zone hover/dragging background */
+  --color-drop-zone-hover-border: color-mix(in srgb, var(--palette-navy) 56%, var(--palette-white)); /* navy at 56% over white: file drop zone hover/dragging border */
+  --color-upload-footer-text: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload dialog footer note; at least 4.5:1 on the dialog */
+  --color-error-bg: color-mix(in srgb, var(--color-status-flagged) 12%, transparent); /* the flagged amber at 12%, over the dialog: upload error box background */
+  --color-error-border: color-mix(in srgb, var(--color-status-flagged) 50%, transparent); /* the flagged amber at 50%, over the dialog: upload error box border */
+  --color-error-text: color-mix(in srgb, var(--color-flagged-text) 75%, var(--color-text)); /* the flagged brown darkened with the navy text: upload error box text */
+  --color-review-divider: color-mix(in srgb, var(--palette-navy) 10%, var(--palette-white)); /* navy at 10% over white: divider between upload review rows */
+  --color-status-ready: var(--palette-navy); /* "ready" status dot in upload review (navy; "flagged" stays amber) */
   --color-status-flagged: #cc964c; /* same as dark */
-  --color-review-note: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
+  --color-review-note: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload review footnote; at least 4.5:1 on the dialog */
 }
 
 /*

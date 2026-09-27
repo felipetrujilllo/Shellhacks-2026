@@ -11,6 +11,7 @@ import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import BasemapToggle from './components/BasemapToggle'
 import { BASEMAPS } from './components/basemaps'
+import { UTILITY_COLORS } from './colors'
 import MapLegend from './components/MapLegend'
 import OverlapDetail from './components/OverlapDetail'
 import { HALO_COLOR_DARK, POINT_STROKE_COLORS, projectLayers } from './components/mapStyle'
@@ -57,9 +58,26 @@ function ruleTokens(selectors: string[]): Tokens {
 const darkDeclarations = ruleTokens(DARK_SELECTORS)
 const lightDeclarations = ruleTokens(LIGHT_SELECTORS)
 
+/** Palette values to use instead of theme.css's while withPalette() runs (#63). */
+let paletteOverride: Record<string, string> | null = null
+
 /** The tokens in effect in `theme`, as the cascade resolves them: the light rule overrides :root. */
 function themeTokens(theme: Theme = 'dark'): Tokens {
-  return theme === 'dark' ? darkDeclarations : new Map([...darkDeclarations, ...lightDeclarations])
+  const tokens = theme === 'dark' ? darkDeclarations : new Map([...darkDeclarations, ...lightDeclarations])
+  if (!paletteOverride) return tokens
+  const edited = new Map(tokens)
+  for (const [name, value] of Object.entries(paletteOverride)) edited.set(name, { value, comment: '' })
+  return edited
+}
+
+/** Runs `fn` as if theme.css's palette tokens had the values in `palette` (an edit to theme.css, simulated). */
+function withPalette<T>(palette: Record<string, string>, fn: () => T): T {
+  paletteOverride = palette
+  try {
+    return fn()
+  } finally {
+    paletteOverride = null
+  }
 }
 
 // Every non-test source file under src/, as text (same glob as colors.test.ts).
@@ -77,7 +95,8 @@ const MAP_TOKENS = [
   '--color-overlap',
   '--color-overlap-selected',
   '--color-point-stroke',
-  '--color-legend-low-confidence',
+  // #63: --color-legend-low-confidence left this list. Only the legend (DOM) paints it, never MapLibre, so it now
+  // reads var() directly and has a light value too (the white light-theme legend).
   '--color-halo-dark',
   '--color-halo-light',
 ]
@@ -421,7 +440,7 @@ describe('contrast (WCAG AA)', () => {
   })
 
   // #45: the same list, run once per theme.
-  it.each(THEMES.flatMap((theme) => CONTRAST_PAIRS.map((pair) => ({ theme, ...pair }))))('$theme theme: $name: $fg on $bg is at least $min:1', ({ theme, fg, bg, min }) => {
+  it.each(THEMES.flatMap((theme) => CONTRAST_PAIRS.filter((pair) => !pair.themes || pair.themes.includes(theme)).map((pair) => ({ theme, ...pair }))))('$theme theme: $name: $fg on $bg is at least $min:1', ({ theme, fg, bg, min }) => {
     expect(pairContrast(fg, bg, theme)).toBeGreaterThanOrEqual(min)
   })
 
@@ -492,7 +511,9 @@ describe('no green (#43)', () => {
   it('builds the light theme\'s neutral surfaces and greys from navy mixed with white', () => {
     const light = ['--color-surface', '--color-muted', '--color-rule', '--color-panel-bg', '--color-panel-heading', '--color-panel-meta', '--color-step', '--color-drop-zone-bg', '--color-drop-zone-text', '--color-focus-ring']
     for (const name of light) {
-      expect(themeTokens().get(name)?.value, name).toMatch(/^color-mix\(in srgb, var\(--palette-navy\) [\d.]+%, var\(--palette-white\)\)$/)
+      // #63: reads the light theme, as the name says (it read the default dark rule, from before #45 split the themes;
+      // since #63 the dark panel is plain navy).
+      expect(themeTokens('light').get(name)?.value, name).toMatch(/^color-mix\(in srgb, var\(--palette-navy\) [\d.]+%, var\(--palette-white\)\)$/)
     }
   })
 })
@@ -551,13 +572,16 @@ describe('light theme (#45)', () => {
 })
 
 describe('dark theme unchanged by #45', () => {
-  it('resolves every token that existed before #45 to exactly the color it had then', () => {
+  it('resolves every token that existed before #45 to exactly the color it had then (except the ones #63 made navy on purpose)', () => {
     const tokens = themeTokens('dark')
     for (const [name, before] of Object.entries(DARK_BEFORE_45)) {
       expect(tokens.has(name), `${name} was removed`).toBe(true)
-      expect(hex8(resolveToken(name, 'dark')), name).toBe(before)
+      // #63 deliberately changed the dark theme's dialog/overlay tokens (they were the light values in both themes).
+      if (CHANGED_BY_63.includes(name)) expect(hex8(resolveToken(name, 'dark')), `${name} should have changed in #63`).not.toBe(before)
+      else expect(hex8(resolveToken(name, 'dark')), name).toBe(before)
     }
     expect(Object.keys(DARK_BEFORE_45)).toHaveLength(133)
+    for (const name of CHANGED_BY_63) expect(DARK_BEFORE_45, name).toHaveProperty([name])
   })
 
   it('adds only the sidebar accent tokens, which resolve to the gold accent the sidebar painted before (and, since #47, the swatch rings)', () => {
@@ -566,7 +590,9 @@ describe('dark theme unchanged by #45', () => {
     // (the sidebar ring is transparent in the dark theme, so the sidebar looks as before).
     const swatchRings47 = ['--color-swatch-ring', '--color-panel-swatch-ring']
     expect(added.filter((name) => swatchRings47.includes(name)).sort()).toEqual([...swatchRings47].sort())
-    expect(added.filter((name) => !swatchRings47.includes(name))).toEqual(['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border'])
+    // #63 added the map control state tokens; its describe block below checks them.
+    expect(added.filter((name) => NEW_IN_63.includes(name)).sort()).toEqual([...NEW_IN_63].sort())
+    expect(added.filter((name) => !swatchRings47.includes(name) && !NEW_IN_63.includes(name))).toEqual(['--color-sidebar-accent-text', '--color-sidebar-accent-line', '--color-sidebar-accent-border'])
     expect(darkDeclarations.get('--color-sidebar-accent-text')?.value).toBe('var(--color-accent)')
     expect(darkDeclarations.get('--color-sidebar-accent-line')?.value).toBe('var(--color-accent)')
     expect(darkDeclarations.get('--color-sidebar-accent-border')?.value).toBe('var(--color-accent-border)')
@@ -694,8 +720,9 @@ describe('utility swatch rings (#47)', () => {
     }
   })
 
-  it.each(THEMES)('in the %s theme, rings the panel dots at least 3:1 against the light panel and against every dot fill', (theme) => {
-    // The selection/detail panel is light in both themes, where the dots alone are under 3:1.
+  // #63: light theme only. The panel was light in both themes; since #63 it is navy in the dark theme (next test).
+  it.each(['light'] as const)('in the %s theme, rings the panel dots at least 3:1 against the light panel and against every dot fill', (theme) => {
+    // The light selection/detail panel, where the dots alone are under 3:1.
     for (const bg of PANEL_BACKGROUNDS) {
       expect(pairContrast('--color-panel-swatch-ring', bg, theme), bg.join(' + ')).toBeGreaterThanOrEqual(3)
       expect(Math.min(...UTILITY_DOTS.map((dot) => pairContrast(dot, bg, theme)))).toBeLessThan(3)
@@ -705,11 +732,31 @@ describe('utility swatch rings (#47)', () => {
     }
   })
 
-  it('leaves the map legend alone: its swatches sit on the dark slate legend panel in both themes', () => {
-    render(createElement(MapLegend))
-    const panel = screen.getByText('Coordination opportunity').closest('.map-legend-panel')
-    expect(panel?.className).toMatch(/(?:^|\s)bg-slate-950\/95(?:\s|$)/)
-    expect(panel?.className).not.toMatch(/(?:^|\s)(?:dark|light):/) // no theme variant: the same panel in both themes
+  it('in the dark theme, leaves the panel dots unringed on the navy panel (#63), where they reach 3:1 on their own', () => {
+    expect(resolveToken('--color-panel-swatch-ring', 'dark').a).toBe(0)
+    for (const bg of PANEL_BACKGROUNDS) {
+      for (const dot of UTILITY_DOTS) expect(pairContrast(dot, bg, 'dark'), dot).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  // #63 replaced 'leaves the map legend alone: its swatches sit on the dark slate legend panel in both themes': the
+  // legend now follows the theme (white in the light theme), so its swatches get the sidebar's ring there.
+  it('rings the legend swatches with --shadow-swatch-ring, which reaches 3:1 on the white light-theme legend and against every swatch', () => {
+    const { container } = render(createElement(MapLegend))
+    const swatches = container.querySelectorAll('.legend-swatch')
+    expect(swatches).toHaveLength(Object.keys(UTILITY_COLORS).length + 2) // each utility, the opportunity and the selected one
+    expect(workspaceDeclarations('.legend-swatch').get('box-shadow')).toBe('var(--shadow-swatch-ring)')
+    const lines = [...UTILITY_DOTS, '--color-overlap', '--color-overlap-selected']
+    for (const map of ['--color-map-bg', '--color-halo-light', '--color-halo-dark']) {
+      const legend = [map, '--color-map-context-bg']
+      // Light theme: the ring does the work (the lines alone are under 3:1 on white).
+      expect(pairContrast('--color-swatch-ring', legend, 'light'), map).toBeGreaterThanOrEqual(3)
+      expect(Math.min(...lines.map((line) => pairContrast(line, legend, 'light'))), map).toBeLessThan(3)
+      // Dark theme: no ring, and every line reaches 3:1 on the navy legend by itself.
+      expect(resolveToken('--color-swatch-ring', 'dark').a).toBe(0)
+      for (const line of lines) expect(pairContrast(line, legend, 'dark'), `${line} over ${map}`).toBeGreaterThanOrEqual(3)
+    }
+    for (const line of lines) expect(contrast(resolveToken('--color-swatch-ring', 'light'), resolveToken(line, 'light')), line).toBeGreaterThanOrEqual(3)
   })
 })
 
@@ -893,21 +940,29 @@ const PALETTE_ROLES: Record<string, string> = {
   '--color-accent-ink': '--palette-navy',
   '--color-primary-button-text': '--palette-navy',
   // #43: the former greens that now name a palette color directly.
-  '--color-text': '--palette-navy',
-  '--color-link': '--palette-navy',
-  '--color-savings': '--palette-navy',
   '--color-checkbox': '--palette-navy',
   '--color-tab-underline': '--palette-navy',
-  '--color-step-current': '--palette-navy',
-  '--color-step-current-bar': '--palette-navy',
-  '--color-status-ready': '--palette-navy',
   '--color-sidebar-option-bg': '--palette-navy',
   '--color-source-dot': '--palette-gold',
   '--color-why-border': '--palette-gold',
   '--color-header-text': '--palette-white',
-  '--color-secondary-button-bg': '--palette-white',
   '--color-card-hover-bg': '--palette-white',
   '--color-batch-card-bg': '--palette-white',
+  // #63 changed these dark-theme roles (they were navy/white on the light dialog and panel in both themes):
+  // the dark panel and dialog are navy with white text and gold accents. Their light values keep the old roles.
+  '--color-text': '--palette-white',
+  '--color-link': '--palette-gold',
+  '--color-savings': '--palette-gold',
+  '--color-step-current': '--palette-white',
+  '--color-step-current-bar': '--palette-gold',
+  '--color-status-ready': '--palette-white',
+  '--color-secondary-button-bg': '--palette-navy',
+  // #63: new in the dark theme.
+  '--color-panel-bg': '--palette-navy',
+  '--color-upload-symbol-icon': '--palette-gold',
+  '--color-drop-zone-hover-border': '--palette-gold',
+  '--color-map-control-pressed-bg': '--palette-gold',
+  '--color-map-control-pressed-text': '--palette-navy',
 }
 
 // Text/background pairs as workspace.css paints them. `bg` lists the layers bottom to top
@@ -915,7 +970,8 @@ const PALETTE_ROLES: Record<string, string> = {
 // Every pair is checked in both themes (#45). The sidebar accent pairs name what workspace.css
 // paints since #45 (--color-sidebar-accent-*); in the dark theme those are the gold --color-accent*.
 const SIDEBAR = '--color-sidebar-bg'
-const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] = [
+// A pair with `themes` is checked only in those themes (#63: a ring that is transparent by design in the other).
+const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number; themes?: Theme[] }[] = [
   { name: 'top bar text', fg: '--color-header-text', bg: ['--color-header-bg'], min: 4.5 },
   { name: 'primary button text', fg: '--color-primary-button-text', bg: ['--color-accent'], min: 4.5 },
   { name: 'primary button hover text', fg: '--color-primary-button-text', bg: ['--color-primary-button-hover'], min: 4.5 },
@@ -977,7 +1033,8 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'selection panel emphasized meta value', fg: '--color-panel-meta-strong', bg: ['--color-panel-bg'], min: 4.5 },
   { name: 'current upload step label', fg: '--color-step-current', bg: ['--color-panel-bg'], min: 4.5 },
   { name: 'current upload step underline', fg: '--color-step-current-bar', bg: ['--color-panel-bg'], min: 3 },
-  { name: 'upload error text', fg: '--color-error-text', bg: ['--color-error-bg'], min: 4.5 },
+  // #63: the error box is now a translucent amber wash over the dialog (was an opaque light box in both themes).
+  { name: 'upload error text', fg: '--color-error-text', bg: ['--color-panel-bg', '--color-error-bg'], min: 4.5 },
   { name: 'overlap detail "why" text', fg: '--color-why-text', bg: ['--color-why-bg'], min: 4.5 },
   { name: 'status notice text', fg: '--color-notice-text', bg: ['--color-notice-bg'], min: 4.5 },
   { name: 'drop zone title', fg: '--color-drop-zone-title', bg: ['--color-drop-zone-bg'], min: 4.5 },
@@ -1000,15 +1057,29 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'sidebar secondary button text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-button-bg'], min: 4.5 },
   { name: 'sidebar project row hover text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-row-hover'], min: 4.5 },
   { name: 'sidebar hovered card text', fg: '--color-sidebar-text', bg: [SIDEBAR, '--color-sidebar-card-hover-bg'], min: 4.5 },
-  // #47: the ring around the utility swatch dots on the selection/detail panel, light in both themes.
-  // The sidebar card's ring is transparent in the dark theme by design: see 'utility swatch rings (#47)'.
-  { name: 'utility swatch ring on the selection/detail panel', fg: '--color-panel-swatch-ring', bg: ['--color-panel-bg'], min: 3 },
-  // #54: the minimum-match slider on the map (workspace.css .match-slider), a translucent navy chip like the map
+  // #47: the ring around the utility swatch dots on the selection/detail panel. Light theme only since #63: the dark
+  // theme's panel is navy, where the dots alone reach 3:1 and the ring is transparent by design, like the sidebar's.
+  { name: 'utility swatch ring on the selection/detail panel', fg: '--color-panel-swatch-ring', bg: ['--color-panel-bg'], min: 3, themes: ['light'] },
+  // #54: the minimum-match slider on the map (workspace.css .match-slider), a translucent chip like the map
   // context chip, over a dark map or a light one (--color-halo-light stands in for Positron). The thumb and the
-  // active part of the track are the gold accent; the value label reuses the chip text (pairs above).
-  { name: 'minimum-match slider thumb and active track on a dark map', fg: '--color-accent', bg: ['--color-map-bg', '--color-map-context-bg'], min: 3 },
-  { name: 'minimum-match slider thumb and active track on a light map', fg: '--color-accent', bg: ['--color-halo-light', '--color-map-context-bg'], min: 3 },
+  // active part of the track are the map accent (#63: was --color-accent, which is 1.5:1 on the light theme's
+  // white chip); the value label reuses the chip text (pairs above).
+  { name: 'minimum-match slider thumb and active track on a dark map', fg: '--color-map-accent', bg: ['--color-map-bg', '--color-map-context-bg'], min: 3 },
+  { name: 'minimum-match slider thumb and active track on a light map', fg: '--color-map-accent', bg: ['--color-halo-light', '--color-map-context-bg'], min: 3 },
   { name: 'focus outline on the minimum-match slider over a light map', fg: '--color-focus-ring', bg: ['--color-halo-light', '--color-map-context-bg'], min: 3 },
+  // #63: the map controls (Fit to data, Legend, basemap picker), the legend popover and the tooltip share the map chip
+  // tokens, so the chip text/muted pairs above cover their text; these are the states only the controls have.
+  { name: 'focus outline on the map controls over a dark map', fg: '--color-focus-ring', bg: ['--color-map-bg', '--color-map-context-bg'], min: 3 },
+  { name: 'hovered map control text (Fit to data, an unpressed basemap option)', fg: '--color-map-context-text', bg: ['--color-map-control-hover'], min: 4.5 },
+  { name: 'pressed basemap option text', fg: '--color-map-control-pressed-text', bg: ['--color-map-control-pressed-bg'], min: 4.5 },
+  { name: 'pressed basemap option against the picker on a dark map', fg: '--color-map-control-pressed-bg', bg: ['--color-map-bg', '--color-map-context-bg'], min: 3 },
+  { name: 'pressed basemap option against the picker on a light map', fg: '--color-map-control-pressed-bg', bg: ['--color-halo-light', '--color-map-context-bg'], min: 3 },
+  { name: 'map tooltip and legend text on a satellite map (dark imagery under the chip)', fg: '--color-map-context-text', bg: ['--color-halo-dark', '--color-map-context-bg'], min: 4.5 },
+  { name: 'map tooltip utility and date (muted) on a satellite map', fg: '--color-map-context-muted', bg: ['--color-halo-dark', '--color-map-context-bg'], min: 4.5 },
+  // #63: the notices and the upload dialog's remaining pieces, now per theme.
+  { name: 'upload problem notice text', fg: '--color-upload-problem-text', bg: ['--color-upload-problem-bg'], min: 4.5 },
+  { name: 'upload problem notice "Clear my uploads" link', fg: '--color-upload-problem-link', bg: ['--color-upload-problem-bg'], min: 4.5 },
+  { name: 'drop zone border while hovered/dragging vs the drop zone', fg: '--color-drop-zone-hover-border', bg: ['--color-drop-zone-hover-bg'], min: 3 },
 ]
 
 type Rgba = { r: number; g: number; b: number; a: number } // channels 0-255, alpha 0-1
@@ -1362,3 +1433,223 @@ describe('components use the shape tokens, not ad-hoc Tailwind radius/shadow/blu
     expect(container.querySelector('[class*="rounded-"]:not(.rounded-full)')).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------------------------
+// Modals and floating surfaces follow the light/dark theme (#63). Before #63 the upload dialog, selection panel
+// and notices used the light values in both themes, and the map controls, legend and tooltip hard-coded dark
+// Tailwind slate. Now each takes its colors from theme.css tokens with a dark (navy, white text, gold accents) and a
+// light (white/near-white, navy text) value.
+// ---------------------------------------------------------------------------------------------
+
+// The dialog/overlay tokens, by surface: each has a different value in the light and dark rules.
+const OVERLAY_TOKENS: Record<string, string[]> = {
+  'workspace base (--paper, --ink, --muted, --rule) and buttons on the panels': ['--color-surface', '--color-text', '--color-muted', '--color-rule', '--color-link', '--color-icon-button-hover', '--color-secondary-button-bg', '--color-secondary-button-border', '--color-secondary-button-hover'],
+  'upload dialog': ['--color-panel-bg', '--color-dialog-border', '--color-dialog-backdrop', '--color-upload-symbol-bg', '--color-upload-symbol-border', '--color-upload-symbol-icon', '--color-step', '--color-step-current', '--color-step-current-bar', '--color-upload-footer-text'],
+  'drop zone': ['--color-drop-zone-bg', '--color-drop-zone-border', '--color-drop-zone-text', '--color-drop-zone-title', '--color-drop-zone-hint', '--color-drop-zone-hover-bg', '--color-drop-zone-hover-border'],
+  'review rows': ['--color-review-divider', '--color-status-ready', '--color-review-note'],
+  'upload errors': ['--color-error-bg', '--color-error-border', '--color-error-text'],
+  'selection/detail panel': ['--color-panel-border', '--color-panel-swatch-ring', '--color-panel-heading', '--color-panel-meta', '--color-panel-meta-strong', '--color-savings', '--color-why-bg', '--color-why-text'],
+  'notices': ['--color-notice-bg', '--color-notice-text', '--color-upload-problem-bg', '--color-upload-problem-text', '--color-upload-problem-link'],
+  'map controls, legend, tooltip and match slider': ['--color-map-context-bg', '--color-map-context-border', '--color-map-context-text', '--color-map-context-muted', '--color-map-context-divider', '--color-map-control-hover', '--color-map-control-pressed-bg', '--color-map-control-pressed-text', '--color-map-accent', '--color-legend-low-confidence'],
+}
+// Tokens #63 added (to both rules).
+const NEW_IN_63 = ['--color-map-control-hover', '--color-map-control-pressed-bg', '--color-map-control-pressed-text', '--color-map-accent']
+// Dark-theme tokens #63 changed on purpose: every overlay token that existed before #45 whose dark value used to be
+// the light one (the map chip, backdrop and legend swatch kept their dark values; the light theme changed instead).
+const CHANGED_BY_63 = Object.values(OVERLAY_TOKENS).flat().filter((name) =>
+  name in DARK_BEFORE_45 && !['--color-dialog-backdrop', '--color-legend-low-confidence'].includes(name) && !name.startsWith('--color-map-context-'))
+
+// The surfaces' backgrounds: navy-based in the dark theme, white/near-white in the light one.
+const OVERLAY_SURFACES = ['--color-surface', '--color-panel-bg', '--color-upload-symbol-bg', '--color-drop-zone-bg', '--color-drop-zone-hover-bg', '--color-why-bg', '--color-notice-bg', '--color-secondary-button-bg', '--color-map-control-hover']
+
+// The four components the ticket covers (#63). OverlapList.tsx is dead code, out of scope as in #46.
+const FLOATING_COMPONENTS = ['ProjectMap.tsx', 'MapLegend.tsx', 'BasemapToggle.tsx', 'UploadProjects.tsx']
+const TAILWIND_COLOR_NAMES = 'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black'
+/** A Tailwind color utility (any variant, opacity or arbitrary color value), e.g. bg-slate-950/90, hover:text-white, border-[#fff]. */
+const TAILWIND_COLOR_CLASS = new RegExp(
+  `(?<![\\w-])(?:[\\w-]+:)*!?(?:bg|text|border|ring|fill|stroke|outline|divide|placeholder|accent|caret|decoration|from|via|to|shadow)(?:-[a-z]+)?-` +
+  `(?:(?:${TAILWIND_COLOR_NAMES})(?:-\\d{2,3})?(?:\\/\\d{1,3})?(?![\\w-])|\\[(?:#|rgba?\\(|hsla?\\()[^\\]]*\\])`, 'g')
+const HEX_LITERAL = /#[0-9a-fA-F]{3,8}\b/g
+/** A color given as a string in JSX or an inline style (fill="#fff", color: 'white'); var(), currentColor and none are fine. */
+const INLINE_COLOR_STRING = /\b(?:color|background|backgroundColor|borderColor|fill|stroke)\s*[:=]\s*\{?\s*(['"`])(?!var\(|currentColor\1|none\1|transparent\1)[^'"`]*\1/g
+const colorClasses = (source: string) => [...source.matchAll(TAILWIND_COLOR_CLASS)].map((m) => m[0])
+
+/** The .workspace aliases (--paper, --ink, --muted, --rule, --accent) and the theme token each names. */
+function workspaceAliases(): Map<string, string> {
+  const aliases = new Map<string, string>()
+  for (const [prop, value] of workspaceDeclarations('.workspace')) {
+    const ref = value.match(/^var\((--color-[\w-]+)\)$/)?.[1]
+    if (prop.startsWith('--') && ref) aliases.set(prop, ref)
+  }
+  return aliases
+}
+
+/** The theme.css tokens a workspace.css value paints with (following the .workspace aliases). */
+function paintedTokens(value: string): string[] {
+  const aliases = workspaceAliases()
+  return [...value.matchAll(/var\((--[\w-]+)/g)].map((m) => aliases.get(m[1]) ?? m[1])
+}
+
+const COLOR_PROPERTY = /^(?:color|background(?:-color)?|border(?:-(?:top|right|bottom|left))?(?:-color)?)$/
+// workspace.css rules of the floating surfaces (#63), each with at least one color declaration.
+const FLOATING_RULES = [
+  '.upload-dialog', '.upload-dialog::backdrop', '.upload-symbol', '.upload-steps', '.upload-steps .current', '.drop-zone', '.drop-zone strong',
+  '.drop-zone small', '.drop-zone:hover', '.upload-error', '.review-row', '.review-row p', '.status-dot.ready', '.status-dot.flagged', '.review-note',
+  '.upload-footer>span', '.selection-panel', '.selection-heading', '.overlap-detail-why', '.workspace-notice', '.workspace-notice.upload-problem',
+  '.workspace-notice.upload-problem .text-link', '.map-control', '.map-panel', '.map-segmented button', '.map-segmented button:hover',
+  '.map-segmented button[aria-pressed=true]', '.map-toolbar>button:hover:not(:disabled)', '.overlay-muted', '.match-slider', '.map-context',
+]
+// A different palette, as if someone edited theme.css's four base colors.
+const OTHER_PALETTE = { '--palette-navy': '#3a0b1f', '--palette-white': '#f0f0e0', '--palette-gold': '#28c9ff', '--palette-gold-dark': '#00a9f4' }
+
+describe('modals and floating surfaces follow the theme (#63)', () => {
+  it('gives every dialog/overlay token a different value in the light and dark rules, never "same as dark"', () => {
+    const names = Object.values(OVERLAY_TOKENS).flat()
+    expect(names.length).toBeGreaterThan(50)
+    expect(new Set(names).size).toBe(names.length)
+    for (const name of names) {
+      const [dark, light] = [darkDeclarations.get(name), lightDeclarations.get(name)]
+      expect(dark, `${name} in the dark rule`).toBeDefined()
+      expect(light, `${name} in the light rule`).toBeDefined()
+      expect(light!.value, name).not.toBe(dark!.value)
+      expect(light!.comment, name).not.toMatch(/same as dark/)
+      expect(hex8(resolveToken(name, 'light')), `${name} resolves to the same color in both themes`).not.toBe(hex8(resolveToken(name, 'dark')))
+    }
+    // The tokens #63 added are among them; the ones it changed in the dark theme really are overlay tokens.
+    for (const name of NEW_IN_63) expect(names, name).toContain(name)
+    expect(CHANGED_BY_63.length).toBeGreaterThan(40)
+  })
+
+  it('makes the dialog, drop zone, panels and notice navy-based in the dark theme and white/near-white in the light theme', () => {
+    const navyHue = hueOf(resolveToken('--palette-navy'))
+    for (const name of OVERLAY_SURFACES) {
+      const dark = composite([resolveToken('--color-map-bg', 'dark'), resolveToken(name, 'dark')])
+      expect(contrast(dark, parseColor('#FFFFFF')), `dark ${name} is dark`).toBeGreaterThanOrEqual(10)
+      expect(Math.abs(hueOf(dark) - navyHue), `dark ${name} is a navy tint`).toBeLessThan(5)
+      const light = composite([resolveToken('--color-halo-light', 'light'), resolveToken(name, 'light')])
+      expect(contrast(light, parseColor('#FFFFFF')), `light ${name} is near-white`).toBeLessThan(1.25)
+    }
+    // The map chip (controls, legend, tooltip, slider) is translucent: navy over any map in the dark theme, white in the light one.
+    for (const map of ['--color-map-bg', '--color-halo-light', '--color-halo-dark']) {
+      expect(contrast(composite([resolveToken(map), resolveToken('--color-map-context-bg', 'dark')]), parseColor('#FFFFFF')), map).toBeGreaterThanOrEqual(10)
+      expect(contrast(composite([resolveToken(map), resolveToken('--color-map-context-bg', 'light')]), parseColor('#FFFFFF')), map).toBeLessThan(1.25)
+    }
+    // The backdrop dims the page: strongly in the dark theme, lightly in the light one, navy in both.
+    const page = parseColor('#FFFFFF')
+    const [darkDim, lightDim] = (['dark', 'light'] as const).map((theme) => composite([page, resolveToken('--color-dialog-backdrop', theme)]))
+    expect(contrast(darkDim, page)).toBeGreaterThanOrEqual(3)
+    expect(contrast(lightDim, page)).toBeLessThan(2)
+    for (const dim of [darkDim, lightDim]) expect(Math.abs(hueOf(dim) - navyHue)).toBeLessThan(5)
+    // Text: white on the dark surfaces, navy on the light ones.
+    expectColor(resolveToken('--color-text', 'dark'), parseColor('#FFFFFF'))
+    expectColor(resolveToken('--color-text', 'light'), parseColor('#0B1F3A'))
+    expectColor(resolveToken('--color-map-context-text', 'light'), parseColor('#0B1F3A'))
+  })
+
+  it('keeps gold accents in both themes: the primary button, the "why" bar and, in the dark theme, the current step, links and slider', () => {
+    for (const theme of THEMES) {
+      expectColor(resolveToken('--color-accent', theme), parseColor('#FFC928'))
+      expectColor(resolveToken('--color-why-border', theme), parseColor('#FFC928'))
+    }
+    for (const name of ['--color-step-current-bar', '--color-link', '--color-savings', '--color-map-accent', '--color-map-control-pressed-bg', '--color-drop-zone-hover-border']) {
+      expectColor(resolveToken(name, 'dark'), parseColor('#FFC928'), 6, name)
+    }
+    // On white, gold is under 3:1, so the light slider uses the sidebar's darker gold (still gold in hue).
+    expect(themeTokens('light').get('--color-map-accent')?.value).toBe('var(--color-sidebar-accent-line)')
+    expect(Math.abs(hueOf(resolveToken('--color-map-accent', 'light')) - hueOf(resolveToken('--palette-gold-dark')))).toBeLessThan(10)
+  })
+
+  it('recognizes Tailwind color utilities, hex literals and inline color strings, and lets layout utilities and var() through', () => {
+    expect(colorClasses('"border border-white/15 bg-slate-950/90 px-3 text-xs text-slate-200 hover:bg-slate-800"')).toEqual(['border-white/15', 'bg-slate-950/90', 'text-slate-200', 'hover:bg-slate-800'])
+    expect(colorClasses('`${on ? \'bg-slate-700 text-white\' : \'text-slate-400 hover:bg-white/10\'}` focus-visible:outline-sky-400 ring-offset-black')).toEqual(['bg-slate-700', 'text-white', 'text-slate-400', 'hover:bg-white/10', 'focus-visible:outline-sky-400', 'ring-offset-black'])
+    expect(colorClasses('"bg-[#0b1f3a] text-[rgb(1,2,3)] border-t-amber-500 fill-rose-50 !text-sky-300"')).toEqual(['bg-[#0b1f3a]', 'text-[rgb(1,2,3)]', 'border-t-amber-500', 'fill-rose-50', '!text-sky-300'])
+    expect(colorClasses('"map-control min-h-11 px-3 text-xs font-semibold border-t-2 border-dashed border-dotted rounded-full text-sm outline-2 bg-[var(--color-panel-bg)] text-balance"')).toEqual([])
+    expect('#fff #0B1F3A #0000 color: "#abc"'.match(HEX_LITERAL)).toEqual(['#fff', '#0B1F3A', '#0000', '#abc'])
+    expect('href="#top" id="#product"'.match(HEX_LITERAL)).toBeNull()
+    expect([...'style={{ color: \'white\' }} fill="#fff" stroke="currentColor" fill="none" borderColor: \'var(--x)\''.matchAll(INLINE_COLOR_STRING)].map((m) => m[0])).toEqual(['color: \'white\'', 'fill="#fff"'])
+  })
+
+  it.each(FLOATING_COMPONENTS)('%s has no Tailwind color utilities, hex literals or inline color strings', (file) => {
+    const text = readFileSync(resolve(SRC, 'components', file), 'utf8')
+    expect(colorClasses(text), file).toEqual([])
+    expect(text.match(HEX_LITERAL), file).toBeNull()
+    expect(text.match(INLINE_COLOR_STRING), file).toBeNull()
+  })
+
+  it('paints every floating surface in workspace.css only with var() tokens that both themes define', () => {
+    const [dark, light] = [themeTokens('dark'), themeTokens('light')]
+    for (const selector of FLOATING_RULES) {
+      const colors = [...workspaceDeclarations(selector)].filter(([prop]) => COLOR_PROPERTY.test(prop))
+      expect(colors.length, `${selector} has a color declaration`).toBeGreaterThan(0)
+      for (const [prop, value] of colors) {
+        const tokens = paintedTokens(value)
+        expect(tokens.length, `${selector} ${prop}: ${value}`).toBeGreaterThan(0)
+        for (const token of tokens) {
+          expect(token, `${selector} ${prop}`).toMatch(/^--color-/)
+          expect(dark.has(token) && light.has(token), `${selector} ${prop}: ${token} in both themes`).toBe(true)
+        }
+      }
+    }
+    // The map overlays read the chip tokens, the pressed basemap option its own pair, the legend swatch the swatch ring.
+    expect(paintedTokens(workspaceDeclarations('.map-control').get('background')!)).toEqual(['--color-map-context-bg'])
+    expect(paintedTokens(workspaceDeclarations('.map-panel').get('background')!)).toEqual(['--color-map-context-bg'])
+    expect(paintedTokens(workspaceDeclarations('.map-segmented button[aria-pressed=true]').get('background')!)).toEqual(['--color-map-control-pressed-bg'])
+    expect(paintedTokens(workspaceDeclarations('.upload-dialog').get('background')!)).toEqual(['--color-panel-bg'])
+    expect(paintedTokens(workspaceDeclarations('.upload-dialog').get('color')!)).toEqual(['--color-text'])
+  })
+
+  it('renders the basemap picker, legend and tooltip with those classes, and the legend swatch reads its token through var()', () => {
+    render(createElement(BasemapToggle, { options: ['dark', 'light', 'satellite'], value: 'light', onChange: () => {} }))
+    const group = screen.getByRole('group', { name: 'Basemap' })
+    expect(group).toHaveClass('map-control', 'map-segmented')
+    for (const button of screen.getAllByRole('button')) expect(colorClasses(`"${button.className}"`), button.textContent ?? '').toEqual([])
+    expect(screen.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
+    const { container } = render(createElement(MapLegend))
+    expect(container.querySelector('details')).toHaveClass('map-control')
+    expect(screen.getByText('Coordination opportunity').parentElement).toHaveClass('map-panel', 'map-legend-panel')
+    const low = screen.getByText('Low-confidence location (unconfirmed)').querySelectorAll<HTMLElement>('[style]')
+    const lowSwatches = [...low].filter((el) => el.style.borderColor)
+    expect(lowSwatches).toHaveLength(2)
+    for (const el of lowSwatches) expect(el.style.borderColor).toBe('var(--color-legend-low-confidence)')
+    // ProjectMap's tooltip and Fit to data button (the map needs WebGL, so checked in the source).
+    const map = readFileSync(resolve(SRC, 'components/ProjectMap.tsx'), 'utf8')
+    expect(map).toMatch(/role="tooltip" className="map-panel [^"]*"/)
+    expect(map.match(/className="overlay-muted /g)).toHaveLength(2) // utility and in-service date
+    expect(map).toMatch(/onClick=\{fitData\}[\s\S]*?className="map-control /)
+  })
+
+  it('changes every floating surface when a palette color in theme.css changes (they only use var(--…))', () => {
+    // The backgrounds and main text of each surface; the upload error box is the documented exception (its amber is a
+    // warning literal, not a palette color), though it too reads only var() (test above).
+    const painted: [string, string][] = [
+      ['.upload-dialog', 'background'], ['.upload-dialog', 'color'], ['.upload-dialog', 'border'], ['.upload-dialog::backdrop', 'background'],
+      ['.drop-zone', 'background'], ['.drop-zone', 'color'], ['.drop-zone:hover', 'background'], ['.review-note', 'color'], ['.review-row', 'border-bottom'],
+      ['.selection-panel', 'background'], ['.selection-panel', 'border'], ['.overlap-detail-why', 'background'],
+      ['.workspace-notice', 'background'], ['.workspace-notice', 'color'], ['.workspace-notice.upload-problem', 'background'],
+      ['.map-control', 'background'], ['.map-control', 'color'], ['.map-control', 'border'], ['.map-panel', 'background'], ['.map-panel', 'color'],
+      ['.map-segmented button', 'color'], ['.map-segmented button:hover', 'background'], ['.map-segmented button[aria-pressed=true]', 'background'],
+      ['.map-segmented button[aria-pressed=true]', 'color'], ['.overlay-muted', 'color'], ['.match-slider', 'background'], ['.match-slider', 'color'],
+    ]
+    for (const theme of THEMES) {
+      for (const [selector, prop] of painted) {
+        const value = workspaceDeclarations(selector).get(prop)
+        expect(value, `${selector} ${prop}`).toBeDefined()
+        const [token] = paintedTokens(value!)
+        const before = hex8(resolveToken(token, theme))
+        const after = withPalette(OTHER_PALETTE, () => hex8(resolveToken(token, theme)))
+        expect(after, `${theme} ${selector} ${prop} (${token}) ignores the palette`).not.toBe(before)
+      }
+    }
+    // Sanity: the override really is scoped to withPalette().
+    expect(hex8(resolveToken('--palette-navy'))).toBe('#0b1f3aff')
+  })
+})
+
+/** HSL hue in degrees (0-360) of a color; alpha is ignored. */
+function hueOf({ r, g, b }: Rgba): number {
+  const [max, min] = [Math.max(r, g, b), Math.min(r, g, b)]
+  const delta = max - min
+  if (delta === 0) return 0
+  const sector = max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4
+  return sector * 60
+}
