@@ -3,11 +3,15 @@
 // themeColor() fallbacks can't drift from theme.css.
 /// <reference types="node" />
 import { Color, latest, normalizePropertyExpression } from '@maplibre/maplibre-gl-style-spec'
+import { render, screen } from '@testing-library/react'
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import BasemapToggle from './components/BasemapToggle'
 import { BASEMAPS } from './components/basemaps'
+import MapLegend from './components/MapLegend'
 import { projectsToGeoJSON } from './geo'
 import { THEME_STORAGE_KEY, applyTheme, currentTheme, getInitialTheme, storeTheme, themeColor, type Theme } from './theme'
 import type { Project } from './types'
@@ -33,6 +37,8 @@ const themeRules = [...themeCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
 // The dark theme is the default :root rule; the light theme is the rule applyTheme('light') switches on (#45).
 const DARK_SELECTORS = [':root', '::backdrop']
 const LIGHT_SELECTORS = [':root[data-theme="light"]', '[data-theme="light"] ::backdrop']
+// The shape tokens (#46: radius, shadow, blur, spacing) are the third rule: not colors, the same in both themes.
+const SHAPE_SELECTORS = [':root']
 
 /** A rule's declarations: name -> { value, comment } (comment is the same-line comment, if any). */
 function ruleTokens(selectors: string[]): Tokens {
@@ -214,9 +220,15 @@ describe('theme switching (#45)', () => {
 describe('theme.css', () => {
   it('declares the dark tokens in one :root rule and the light ones in one [data-theme="light"] rule, each with a one-line comment saying where it is used', () => {
     // #45 changed this from "one :root rule": the light theme is a second rule. Same checks, per rule.
+    // #46 added a third rule for the shape tokens (radius, shadow, blur, spacing), which are not colors:
+    // the color checks below still cover exactly the two color rules, and the shape rule may hold
+    // only shape tokens (their values and comments are checked in 'shape tokens (#46)').
     const rules = [...stripCssComments(themeCss).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    expect(rules).toHaveLength(2)
-    expect(rules.map((r) => r[1].split(',').map((s) => s.trim()))).toEqual([DARK_SELECTORS, LIGHT_SELECTORS])
+    expect(rules).toHaveLength(3)
+    expect(rules.map((r) => r[1].split(',').map((s) => s.trim()))).toEqual([DARK_SELECTORS, LIGHT_SELECTORS, SHAPE_SELECTORS])
+    const shapeNames = (rules[2][2].match(/--[\w-]+(?=\s*:)/g) ?? [])
+    expect(shapeNames.length).toBeGreaterThan(0)
+    for (const name of shapeNames) expect(name, 'the shape rule holds only shape tokens').toMatch(/^--(?:radius|shadow|blur|space)-/)
     expect(darkDeclarations.size).toBeGreaterThan(50)
 
     for (const [i, [theme, tokens]] of ([['dark', darkDeclarations], ['light', lightDeclarations]] as const).entries()) {
@@ -262,7 +274,8 @@ describe('workspace.css', () => {
 
   it('only uses tokens that theme.css or its own scoped aliases define', () => {
     const css = stripCssComments(workspaceCss)
-    const theme = themeTokens()
+    // theme.css defines the color tokens (its two color rules) and, since #46, the shape tokens (its shape rule).
+    const theme = new Set([...themeTokens().keys(), ...shapeTokens().keys()])
     const local = new Set([...css.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]))
     // The palette namespace belongs to theme.css: no stylesheet redefines a --color-* token.
     expect([...local].filter((name) => name.startsWith('--color-'))).toEqual([])
@@ -977,3 +990,213 @@ function lineColor(value: unknown, project: Project): string {
   const result: unknown = expr.evaluate({ zoom: 8 }, { type: feature.geometry.type, properties: feature.properties })
   return result instanceof Color ? result.toString() : String(result)
 }
+
+// ---------------------------------------------------------------------------------------------
+// Shape tokens (#46): one corner-radius, shadow, blur and spacing scale for every surface.
+// They live in theme.css's third rule (`:root`, after the two color rules), so theme.css is the one
+// place for every design token; workspace.css only uses them. Add future radius/shadow/blur/spacing
+// tokens to that rule, one per line with a comment; the tests below and in 'theme.css' enforce it.
+// ---------------------------------------------------------------------------------------------
+
+/** workspace.css without comments and without @media blocks: its base (desktop) rules. */
+const workspaceBaseCss = stripCssComments(workspaceCss).replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '')
+
+/** The declarations (property -> value, last one wins) of every base workspace.css rule whose selector list contains `selector`. */
+function workspaceDeclarations(selector: string): Map<string, string> {
+  const decls = new Map<string, string>()
+  for (const m of workspaceBaseCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!m[1].split(',').map((s) => s.trim()).includes(selector)) continue
+    for (const d of m[2].split(';')) {
+      const i = d.indexOf(':')
+      if (i > 0) decls.set(d.slice(0, i).trim(), d.slice(i + 1).trim())
+    }
+  }
+  return decls
+}
+
+/** theme.css's shape-token rule (#46): name -> { value, comment }, one token per line like the color rules. */
+function shapeTokens(): Tokens {
+  const rule = themeRules.find((r) => r.selectors.join(',') === SHAPE_SELECTORS.join(','))
+  expect(rule, 'theme.css has a shape-token rule').toBeDefined()
+  const tokens = ruleTokens(SHAPE_SELECTORS)
+  expect(rule!.body.match(/--[\w-]+\s*:/g) ?? [], 'one declaration per line').toHaveLength(tokens.size)
+  return tokens
+}
+
+/** A border-radius value made only of shape tokens: `50%` (circles), or 1-4 parts each var(--radius-…) or 0. */
+function isTokenRadius(value: string): boolean {
+  if (value === '50%') return true
+  const parts = value.replace(/\s*\/\s*/g, ' ').split(/\s+/).filter(Boolean) // a token part has no spaces; calc() etc. splits into invalid parts
+  return parts.length >= 1 && parts.length <= 4 && parts.every((p) => p === '0' || /^var\(--radius-[\w-]+\)$/.test(p))
+}
+
+const LENGTH = /^\d+(?:\.\d+)?(?:px|rem)$/
+const SHAPE_TOKEN_REF = /var\((--(?:radius|shadow|blur|space)-[\w-]+)\)/g
+
+// The components the ticket covers. OverlapList.tsx is left out on purpose: nothing renders it
+// (only its own test imports it), and #46 leaves it untouched.
+const SHAPE_COMPONENTS = ['BasemapToggle.tsx', 'ProjectMap.tsx', 'MapLegend.tsx', 'OverlapDetail.tsx', 'UploadProjects.tsx']
+/** Tailwind radius, shadow and backdrop-blur utilities (any variant or arbitrary value), except rounded-full. */
+const AD_HOC_SHAPE_CLASS = /(?<![\w-])(?:rounded|shadow|backdrop-blur)(?:-[^\s'"`}]*)?(?=[\s'"`}]|$)/g
+const adHocShapeClasses = (source: string) => [...source.matchAll(AD_HOC_SHAPE_CLASS)].map((m) => m[0]).filter((c) => c !== 'rounded-full')
+
+describe('shape tokens (#46)', () => {
+  it('defines the radius, shadow, blur and spacing tokens in one :root rule, each with a one-line comment on where it applies', () => {
+    const tokens = shapeTokens()
+    expect([...tokens.keys()]).toEqual([
+      '--radius-sm', '--radius-md', '--radius-lg',
+      '--shadow-panel', '--shadow-control',
+      '--blur-panel',
+      '--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6',
+    ])
+    for (const [name, { comment }] of tokens) {
+      expect(comment, `${name} needs a one-line comment`).toMatch(/^\/\*\s*\S.*\*\/$/)
+    }
+    // Single source: only theme.css defines them, and its header says where each kind of token goes.
+    const workspaceDefines = [...stripCssComments(workspaceCss).matchAll(/(--(?:radius|shadow|blur|space)-[\w-]+)\s*:/g)].map((m) => m[1])
+    expect(workspaceDefines, 'workspace.css only uses the shape tokens').toEqual([])
+    expect(themeCss).toMatch(/shape tokens \(#46\): --radius-\*, --shadow-\*, --blur-\*,/)
+  })
+
+  it('gives radius, blur and spacing tokens plain lengths: three radius tiers (6/10/16px) and a 4px spacing scale', () => {
+    const tokens = shapeTokens()
+    const px = (name: string) => {
+      const value = tokens.get(name)?.value ?? ''
+      expect(value, name).toMatch(LENGTH)
+      return parseFloat(value) * (value.endsWith('rem') ? 16 : 1)
+    }
+    expect(['--radius-sm', '--radius-md', '--radius-lg'].map(px)).toEqual([6, 10, 16])
+    expect(px('--blur-panel')).toBeGreaterThan(0)
+    for (let i = 1; i <= 6; i++) expect(px(`--space-${i}`), `--space-${i}`).toBe(4 * i)
+    // The basemap picker's inner buttons (md) sit inside its lg corner, padded by --space-1: md <= lg - space-1.
+    expect(px('--radius-md')).toBeLessThanOrEqual(px('--radius-lg') - px('--space-1'))
+  })
+
+  it('builds shadows from offsets, blur and theme.css color tokens only, so each theme keeps its own shadow colors', () => {
+    const tokens = shapeTokens()
+    for (const name of ['--shadow-panel', '--shadow-control']) {
+      const value = tokens.get(name)?.value ?? ''
+      expect(value.replace(/var\(--[\w-]+\)/g, '').match(COLOR_LITERAL), name).toBeNull()
+      for (const layer of splitTopLevel(value)) {
+        const m = layer.match(/^(?:-?\d+(?:\.\d+)?(?:px)?\s+){2,4}var\((--color-[\w-]+)\)$/)
+        expect(m, `${name} layer "${layer}"`).not.toBeNull()
+        // The color is a real token in both themes, and the light theme redefines it (navy, not black).
+        for (const theme of THEMES) expect(() => resolveToken(m![1], theme), `${theme} ${m![1]}`).not.toThrow()
+        expect(lightDeclarations.has(m![1]), m![1]).toBe(true)
+      }
+    }
+  })
+
+  it('checks radius values the way the workspace.css test below relies on', () => {
+    for (const ok of ['var(--radius-sm)', '50%', '0 var(--radius-sm) var(--radius-sm) 0', 'var(--radius-lg) / var(--radius-md)']) expect(isTokenRadius(ok), ok).toBe(true)
+    for (const bad of ['5px', '.5rem', '999px', '0 4px 4px 0', '0 var(--radius-sm) 4px 0', 'calc(var(--radius-lg) - 4px)', 'var(--gap)', '']) expect(isTokenRadius(bad), bad).toBe(false)
+  })
+
+  it('leaves workspace.css no raw border-radius: every value is var(--radius-…) (each part of a shorthand, or 0) or 50%', () => {
+    const css = stripCssComments(workspaceCss) // media queries included
+    const radii = [...css.matchAll(/(border(?:-[a-z]+)*-radius)\s*:\s*([^;}]+)/g)].map((m) => ({ prop: m[1], value: m[2].trim() }))
+    expect(radii.length).toBeGreaterThan(20)
+    for (const { prop, value } of radii) expect(isTokenRadius(value), `${prop}: ${value}`).toBe(true)
+    // The scale is really used: all three tiers, and the "why" callout's one-sided shorthand.
+    for (const tier of ['sm', 'md', 'lg']) expect(css).toContain(`border-radius:var(--radius-${tier})`)
+    expect(css).toContain('border-radius:0 var(--radius-sm) var(--radius-sm) 0')
+  })
+
+  it('defines every --radius/--shadow/--blur/--space token that workspace.css uses', () => {
+    const defined = shapeTokens()
+    const used = new Set([...stripCssComments(workspaceCss).matchAll(SHAPE_TOKEN_REF)].map((m) => m[1]))
+    expect(used.size).toBe(defined.size) // every token is used somewhere, too
+    for (const name of used) expect(defined.has(name), `${name} is not defined`).toBe(true)
+  })
+
+  it('casts drop shadows only through the shadow tokens (inset lines, like the selected card bar, excepted) and blurs through --blur-panel', () => {
+    const css = stripCssComments(workspaceCss)
+    const shadows = [...css.matchAll(/box-shadow\s*:\s*([^;}]+)/g)].map((m) => m[1].trim())
+    expect(shadows.length).toBeGreaterThan(5)
+    for (const value of shadows) {
+      for (const layer of splitTopLevel(value)) {
+        expect(/^var\(--shadow-[\w-]+\)$/.test(layer) || /(?:^|\s)inset(?:\s|$)/.test(layer), `box-shadow layer "${layer}"`).toBe(true)
+      }
+    }
+    // Backdrop blur on the page's surfaces reads the token; only the dialog's ::backdrop keeps its own
+    // (tokens on :root may not reach ::backdrop, see theme.css).
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      for (const d of m[2].matchAll(/backdrop-filter\s*:\s*([^;]+)/g)) {
+        if (m[1].includes('::backdrop')) continue
+        expect(d[1].trim(), m[1].trim()).toBe('blur(var(--blur-panel))')
+      }
+    }
+  })
+
+  it('gives every floating panel the lg radius and the panel shadow, like the sidebar card', () => {
+    // Legend popover and map tooltip share .map-panel (MapLegend.tsx, ProjectMap.tsx).
+    for (const selector of ['.sidebar-panel', '.selection-panel', '.workspace-notice', '.upload-dialog', '.map-panel']) {
+      const decls = workspaceDeclarations(selector)
+      expect(decls.get('border-radius'), selector).toBe('var(--radius-lg)')
+      expect(splitTopLevel(decls.get('box-shadow') ?? ''), selector).toContain('var(--shadow-panel)')
+    }
+    // Floating panels are padded from the spacing scale.
+    expect(workspaceDeclarations('.selection-panel').get('padding')).toBe('var(--space-4)')
+    expect(workspaceDeclarations('.map-panel').get('padding')).toBe('var(--space-4)')
+    expect(workspaceDeclarations('.workspace-notice').get('padding')).toBe('var(--space-3) var(--space-4)')
+    expect(workspaceDeclarations('.upload-shell').get('padding')).toMatch(/^(?:var\(--space-\d\)\s*){1,4}$/)
+  })
+
+  it('gives the map toolbar controls the lg radius, the control shadow and the panel blur, with inner basemap buttons one tier down', () => {
+    const control = workspaceDeclarations('.map-control')
+    expect(control.get('border-radius')).toBe('var(--radius-lg)')
+    expect(control.get('box-shadow')).toBe('var(--shadow-control)')
+    expect(control.get('backdrop-filter')).toBe('blur(var(--blur-panel))')
+    expect(workspaceDeclarations('.map-segmented').get('padding')).toBe('var(--space-1)')
+    expect(workspaceDeclarations('.map-segmented button').get('border-radius')).toBe('var(--radius-md)')
+    const toolbar = workspaceDeclarations('.map-toolbar')
+    expect([toolbar.get('left'), toolbar.get('top'), toolbar.get('gap')]).toEqual(['var(--space-4)', 'var(--space-4)', 'var(--space-2)'])
+    // Top bar icon buttons, cards, inputs and the sort select share the md/sm tiers.
+    expect(workspaceDeclarations('.sidebar-toggle').get('border-radius')).toBe('var(--radius-md)')
+    expect(workspaceDeclarations('.theme-toggle').get('border-radius')).toBe('var(--radius-md)')
+    for (const selector of ['.opportunity-card', '.batch-card', '.workspace-search', '.primary-button', '.secondary-button']) {
+      expect(workspaceDeclarations(selector).get('border-radius'), selector).toBe('var(--radius-md)')
+    }
+    expect(workspaceDeclarations('.list-sort select').get('border-radius')).toBe('var(--radius-sm)')
+  })
+})
+
+describe('components use the shape tokens, not ad-hoc Tailwind radius/shadow/blur (#46)', () => {
+  const componentSource = (file: string) => {
+    const source = sources[`./components/${file}`]
+    if (source === undefined) throw new Error(`no source for ${file}`)
+    return source
+  }
+
+  it('recognizes Tailwind radius, shadow and blur utilities, variants and arbitrary values, allowing rounded-full', () => {
+    expect(adHocShapeClasses('"flex rounded-xl p-1 shadow-lg backdrop-blur-md"')).toEqual(['rounded-xl', 'shadow-lg', 'backdrop-blur-md'])
+    expect(adHocShapeClasses('`h-1 rounded ${x ? \'hover:shadow-sm\' : \'\'}`')).toEqual(['rounded', 'shadow-sm']) // variants are caught (reported without the prefix)
+    expect(adHocShapeClasses('"rounded-[var(--radius-lg)] shadow-violet-950/20 !rounded-t-lg"')).toEqual(['rounded-[var(--radius-lg)]', 'shadow-violet-950/20', 'rounded-t-lg'])
+    expect(adHocShapeClasses('"size-2 rounded-full border-2" map-control map-panel')).toEqual([])
+  })
+
+  it.each(SHAPE_COMPONENTS)('%s has no rounded-* (except rounded-full), shadow-* or backdrop-blur-* classes', (file) => {
+    expect(adHocShapeClasses(componentSource(file))).toEqual([])
+  })
+
+  it('styles the map toolbar, its controls, the legend popover and the tooltip with the workspace.css shape classes', () => {
+    const map = componentSource('ProjectMap.tsx')
+    expect(map).toContain('<div className="map-toolbar">')
+    expect(map).toMatch(/onClick=\{fitData\}[\s\S]*?className="map-control /)
+    expect(map).toMatch(/role="tooltip" className="map-panel /)
+    // Every map-* class the components use is defined in workspace.css.
+    const used = new Set(SHAPE_COMPONENTS.flatMap((file) => [...componentSource(file).matchAll(/(?<![\w-])(map-[a-z-]+)(?=[\s"'`])/g)].map((m) => m[1])))
+    expect([...used].sort()).toEqual(['map-control', 'map-legend-panel', 'map-panel', 'map-segmented', 'map-toolbar'])
+    for (const cls of used) expect(workspaceBaseCss, cls).toMatch(new RegExp(`\\.${cls}[\\s{,.:\\[]`))
+  })
+
+  it('renders the basemap picker and the legend with those classes', () => {
+    const { container } = render(createElement(BasemapToggle, { options: ['dark', 'satellite'], value: 'dark', onChange: () => {} }))
+    expect(screen.getByRole('group', { name: 'Basemap' })).toHaveClass('map-control', 'map-segmented')
+    render(createElement(MapLegend))
+    const legend = screen.getByText('Legend').closest('details')
+    expect(legend).toHaveClass('map-control')
+    expect(screen.getByText('Coordination opportunity').parentElement).toHaveClass('map-panel', 'map-legend-panel')
+    expect(container.querySelector('[class*="rounded-"]:not(.rounded-full)')).toBeNull()
+  })
+})

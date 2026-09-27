@@ -169,16 +169,16 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
           <Layer {...overlapLayer} />
         </Source>
       </Map>
-      <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2 pr-12">
+      <div className="map-toolbar">
         <BasemapToggle options={basemapOptions(theme)} value={basemap} onChange={setPick} />
         <button type="button" onClick={fitData} disabled={!bounds}
-          className="min-h-11 rounded-xl border border-white/15 bg-slate-950/90 px-3 text-xs font-semibold text-slate-200 shadow-lg backdrop-blur-md hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 disabled:opacity-40">
+          className="map-control min-h-11 border border-white/15 bg-slate-950/90 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 disabled:opacity-40">
           Fit to data
         </button>
         <MapLegend />
       </div>
       {hoveredProject && (
-        <div role="tooltip" className="pointer-events-none absolute bottom-24 left-4 right-4 max-w-sm rounded-xl border border-white/15 bg-slate-950/95 p-4 text-slate-100 shadow-xl backdrop-blur-md">
+        <div role="tooltip" className="map-panel pointer-events-none absolute bottom-24 left-4 right-4 max-w-sm border border-white/15 bg-slate-950/95 text-slate-100">
           <p className="mb-1 text-xs text-sky-300">{hoveredProject.utility}</p>
           <p className="text-sm font-semibold">{hoveredProject.project_name}</p>
           <p className="mt-2 text-xs text-slate-400">In service: <time dateTime={hoveredProject.in_service_date}>{hoveredProject.in_service_date}</time></p>

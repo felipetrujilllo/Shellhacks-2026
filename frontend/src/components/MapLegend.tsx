@@ -8,12 +8,12 @@ const LOW_CONFIDENCE_SWATCH = themeColor('--color-legend-low-confidence', '#cbd5
 
 export default function MapLegend() {
   return (
-    <details className="relative rounded-xl border border-white/15 bg-slate-950/90 text-xs text-slate-200 shadow-lg backdrop-blur-md">
+    <details className="map-control relative border border-white/15 bg-slate-950/90 text-xs text-slate-200">
       <summary className="min-h-11 cursor-pointer px-3 py-3.5 font-semibold focus-visible:outline-2 focus-visible:outline-sky-400">Legend</summary>
-      <div className="absolute left-0 top-full mt-2 w-64 space-y-3 rounded-xl border border-white/15 bg-slate-950/95 p-4 shadow-xl">
+      <div className="map-panel map-legend-panel border border-white/15 bg-slate-950/95">
         {Object.entries(UTILITY_COLORS).map(([utility, color]) => (
           <div key={utility} className="flex items-center gap-2">
-            <span className="inline-block h-1 w-5 rounded" style={{ backgroundColor: color }} />
+            <span className="inline-block h-1 w-5 rounded-full" style={{ backgroundColor: color }} />
             {utility}
           </div>
         ))}
@@ -29,7 +29,7 @@ export default function MapLegend() {
           Coordination opportunity
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-block h-1 w-5 rounded" style={{ backgroundColor: SELECTED_OVERLAP_COLOR }} />
+          <span className="inline-block h-1 w-5 rounded-full" style={{ backgroundColor: SELECTED_OVERLAP_COLOR }} />
           Selected opportunity
         </div>
       </div>

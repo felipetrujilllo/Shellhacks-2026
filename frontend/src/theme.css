@@ -6,6 +6,15 @@
  * once at page load, so reload the page after editing a map token.
  * Tailwind utility classes on the map controls (bg-slate-950/90, text-sky-300, …) are not
  * tokenized yet.
+ * Three rules, and where a new token goes:
+ *   1. :root, ::backdrop                     dark colors (the default): --palette-* and --color-*
+ *   2. :root[data-theme="light"] …           the light theme's --color-* overrides (#45); every
+ *                                          --color-* except the map tokens is redeclared here
+ *   3. :root (at the end of this file)      shape tokens (#46): --radius-*, --shadow-*, --blur-*,
+ *                                          --space-*; not colors, the same in both themes
+ * Every token sits on its own line with a one-line comment saying where it is used, and
+ * theme.test.ts checks each rule holds only its own kind of token. Shadows hold no color
+ * literal: they compose the --color-sidebar-shadow* tokens, so each theme's shadow colors apply.
  * Tokens are also set on ::backdrop so the upload dialog's backdrop can read them in
  * browsers where ::backdrop does not inherit from :root.
  *
@@ -81,8 +90,8 @@
   --color-sidebar-bg: #47494d; /* floating sidebar card background: sidebar card grey, the assignee's choice, not part of the gold/navy palette */
   --color-sidebar-border: color-mix(in srgb, var(--palette-white) 11%, transparent); /* sidebar card border */
   --color-sidebar-highlight: color-mix(in srgb, var(--palette-white) 8%, transparent); /* sidebar card inset top highlight */
-  --color-sidebar-shadow: #0000008c; /* sidebar card far drop shadow */
-  --color-sidebar-shadow-near: #00000059; /* sidebar card near drop shadow */
+  --color-sidebar-shadow: #0000008c; /* far drop shadow of every floating panel (--shadow-panel in the shape rule below: sidebar card, selection panel, notice, upload dialog, legend, map tooltip) */
+  --color-sidebar-shadow-near: #00000059; /* near drop shadow of every floating panel (--shadow-panel) and the floating map controls' shadow (--shadow-control) */
   --color-sidebar-text: #f2f3f5; /* sidebar text (sidebar --ink) and sort dropdown options */
   --color-sidebar-muted: #cdd0d4; /* sidebar secondary text (sidebar --muted); lightened from #c0c3c9 to reach 4.5:1 on hovered/selected sidebar cards */
   --color-sidebar-rule: color-mix(in srgb, var(--palette-white) 10%, transparent); /* sidebar dividers (sidebar --rule) */
@@ -149,7 +158,7 @@
   --color-upload-problem-bg: #f4e2d4; /* notice background when saved uploads could not be added */
   --color-upload-problem-text: #5b3419; /* notice text when saved uploads could not be added */
   --color-upload-problem-link: #7a3f14; /* Clear my uploads link inside that notice */
-  --color-floating-shadow: #0003; /* drop shadow of the notice and selection panel */
+  --color-floating-shadow: #0003; /* unused since #46 (the notice and selection panel now cast --shadow-panel); kept because theme.test.ts pins the pre-#45 dark token set */
   --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* navy at 2% over white: selection panel and upload dialog background */
   --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* navy at 17% over white: selection panel border */
   --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel heading; at least 4.5:1 on the panel */
@@ -161,7 +170,7 @@
 
   /* Upload dialog */
   --color-dialog-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog border */
-  --color-dialog-shadow: #0005; /* upload dialog drop shadow */
+  --color-dialog-shadow: #0005; /* unused since #46 (the upload dialog now casts --shadow-panel); kept because theme.test.ts pins the pre-#45 dark token set */
   --color-dialog-backdrop: color-mix(in srgb, var(--palette-navy) 66%, transparent); /* navy at 66%: dimmed backdrop behind the upload dialog */
   --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: upload dialog icon tile background */
   --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog icon tile border */
@@ -241,8 +250,8 @@
   --color-sidebar-bg: var(--palette-white); /* floating sidebar card background (white) */
   --color-sidebar-border: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar card border */
   --color-sidebar-highlight: color-mix(in srgb, var(--palette-white) 8%, transparent); /* same as dark */
-  --color-sidebar-shadow: color-mix(in srgb, var(--palette-navy) 22%, transparent); /* navy at 22%: sidebar card far drop shadow, softer than the dark theme's black */
-  --color-sidebar-shadow-near: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar card near drop shadow */
+  --color-sidebar-shadow: color-mix(in srgb, var(--palette-navy) 22%, transparent); /* navy at 22%: far drop shadow of every floating panel (--shadow-panel), softer than the dark theme's black */
+  --color-sidebar-shadow-near: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: near drop shadow of floating panels (--shadow-panel) and map controls (--shadow-control) */
   --color-sidebar-text: var(--palette-navy); /* sidebar text (sidebar --ink) and sort dropdown options (navy) */
   --color-sidebar-muted: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: sidebar secondary text (sidebar --muted); at least 4.5:1 on hovered/selected sidebar cards */
   --color-sidebar-rule: color-mix(in srgb, var(--palette-navy) 12%, transparent); /* navy at 12%: sidebar dividers (sidebar --rule) */
@@ -344,4 +353,29 @@
   --color-status-ready: var(--palette-navy); /* same as dark */
   --color-status-flagged: #cc964c; /* same as dark */
   --color-review-note: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* same as dark */
+}
+
+/*
+ * Shape tokens (#46): the one corner-radius, shadow, blur and spacing scale, so cards, buttons,
+ * map controls and floating panels share the floating sidebar card's macOS-like corners.
+ * Three radius tiers (6/10/16px): sm for chips and small controls, md for buttons, inputs and cards,
+ * lg for floating panels. workspace.css may use no border-radius but var(--radius-…) or 50%.
+ * Not colors, so this rule is the same in both themes. Add future radius/shadow/blur/spacing
+ * tokens here (one per line, with a comment), never in workspace.css.
+ * Note: --radius-sm/md/lg share Tailwind's theme namespace, so a Tailwind rounded-sm/md/lg
+ * would follow this scale.
+ */
+:root {
+  --radius-sm: 6px; /* chips and small controls: icon buttons, sort select, tab and filter counts, "new" tag, the "why" callout's right corners */
+  --radius-md: 10px; /* buttons, inputs and cards: top bar icon buttons, primary/secondary buttons, search, opportunity/batch cards, project rows, drop zone, error box, upload symbol, map context chip, basemap picker buttons */
+  --radius-lg: 16px; /* floating panels: sidebar card, selection/detail panel, notice, upload dialog, map toolbar controls, legend popover, map tooltip */
+  --shadow-panel: 0 18px 50px var(--color-sidebar-shadow), 0 2px 8px var(--color-sidebar-shadow-near); /* floating panels: sidebar card (plus its inset highlight), selection/detail panel, notice, upload dialog, legend popover, map tooltip */
+  --shadow-control: 0 4px 14px var(--color-sidebar-shadow-near), 0 1px 3px var(--color-sidebar-shadow-near); /* floating map controls: basemap picker, Fit to data, Legend button, map context chip, and the pressed basemap button */
+  --blur-panel: 12px; /* backdrop blur behind the translucent map surfaces: toolbar controls, legend popover, tooltip, map context chip */
+  --space-1: 4px; /* basemap picker padding and gap (its inner buttons' md radius sits inside its lg radius) */
+  --space-2: 8px; /* map toolbar gap, legend popover offset, map context chip gap and vertical padding */
+  --space-3: 12px; /* sidebar card margin (--gap), notice vertical padding and gap, map context chip side padding, legend row gap */
+  --space-4: 16px; /* floating panel padding (selection panel, legend popover, tooltip), notice side padding, map overlay inset from the map edge */
+  --space-5: 20px; /* upload dialog bottom padding (all sides on phones) */
+  --space-6: 24px; /* upload dialog top and side padding, map context chip inset from the map bottom */
 }
