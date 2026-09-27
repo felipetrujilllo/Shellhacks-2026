@@ -23,9 +23,11 @@ Full prompt and judging criteria live in `docs/prompt.md` (`plan-slice` reads it
   (`docs/prompt.md`).
 
 Project name: **Relay** (the UI brand; plan in `docs/project.md`). It was called GridWatch
-earlier — infrastructure names keep that on purpose: the live URL
+earlier — infrastructure names keep that on purpose: the default App Platform URL
 `gridwatch-b3trj.ondigitalocean.app`, the App Platform app `gridwatch`, and the local test DB
 `gridwatch_test` / container `gridwatch-pg`. Renaming those would break the deploy and CI.
+The live site is at `relaygrid.us` (custom domain, #30); `gridwatch-b3trj.ondigitalocean.app`
+still works alongside it.
 
 ## Team
 - **A — Data/Backend:** @Eveliox — PDF parsing, OSM matching, DB schema, overlap engine
@@ -152,7 +154,8 @@ cost:
 
 ## Still open
 - Event start/end times (TODO in `## Event`, #33)
-- Custom domain for Relay (#30) — the live app stays at `gridwatch-b3trj.ondigitalocean.app`
-  until then
+- Custom domain for Relay (#30) — `relaygrid.us` is declared in `.do/app.yaml`; it serves the
+  live site once the spec is applied and Porkbun's nameservers point at DigitalOcean
+  (`gridwatch-b3trj.ondigitalocean.app` keeps working either way)
 - UI freeze time — not set yet; agree as a team once the event end time is known. After the
   freeze, only bug fixes to the frontend.

@@ -67,7 +67,7 @@ Locked decisions:
 | Database | Tiger Data (Postgres + PostGIS + time-series) |
 | AI | Snowflake Cortex / REST — savings note only |
 | Hosting | DigitalOcean App Platform, deployed from GitHub |
-| Domain | GoDaddy Registry |
+| Domain | `relaygrid.us` — registered at Porkbun, DNS managed by DigitalOcean (#30) |
 | Geocoding | Nominatim (cache every result), only if source data has addresses |
 
 ## MVP (must ship; the first two map to the sponsor's "Required")

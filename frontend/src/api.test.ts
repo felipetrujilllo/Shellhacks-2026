@@ -37,6 +37,21 @@ describe('apiUrl', () => {
     expect(apiUrl('overlaps')).toBe('https://gridwatch.example/api/overlaps')
   })
 
+  it('keeps a relative base same-origin (production sets VITE_API_URL=/api, #30)', () => {
+    vi.stubEnv('VITE_API_URL', '/api')
+    expect(apiUrl('/overlaps')).toBe('/api/overlaps')
+    expect(apiUrl('overlaps')).toBe('/api/overlaps')
+    vi.stubEnv('VITE_API_URL', '/api/')
+    expect(apiUrl('/overlaps')).toBe('/api/overlaps')
+  })
+
+  it('fetches a relative base on the page\'s own host', async () => {
+    vi.stubEnv('VITE_API_URL', '/api')
+    fetchMock.mockResolvedValue(jsonResponse(apiExample('overlaps')))
+    await fetchOverlaps()
+    expect(requestedUrl()).toBe('/api/overlaps')
+  })
+
   it('throws when VITE_API_URL is missing', () => {
     vi.stubEnv('VITE_API_URL', '')
     expect(() => apiUrl('/projects')).toThrow('VITE_API_URL is not set')

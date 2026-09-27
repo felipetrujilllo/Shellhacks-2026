@@ -3,19 +3,35 @@
 # the procedure; the DATABASE_URL secret is deliberately NOT in here.
 #
 #   doctl apps create --spec .do/app.yaml              # first time
-#   doctl apps update <app-id> --spec .do/app.yaml     # after editing this file
+#   After editing this file, apply it from the LIVE spec (README "Custom domain"): updating
+#   straight from this file sends DATABASE_URL with no value and wipes the secret.
 #
-# One app, two components, ONE origin:
+# One app, two components, ONE origin per hostname:
 #   web (static site) -> /       the Vite build
 #   api (FastAPI)     -> /api    uvicorn; the /api prefix is stripped before the app sees it
 #
 # Serving both from one app is what breaks the URL cycle (the backend needs the frontend's
-# origin for CORS, the frontend needs the backend's URL at build time). Same origin means
-# FRONTEND_ORIGIN is just ${APP_URL}, so neither component has to know the other's hostname
-# and nothing is hardcoded. It also means the demo makes same-origin requests, so the CORS
-# middleware never has to be right for the demo to work.
+# origin for CORS, the frontend needs the backend's URL at build time). The frontend calls
+# the API at the relative path /api, so whichever hostname served the page (relaygrid.us,
+# www.relaygrid.us or the default *.ondigitalocean.app host) also answers its API calls:
+# every request is same-origin, CORS never runs, and no hostname is baked into the bundle.
+# FRONTEND_ORIGIN is ${APP_URL} only because app/config.py requires it; nothing in the
+# demo depends on it being right.
 name: gridwatch
 region: nyc
+
+# Custom domains, added on top of the default gridwatch-b3trj.ondigitalocean.app host, which
+# keeps working (the app name stays `gridwatch`; renaming it would break the deploy). The
+# domain is registered at Porkbun with its nameservers pointed at ns1/ns2/ns3.digitalocean.com,
+# so DigitalOcean manages the relaygrid.us zone: it creates the records for these hosts and
+# issues their TLS certificates itself once DNS resolves. PRIMARY is what ${APP_URL} becomes.
+domains:
+  - domain: relaygrid.us
+    type: PRIMARY
+    zone: relaygrid.us
+  - domain: www.relaygrid.us
+    type: ALIAS
+    zone: relaygrid.us
 
 ingress:
   rules:
@@ -73,7 +89,9 @@ services:
         scope: RUN_TIME
         # The frontend is the `web` component of this same app, served at /, so the app's
         # own URL *is* the frontend's origin. ${web.PUBLIC_URL} would be the same host with
-        # a trailing path, which CORS compares literally and would reject.
+        # a trailing path, which CORS compares literally and would reject. With a PRIMARY
+        # domain, ${APP_URL} is https://relaygrid.us; the other hosts don't need CORS because
+        # the frontend's API calls are same-origin (VITE_API_URL below).
         value: ${APP_URL}
 
 static_sites:
@@ -91,6 +109,11 @@ static_sites:
         # when it builds. A runtime-only value would never reach the browser, and
         # frontend/src/api.ts throws when VITE_API_URL is empty.
         scope: BUILD_TIME
-        # The app URL plus the api component's ingress path, i.e. https://<app>/api.
-        # Derived, so renaming the app or moving the route needs no edit here.
-        value: ${api.PUBLIC_URL}
+        # Relative on purpose: the api component's ingress path, with no scheme or host. It
+        # used to be ${api.PUBLIC_URL}, but once a PRIMARY domain exists that resolves to
+        # https://relaygrid.us/api, so the bundle served at www.relaygrid.us or the
+        # *.ondigitalocean.app host would call relaygrid.us cross-origin and the backend's
+        # CORS (one allowed origin: FRONTEND_ORIGIN) would reject it. /api makes the browser
+        # call the host that served the page, on every hostname. Keep it equal to the /api
+        # ingress prefix above (backend/tests/test_app_spec.py checks that).
+        value: /api

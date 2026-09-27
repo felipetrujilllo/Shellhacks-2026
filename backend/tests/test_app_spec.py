@@ -269,9 +269,13 @@ def test_no_env_value_hardcodes_a_url(api, web):
             value = entry.get("value")
             if not value:
                 continue
-            assert re.fullmatch(r"\$\{[A-Za-z0-9_.]+\}(/[A-Za-z0-9_./-]*)?", value), (
+            bindable = re.fullmatch(r"\$\{[A-Za-z0-9_.]+\}(/[A-Za-z0-9_./-]*)?", value)
+            # A root-relative path (/api) names no host, so it can't go stale either; `//`
+            # anywhere would make the browser read it as protocol-relative, i.e. a host.
+            root_relative = re.fullmatch(r"(/[A-Za-z0-9_.-]+)+/?", value)
+            assert bindable or root_relative, (
                 f"{component['name']}.{key} = {value!r} should be a bindable platform "
-                "variable, not a literal URL"
+                "variable or a root-relative path, not a literal URL"
             )
             for literal in ("http://", "https://", "localhost", "ondigitalocean.app"):
                 assert literal not in value, f"{component['name']}.{key} hardcodes {literal}"
@@ -288,15 +292,34 @@ def test_frontend_origin_binds_to_the_app_url_which_the_static_site_owns(spec, a
     )
 
 
-def test_frontend_api_url_binds_to_the_backend_component(api, web):
+def test_frontend_api_url_is_the_backend_ingress_prefix(spec, api, web):
+    """#30: VITE_API_URL is the api component's ingress path, relative, so the browser calls
+    the API on whichever host served the page. It used to be ${api.PUBLIC_URL}, which with a
+    PRIMARY custom domain resolves to https://<primary>/api and makes every other hostname's
+    bundle call the primary cross-origin, where CORS (one allowed origin) rejects it."""
     entry = env_map(web)["VITE_API_URL"]
-    expected = "${" + api["name"] + ".PUBLIC_URL}"
-    assert entry["value"] == expected, (
-        "VITE_API_URL must be derived from the backend component's public URL, not written out"
+    prefix = rule_for(spec, api["name"])["match"]["path"]["prefix"]
+    assert entry["value"] == prefix, (
+        f"VITE_API_URL is {entry['value']!r}, but the api component is served at {prefix!r}; "
+        "it must be exactly that relative path so every hostname calls itself"
     )
+    assert "://" not in entry["value"], "VITE_API_URL must not name a scheme or host"
     assert entry["scope"] == "BUILD_TIME", (
         "Vite inlines import.meta.env.VITE_* at build time; a RUN_TIME value never reaches "
         "the browser and frontend/src/api.ts would throw"
+    )
+
+
+def test_frontend_api_base_can_never_be_cross_origin(web):
+    """Whatever VITE_API_URL becomes, it must stay a same-origin path: a scheme, a host or a
+    protocol-relative `//host` would pin the bundle to one hostname and break it on the
+    others (the custom domain, its www alias, the *.ondigitalocean.app host). The TS side
+    (frontend/src/api.test.ts) checks apiUrl() turns '/api' into '/api/overlaps'."""
+    value = env_map(web)["VITE_API_URL"]["value"]
+    assert value.startswith("/"), f"VITE_API_URL {value!r} is not a root-relative path"
+    assert "//" not in value, f"VITE_API_URL {value!r} would be read as a host"
+    assert "${" not in value, (
+        f"VITE_API_URL {value!r} binds a platform URL, which resolves to the PRIMARY domain"
     )
 
 
@@ -381,3 +404,105 @@ def test_readme_does_not_document_a_doctl_flag_that_does_not_exist():
         "README documents `--env` as a doctl argument, but no doctl apps command accepts it: "
         + "; ".join(offenders)
     )
+
+
+# --- custom domain (#30) -------------------------------------------------------------
+
+
+def live_site_section() -> str:
+    """The README's "### Live site" section, up to the next heading."""
+    readme = README.read_text(encoding="utf-8")
+    match = re.search(r"^### Live site\s*$(.*?)(?=^#{2,3} )", readme, re.M | re.S)
+    assert match, "README has no '### Live site' section"
+    return match.group(1)
+
+
+def default_host(spec: dict) -> str:
+    """The app's *.ondigitalocean.app host, as CLAUDE.md records it. The spec can't hold it
+    (the platform assigns it), but it always starts with the app's name."""
+    text = CLAUDE_MD.read_text(encoding="utf-8")
+    hosts = set(re.findall(r"\b([a-z0-9-]+\.ondigitalocean\.app)\b", text))
+    assert len(hosts) == 1, f"CLAUDE.md should name one ondigitalocean.app host, found {hosts}"
+    host = hosts.pop()
+    assert host.startswith(spec["name"] + "-"), (
+        f"{host} is not the default host of the app named {spec['name']!r}"
+    )
+    return host
+
+
+@pytest.fixture(scope="module")
+def domains(spec) -> list[dict]:
+    entries = spec.get("domains") or []
+    assert entries, f"{SPEC_REL} declares no custom domains"
+    names = [entry["domain"] for entry in entries]
+    assert len(names) == len(set(names)), f"duplicate domains: {names}"
+    return entries
+
+
+@pytest.fixture(scope="module")
+def primary(domains) -> str:
+    primaries = [entry["domain"] for entry in domains if entry["type"] == "PRIMARY"]
+    assert len(primaries) == 1, f"expected exactly one PRIMARY domain, found {primaries}"
+    return primaries[0]
+
+
+def test_every_domain_is_in_its_own_zone(domains):
+    for entry in domains:
+        assert entry["type"] in ("PRIMARY", "ALIAS"), f"unexpected type for {entry}"
+        zone = entry.get("zone")
+        assert zone, (
+            f"{entry['domain']} has no zone; without one DigitalOcean doesn't manage its "
+            "DNS records"
+        )
+        assert entry["domain"] == zone or entry["domain"].endswith("." + zone), (
+            f"{entry['domain']} is not inside zone {zone}"
+        )
+
+
+def test_www_is_an_alias_of_the_primary(domains, primary):
+    types = {entry["domain"]: entry["type"] for entry in domains}
+    assert types.get(f"www.{primary}") == "ALIAS", (
+        f"www.{primary} should be an ALIAS so both spellings serve the site"
+    )
+
+
+def test_primary_domain_is_the_one_the_readme_calls_the_live_site(primary):
+    section = live_site_section()
+    called_primary = [
+        host
+        for line in section.splitlines()
+        if "primary" in line.lower()
+        for host in re.findall(r"\*\*https://([^/*\s]+)/?\*\*", line)
+    ]
+    assert called_primary == [primary], (
+        f"README '### Live site' calls {called_primary} the primary, but {SPEC_REL} says "
+        f"{primary!r}"
+    )
+
+
+def test_readme_live_site_smoke_tests_the_domain_and_the_default_host(spec, api, primary):
+    section = live_site_section()
+    prefix = rule_for(spec, api["name"])["match"]["path"]["prefix"]
+    smoke = "scripts/smoke.py"
+    assert (REPO_ROOT / smoke).is_file(), f"{smoke} is gone; the README command is dead"
+    for host in (primary, default_host(spec)):
+        assert f"**https://{host}**" in section, f"README '### Live site' does not list {host}"
+        command = re.compile(
+            rf"^BASE_URL=https://{re.escape(host)}{re.escape(prefix)} \S*python {smoke}$",
+            re.M,
+        )
+        assert command.search(section), (
+            f"README '### Live site' has no `BASE_URL=https://{host}{prefix} ... {smoke}` "
+            "command (the smoke test needs the API base, including the prefix)"
+        )
+
+
+def test_readme_mentions_every_spec_domain(domains):
+    readme = README.read_text(encoding="utf-8")
+    for entry in domains:
+        assert f"https://{entry['domain']}" in live_site_section(), (
+            f"{entry['domain']} is served by the app but README '### Live site' never says so"
+        )
+        assert f"`{entry['domain']}`" in readme, (
+            f"README never documents {entry['domain']} (see '### Custom domain')"
+        )

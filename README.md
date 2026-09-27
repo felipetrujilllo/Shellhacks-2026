@@ -146,11 +146,12 @@ the console, put it in the spec too, or the next `doctl apps update` will undo i
 | `api` | service (Python buildpack) | `backend/` | `/api` → uvicorn, prefix stripped |
 | `web` | static site (Node buildpack) | `frontend/` | `/` → Vite's `dist/` |
 
-Both components live behind one hostname, which is how the chicken-and-egg between the two
-URLs is solved: the backend's `FRONTEND_ORIGIN` is `${APP_URL}` (the frontend is served from
-that same origin) and the frontend's `VITE_API_URL` is `${api.PUBLIC_URL}` (the app URL plus
-`/api`). No hostname is written down anywhere, so renaming the app breaks nothing. Requests
-are same-origin in production, so CORS never has to be right for the demo to work.
+Both components live behind the same hostname, which is how the chicken-and-egg between the
+two URLs is solved: the frontend's `VITE_API_URL` is the relative path `/api`, so the browser
+calls the API on whichever host served the page, and the backend's `FRONTEND_ORIGIN` is
+`${APP_URL}` (the frontend is served from that same origin). No hostname is baked into the
+bundle, so renaming the app or adding a domain breaks nothing. Requests are same-origin in
+production, so CORS never has to be right for the demo to work.
 
 `VITE_API_URL` is scoped `BUILD_TIME` on purpose: Vite bakes `import.meta.env.VITE_*` into
 the bundle when it builds, so a run-time-only value would never reach the browser.
@@ -161,17 +162,51 @@ dependency list stays in one place.
 
 ### Live site
 
-**https://gridwatch-b3trj.ondigitalocean.app** — the frontend at `/`, the API at `/api`
-(App Platform app `gridwatch`, built from `main`). Check it with the smoke test against the
-**API base, including `/api`**:
+- **https://relaygrid.us** — the primary custom domain (`https://www.relaygrid.us` is an
+  alias for it).
+- **https://gridwatch-b3trj.ondigitalocean.app** — the app's default host, which keeps
+  working alongside the domain.
+
+Both serve the same App Platform app `gridwatch`, built from `main`: the frontend at `/`, the
+API at `/api`. Check each with the smoke test against the **API base, including `/api`**:
 
 ```bash
+BASE_URL=https://relaygrid.us/api backend/.venv/bin/python scripts/smoke.py
 BASE_URL=https://gridwatch-b3trj.ondigitalocean.app/api backend/.venv/bin/python scripts/smoke.py
 BASE_URL=https://gridwatch-b3trj.ondigitalocean.app/api backend/.venv/bin/python scripts/check_demo_data.py
 ```
 
 It reads the same Tiger Data database as local dev, so reloading the demo data (above) shows
 up on the live site immediately; code changes after a promote, which CI/CD redeploys (below).
+
+### Custom domain
+
+`relaygrid.us` is registered at Porkbun, but its DNS is managed by DigitalOcean: at Porkbun
+the domain's authoritative nameservers are set to `ns1.digitalocean.com`,
+`ns2.digitalocean.com` and `ns3.digitalocean.com`. The hosts themselves are declared in the
+`domains:` block of `.do/app.yaml` — `relaygrid.us` as `PRIMARY`, `www.relaygrid.us` as
+`ALIAS`, both in zone `relaygrid.us` — so App Platform creates the DNS records and issues the
+TLS certificate automatically once the nameservers resolve (minutes to a few hours). Until
+then the domain fails its smoke test; the `*.ondigitalocean.app` host is unaffected. The CI
+deploy job keeps smoke-testing that default host.
+
+Why `VITE_API_URL` is the relative `/api` and not `${api.PUBLIC_URL}`: with a `PRIMARY`
+domain, App Platform resolves `${api.PUBLIC_URL}` to `https://relaygrid.us/api`. The bundle
+served at `www.relaygrid.us` or `gridwatch-b3trj.ondigitalocean.app` would then call
+`relaygrid.us` cross-origin, and the backend's CORS (one allowed origin, `FRONTEND_ORIGIN`)
+would reject it. A relative path is same-origin on every host. Local dev keeps the absolute
+`http://localhost:8000` in `frontend/.env`, because there the two are separate origins.
+
+**Applying a spec change safely** (e.g. the `domains:` block): don't update from the repo
+file directly. `.do/app.yaml` declares `DATABASE_URL` with no value, so
+`doctl apps update <app-id> --spec .do/app.yaml` sends it empty and wipes the secret. Start
+from the live spec instead, which carries the secret as an encrypted `EV[...]` value:
+
+```bash
+doctl apps spec get <app-id> > /tmp/live.yaml
+# edit the domains / envs in /tmp/live.yaml to match .do/app.yaml (leave DATABASE_URL alone)
+doctl apps update <app-id> --spec /tmp/live.yaml && rm /tmp/live.yaml
+```
 
 ### First deploy (once, by hand — needs a DigitalOcean account with the repo connected)
 
