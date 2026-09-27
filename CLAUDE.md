@@ -2,7 +2,8 @@
 
 ## Event
 ShellHacks 2026 — FIU.
-<START DATETIME> – <END DATETIME>. Team of 4.
+Start/end: **TODO — fill in the real start and end date-times (with timezone); tracked in #33.**
+Team of 4.
 
 ## Challenge: "Gridlock" (Sperry Tech sponsor challenge — see `docs/prompt.md`)
 > If you pivot mid-event: note the pivot here with a timestamp and one line on why, and say
@@ -150,5 +151,8 @@ cost:
   change. Don't commit on a BLOCK verdict unless the user overrides it in their own words.
 
 ## Still open
-- Test frameworks per layer (fill in `## Checks`)
-- Final project name
+- Event start/end times (TODO in `## Event`, #33)
+- Custom domain for Relay (#30) — the live app stays at `gridwatch-b3trj.ondigitalocean.app`
+  until then
+- UI freeze time — not set yet; agree as a team once the event end time is known. After the
+  freeze, only bug fixes to the frontend.
