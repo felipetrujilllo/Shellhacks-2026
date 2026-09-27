@@ -149,6 +149,11 @@ cost:
   not assume or infer it from "commit", "save", "done", "ship it", or a push earlier in
   the conversation. If in doubt, stop and ask.
 - Same for `git commit`: only commit when explicitly asked in that message.
+- Running the app locally: use only the commands in README "Running the app (API + site)
+  locally" — the API always with `--reload`. Before starting a server, check whether its port
+  (8000 API, 5173 site) is already taken; if it is, stop that process and start fresh rather
+  than reusing it. An API started without `--reload` keeps serving pre-commit code and the
+  local site silently hides new backend work.
 - Before committing or pushing (when asked), run `/test-gate` if it hasn't run since the last
   change. Don't commit on a BLOCK verdict unless the user overrides it in their own words.
 

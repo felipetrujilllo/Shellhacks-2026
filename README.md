@@ -135,6 +135,31 @@ npm run typecheck    # tsc -b (type-checks app + tests + vite config)
 npm run build        # production build into dist/
 ```
 
+### Running the app (API + site) locally
+
+Two terminals, both from this checkout. The API reads the repo-root `.env` and serves the demo
+database read-only; the site reads `VITE_API_URL` from `frontend/.env`
+(`VITE_API_URL=http://localhost:8000`, see `.env.example`).
+
+```bash
+cd backend && .venv/bin/python -m uvicorn app.main:app --reload --port 8000 --env-file ../.env
+cd frontend && npm run dev
+```
+
+Windows (PowerShell):
+
+```powershell
+cd backend; .venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000 --env-file ..\.env
+cd frontend; npm run dev
+```
+
+**Always start the API with `--reload`.** Without it uvicorn keeps serving the code it started
+with, so commits made after that (a pull, a teammate's merge, a ticket landing) never show up
+on the local site, and nothing warns you. Before starting it, check nothing already holds port
+8000 (`Get-NetTCPConnection -LocalPort 8000` / `lsof -i :8000`); if something does, stop it and
+start fresh rather than trusting it. To confirm the API is current, compare a field from the
+latest backend change against `curl http://localhost:8000/overlaps`.
+
 ## Deploying to DigitalOcean (App Platform)
 
 The whole app is one App Platform app with two components, described by `.do/app.yaml`
