@@ -73,6 +73,38 @@ Verified: haversine (R = 3958.8 mi) on the starter table's `lat_center`/`lon_cen
 reproduces all six distances exactly, and the other 19 pairs are all > 25 mi. Use this as
 the overlap algorithm's golden test.
 
+## Published spec (ShellHacks challenge page) — closest points and tiers
+
+The challenge text published on the ShellHacks site differs from the starter docs above in
+two ways (#51):
+
+- **Distance is measured between closest points, 40 km / 25 mi.** Quoted: "We measure the
+  closest points between two projects, not their centers — a 60 km power line can still pass
+  within 5 km of the other utility substation, and that counts."
+- **Overlaps are ranked in four tiers**, by what the two utilities can share:
+
+| Tier | Closest-point distance | What the utilities can share |
+|---|---|---|
+| Touching / crossing | 0 (the projects touch or cross) | must coordinate (outage timing, crossing structures) |
+| Under 1.6 km | < 1.6 km (1 mi) | can share the land itself (right-of-way, access roads, permits) |
+| Under 8 km | < 8 km (5 mi) | can share site logistics (laydown yards, deliveries) |
+| Under 40 km | < 40 km (25 mi) | can share crews and equipment |
+
+### Decision (#48–#51)
+
+- **Center gate stays.** A pair is flagged when its project **centers** are < 25 mi apart
+  (haversine), exactly as in "What to build" above. Why: there was no time left to move the
+  gate, and the center rule reproduces the sponsor's reference table exactly (the golden
+  test: 10 projects → the same 6 overlaps and distances).
+- **Closest approach sets the tier.** For every flagged pair we also measure the closest
+  points of the two projects (each is its A→B line, or its center when an endpoint is
+  unknown) and map it to Sperry's tiers, in miles: `crossing` = 0, `shared_land` < 1.0 mi,
+  `site_logistics` < 5.0 mi, `crews` otherwise (the 25 mi gate bounds it).
+- **Tier-first ranking.** The ranked list is ordered by tier (`crossing` → `shared_land` →
+  `site_logistics` → `crews`), then by score. Shipped in #48 (engine), #49 (API), #50 (UI).
+- **Known limitation.** Pairs whose lines come within 25 mi but whose centers do not are
+  not flagged. Moving the gate from centers to edges (closest points) is the next step.
+
 ## Judging criteria
 Not listed explicitly. From the deliverables: both utilities on an interactive map with
 overlaps highlighted, a ranked opportunity list, a cost/impact estimate (bonus), real

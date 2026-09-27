@@ -135,13 +135,7 @@ Real data is provided, so there is no synthetic fallback. The work is locating p
 | Venue wifi fails | Test on hotspot in rehearsal; offline local build |
 
 ## Demo script (< 3 min)
-1. (15s) Hook: utilities plan in isolation; FERC 2024 rule.
-2. (30s) Map: two utilities, two colors, live.
-3. (45s) Click a flagged pair: distance, date overlap, savings — say the number.
-4. (30s) Zoom out: "[N] overlaps worth an estimated $[X]."
-5. (20s) Tech: real PDFs → OSM-located substations → PostGIS 25-mi overlap job, verified
-   against Sperry's reference table; Tiger Data, DigitalOcean.
-6. (20s) Close: one-liner + what's next (third utility, live filing ingestion).
+Moved to `docs/demo.md` (the one demo script: which pair is clicked, the pitch line, figures).
 
 ## Open questions
 - Ranking formula weights (distance vs time gap vs cost) — pick something simple and explainable.
