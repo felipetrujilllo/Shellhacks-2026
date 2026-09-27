@@ -13,7 +13,7 @@ export const UTILITY_COLORS: Readonly<Record<string, string>> = {
 }
 
 /** Any utility we don't have a named color for (e.g. an uploaded proposal's utility). */
-export const OTHER_UTILITY_COLOR = themeColor('--color-utility-other', '#a3be8c')
+export const OTHER_UTILITY_COLOR = themeColor('--color-utility-other', '#22d3ee')
 
 export function utilityColor(utility: string): string {
   return Object.hasOwn(UTILITY_COLORS, utility) ? UTILITY_COLORS[utility] : OTHER_UTILITY_COLOR

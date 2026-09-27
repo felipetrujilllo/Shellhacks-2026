@@ -11,56 +11,61 @@
  *
  * Palette (the two golds are the Relay logo's gradient stops):
  *   #FFC928 gold (--palette-gold): primary accent and selection: primary button, closed
- *           sidebar toggle, sidebar savings figure, sort select, text links, focus outline,
- *           selected tab and card bar, "new" tag, map-layer checkboxes; mixed with transparent
- *           for the accent border, wash and glow.
+ *           sidebar toggle, sidebar savings figure, sort select, sidebar text links, sidebar
+ *           focus outline, selected tab and card bar, "new" tag, map-layer checkboxes,
+ *           "data source" dot, "why" callout bar; mixed with transparent for the accent
+ *           border, wash and glow.
  *   #F4A900 darker gold (--palette-gold-dark): hover/pressed accent: primary button and
  *           closed sidebar toggle hover.
- *   #0B1F3A navy (--palette-navy): top bar background; text on gold (primary button,
- *           sidebar toggle, "new" tag).
+ *   #0B1F3A navy (--palette-navy): top bar background; text on gold; workspace text, links,
+ *           savings figures and the current upload step (label and bar) on light surfaces;
+ *           dark surfaces (sort options, toggle border, map context chip, dialog backdrop);
+ *           mixed with white for every light surface, border and grey text of the light
+ *           workspace theme, so its neutrals are cool navy tints rather than new hues.
  *   #FFFFFF white (--palette-white): text on navy, secondary button and light card
  *           backgrounds; mixed with transparent for the top bar border and the sidebar
  *           card's borders, fills and hovers.
- * Every other palette color is derived from these four with color-mix(): no new hues.
+ * Every other palette color is derived from these four with color-mix(): no new hues, and no
+ * green anywhere (theme.test.ts checks every token's hue).
  * One deliberate exception: the sidebar card stays grey #47494d (--color-sidebar-bg), the
- * assignee's choice, not part of the gold/navy palette.
+ * assignee's choice, not part of the gold/navy palette. The remaining literals are neutral
+ * greys, black shadows and the orange warning/flagged colors.
  * Map tokens stay plain hex (MapLibre can't parse var() or color-mix()), so the map's white
- * outline and casing repeat #ffffff there. The remaining greens of the light workspace theme
- * move to this palette in the next ticket.
+ * outline and casing repeat #ffffff there.
  */
 :root, ::backdrop {
   /* Palette: the only base colors; everything below that uses them derives from these four */
   --palette-gold: #FFC928; /* gold: primary accent and selection */
   --palette-gold-dark: #F4A900; /* darker gold: hover/pressed accent */
-  --palette-navy: #0B1F3A; /* navy: top bar and text on gold */
+  --palette-navy: #0B1F3A; /* navy: top bar, text on gold and light surfaces, and the base of the light theme's tints */
   --palette-white: #FFFFFF; /* white: text on navy, light backgrounds, translucent white tints */
 
   /* Workspace base (light) — aliased in workspace.css as --paper/--ink/--muted/--rule/--accent */
-  --color-surface: #f5f5f0; /* workspace page background (--paper) */
-  --color-text: #232722; /* default workspace text (--ink) */
-  --color-muted: #6a6e66; /* secondary/meta text (--muted); darkened from #73776f to reach 4.5:1 on the light surfaces */
-  --color-rule: #dddfd7; /* hairline dividers and borders (--rule) */
+  --color-surface: color-mix(in srgb, var(--palette-navy) 4%, var(--palette-white)); /* navy at 4% over white: workspace page background (--paper) */
+  --color-text: var(--palette-navy); /* default workspace text (--ink), navy */
+  --color-muted: color-mix(in srgb, var(--palette-navy) 65%, var(--palette-white)); /* navy at 65% over white: secondary/meta text (--muted); at least 4.5:1 on the light surfaces */
+  --color-rule: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: hairline dividers and borders (--rule) */
   --color-accent: var(--palette-gold); /* primary accent and selection (gold): primary button, sidebar toggle, sidebar highlights, sort select text (--accent) */
   --color-accent-border: color-mix(in srgb, var(--palette-gold) 67%, transparent); /* gold at 67%: sidebar search focus, selected card and sort select hover borders; 67% (was 55%) so the search focus border reaches 3:1 on the sidebar and search field */
   --color-accent-wash: color-mix(in srgb, var(--palette-gold) 11%, transparent); /* gold at 11%: faint fill behind the selected sidebar opportunity card */
   --color-accent-glow: color-mix(in srgb, var(--palette-gold) 33%, transparent); /* gold at 33%: ring around the closed sidebar toggle */
   --color-accent-ink: var(--palette-navy); /* text on gold (navy): sidebar toggle, sidebar "new" tag */
-  --color-focus-ring: #7b8c44; /* keyboard focus outline across the workspace */
+  --color-focus-ring: color-mix(in srgb, var(--palette-navy) 58%, var(--palette-white)); /* navy at 58% over white: keyboard focus outline across the workspace; a mid tone so it reaches 3:1 on both the navy top bar and the light panels */
 
   /* Header */
   --color-header-bg: var(--palette-navy); /* top bar background (navy) */
   --color-header-text: var(--palette-white); /* top bar text (white on navy) */
   --color-header-border: color-mix(in srgb, var(--palette-white) 7%, transparent); /* white at 7%: top bar bottom border */
-  --color-source-dot: #8fa36b; /* small "data source" dot */
+  --color-source-dot: var(--palette-gold); /* small "data source" dot (gold), in the sidebar footer and the map context chip */
 
   /* Buttons */
   --color-primary-button-text: var(--palette-navy); /* text on the primary (gold) button (navy) */
   --color-primary-button-hover: var(--palette-gold-dark); /* primary button hover/pressed background (darker gold) */
   --color-secondary-button-bg: var(--palette-white); /* secondary button background */
-  --color-secondary-button-border: #c9cdc0; /* secondary button border */
-  --color-secondary-button-hover: #eef0e7; /* secondary button hover background */
+  --color-secondary-button-border: color-mix(in srgb, var(--palette-navy) 23%, var(--palette-white)); /* navy at 23% over white: secondary button border */
+  --color-secondary-button-hover: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* navy at 7% over white: secondary button hover background */
   --color-icon-button-hover: #00000008; /* icon button hover wash */
-  --color-link: #4e6532; /* inline text links */
+  --color-link: var(--palette-navy); /* inline text links on light surfaces (navy) */
 
   /* Layout backdrops */
   --color-body-bg: #1c1d20; /* dark area behind the sidebar card */
@@ -95,94 +100,94 @@
   --color-sidebar-flagged-text: #f4be8c; /* flagged-row reason in sidebar import batches; lightened from #f0b37a to reach 4.5:1 */
   --color-sidebar-select-bg: color-mix(in srgb, var(--palette-white) 4%, transparent); /* sidebar "Sort:" select background */
   --color-sidebar-select-border: color-mix(in srgb, var(--palette-white) 15%, transparent); /* sidebar "Sort:" select border */
-  --color-sidebar-option-bg: #20251f; /* sidebar "Sort:" dropdown option background */
+  --color-sidebar-option-bg: var(--palette-navy); /* sidebar "Sort:" dropdown option background (navy) */
 
   /* Sidebar contents (light variant, used outside the dark card) */
-  --color-savings: #3f5a1d; /* savings figures (headline and detail metrics) */
-  --color-checkbox: #6d8044; /* map-layer checkboxes */
-  --color-tab-underline: #5b6e3e; /* selected tab underline */
-  --color-tab-count-bg: #e4e9d9; /* tab count badge */
-  --color-search-bg: #ebede5; /* search field background */
-  --color-search-icon: #838779; /* search field icon */
-  --color-search-focus-border: #a4b680; /* search field focus border */
-  --color-search-placeholder: #8a8d83; /* search placeholder text */
-  --color-scrollbar: #cbcec3; /* list scrollbar thumb */
-  --color-list-caption: #52584b; /* list caption count */
-  --color-card-bg: #fcfcf9; /* opportunity card background */
-  --color-card-border: #dedfd8; /* opportunity card border */
+  --color-savings: var(--palette-navy); /* savings figures on light surfaces (navy; the sidebar shows them in gold) */
+  --color-checkbox: var(--palette-navy); /* map-layer checkboxes (navy) */
+  --color-tab-underline: var(--palette-navy); /* selected tab underline (navy) */
+  --color-tab-count-bg: color-mix(in srgb, var(--palette-navy) 11%, var(--palette-white)); /* navy at 11% over white: tab count badge */
+  --color-search-bg: color-mix(in srgb, var(--palette-navy) 8%, var(--palette-white)); /* navy at 8% over white: search field background */
+  --color-search-icon: color-mix(in srgb, var(--palette-navy) 54%, var(--palette-white)); /* navy at 54% over white: search field icon */
+  --color-search-focus-border: color-mix(in srgb, var(--palette-navy) 35%, var(--palette-white)); /* navy at 35% over white: search field focus border */
+  --color-search-placeholder: color-mix(in srgb, var(--palette-navy) 51%, var(--palette-white)); /* navy at 51% over white: search placeholder text */
+  --color-scrollbar: color-mix(in srgb, var(--palette-navy) 22%, var(--palette-white)); /* navy at 22% over white: list scrollbar thumb */
+  --color-list-caption: color-mix(in srgb, var(--palette-navy) 75%, var(--palette-white)); /* navy at 75% over white: list caption count */
+  --color-card-bg: color-mix(in srgb, var(--palette-navy) 1%, var(--palette-white)); /* navy at 1% over white: opportunity card background */
+  --color-card-border: color-mix(in srgb, var(--palette-navy) 14%, var(--palette-white)); /* navy at 14% over white: opportunity card border */
   --color-card-hover-bg: var(--palette-white); /* opportunity card hover background */
-  --color-card-hover-border: #a5ad96; /* opportunity card hover border */
-  --color-card-selected-bg: #eef2e5; /* selected opportunity card background */
-  --color-card-selected-border: #91a66b; /* selected opportunity card border */
-  --color-card-selected-bar: #81985a; /* selected opportunity card left bar */
-  --color-card-rank: #7a8270; /* opportunity card rank label */
-  --color-card-divider: #e6e8e0; /* divider above an opportunity card's footer */
-  --color-pair-connector: #dde1d5; /* line joining the two projects in a card */
-  --color-tag-text: #526c30; /* "new" tag text */
-  --color-tag-bg: #dce9c3; /* "new" tag background */
-  --color-row-hover: #e9edde; /* project row hover/active background */
+  --color-card-hover-border: color-mix(in srgb, var(--palette-navy) 38%, var(--palette-white)); /* navy at 38% over white: opportunity card hover border */
+  --color-card-selected-bg: var(--color-accent-wash); /* selected opportunity card background (the gold accent wash) */
+  --color-card-selected-border: var(--color-accent-border); /* selected opportunity card border (the gold accent border) */
+  --color-card-selected-bar: var(--color-accent); /* selected opportunity card left bar (gold accent) */
+  --color-card-rank: color-mix(in srgb, var(--palette-navy) 57%, var(--palette-white)); /* navy at 57% over white: opportunity card rank label */
+  --color-card-divider: color-mix(in srgb, var(--palette-navy) 11%, var(--palette-white)); /* navy at 11% over white: divider above an opportunity card's footer */
+  --color-pair-connector: color-mix(in srgb, var(--palette-navy) 14%, var(--palette-white)); /* navy at 14% over white: line joining the two projects in a card */
+  --color-tag-text: var(--color-accent-ink); /* "new" tag text (navy on gold) */
+  --color-tag-bg: var(--color-accent); /* "new" tag background (gold accent) */
+  --color-row-hover: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: project row hover/active background */
   --color-batch-card-bg: var(--palette-white); /* import batch card background */
   --color-flagged-text: #98632f; /* flagged-row reason in import batches */
 
   /* Sidebar toggle (floating bottom-left) */
-  --color-toggle-border: #20251f; /* toggle border */
+  --color-toggle-border: var(--palette-navy); /* toggle border (navy) */
   --color-toggle-shadow: #000a; /* toggle drop shadow */
   --color-toggle-hover: var(--palette-gold-dark); /* closed toggle hover/pressed background (darker gold) */
-  --color-toggle-open-bg: #f9faf5; /* toggle background while the sidebar is open */
+  --color-toggle-open-bg: var(--color-panel-bg); /* toggle background while the sidebar is open (the light panel background) */
   --color-toggle-open-ring: color-mix(in srgb, var(--palette-white) 25%, transparent); /* ring around the toggle while the sidebar is open */
-  --color-toggle-focus-ring: #f9faf5; /* toggle keyboard focus outline */
+  --color-toggle-focus-ring: var(--color-panel-bg); /* toggle keyboard focus outline (the light panel background) */
 
   /* Map overlay chips and panels */
-  --color-map-context-bg: #20251fec; /* map context chip background */
+  --color-map-context-bg: color-mix(in srgb, var(--palette-navy) 93%, transparent); /* navy at 93%: map context chip background */
   --color-map-context-border: color-mix(in srgb, var(--palette-white) 12%, transparent); /* map context chip border */
-  --color-map-context-text: #f2f4eb; /* map context chip text */
-  --color-map-context-muted: #a1aa98; /* map context chip secondary text */
+  --color-map-context-text: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: map context chip text */
+  --color-map-context-muted: color-mix(in srgb, var(--palette-navy) 40%, var(--palette-white)); /* navy at 40% over white: map context chip secondary text */
   --color-map-context-divider: color-mix(in srgb, var(--palette-white) 12.5%, transparent); /* divider inside the map context chip */
-  --color-notice-bg: #e7eed9; /* status notice background */
-  --color-notice-text: #354328; /* status notice text */
+  --color-notice-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: status notice background */
+  --color-notice-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: status notice text */
   --color-upload-problem-bg: #f4e2d4; /* notice background when saved uploads could not be added */
   --color-upload-problem-text: #5b3419; /* notice text when saved uploads could not be added */
   --color-upload-problem-link: #7a3f14; /* Clear my uploads link inside that notice */
   --color-floating-shadow: #0003; /* drop shadow of the notice and selection panel */
-  --color-panel-bg: #f9faf5; /* selection panel and upload dialog background */
-  --color-panel-border: #d7dbce; /* selection panel border */
-  --color-panel-heading: #6e7661; /* selection panel heading; darkened from #717964 (same hue) to reach 4.5:1 */
-  --color-panel-meta: #707566; /* selection panel project meta line; darkened from #828776 (same hue) to reach 4.5:1 */
-  --color-panel-meta-strong: #454c3d; /* emphasized value in the selection panel meta line */
-  --color-why-bg: #eef2e2; /* overlap detail "why" callout background */
-  --color-why-border: #8fa36b; /* overlap detail "why" callout left border */
-  --color-why-text: #3a4034; /* overlap detail "why" callout text */
+  --color-panel-bg: color-mix(in srgb, var(--palette-navy) 2%, var(--palette-white)); /* navy at 2% over white: selection panel and upload dialog background */
+  --color-panel-border: color-mix(in srgb, var(--palette-navy) 17%, var(--palette-white)); /* navy at 17% over white: selection panel border */
+  --color-panel-heading: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel heading; at least 4.5:1 on the panel */
+  --color-panel-meta: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: selection panel project meta line; at least 4.5:1 on the panel */
+  --color-panel-meta-strong: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: emphasized value in the selection panel meta line */
+  --color-why-bg: color-mix(in srgb, var(--palette-navy) 7%, var(--palette-white)); /* navy at 7% over white: overlap detail "why" callout background */
+  --color-why-border: var(--palette-gold); /* overlap detail "why" callout left border (gold accent) */
+  --color-why-text: color-mix(in srgb, var(--palette-navy) 85%, var(--palette-white)); /* navy at 85% over white: overlap detail "why" callout text */
 
   /* Upload dialog */
-  --color-dialog-border: #dbdfd2; /* upload dialog border */
+  --color-dialog-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog border */
   --color-dialog-shadow: #0005; /* upload dialog drop shadow */
-  --color-dialog-backdrop: #111b16a8; /* dimmed backdrop behind the upload dialog */
-  --color-upload-symbol-bg: #e6edd9; /* upload dialog icon tile background */
-  --color-upload-symbol-border: #d7dfc9; /* upload dialog icon tile border */
-  --color-upload-symbol-icon: #5a7040; /* upload dialog icon */
-  --color-step: #71746a; /* upload step labels; darkened from #a2a698 (same hue) to reach 4.5:1 */
-  --color-step-current: #3e5030; /* current upload step label */
-  --color-step-current-bar: #6f8650; /* current upload step underline */
-  --color-drop-zone-bg: #f0f3e9; /* file drop zone background */
-  --color-drop-zone-border: #afbda0; /* file drop zone dashed border */
-  --color-drop-zone-text: #606f51; /* file drop zone text and icon; darkened from #738461 (same hue) to reach 4.5:1 */
-  --color-drop-zone-title: #3f4b35; /* file drop zone title */
-  --color-drop-zone-hint: #676c60; /* file drop zone hint; darkened from #8e9585 (same hue) to reach 4.5:1 */
-  --color-drop-zone-hover-bg: #e6eed8; /* file drop zone hover/dragging background */
-  --color-drop-zone-hover-border: #718750; /* file drop zone hover/dragging border */
-  --color-upload-footer-text: #6e7564; /* upload dialog footer note; darkened from #818975 (same hue) to reach 4.5:1 */
+  --color-dialog-backdrop: color-mix(in srgb, var(--palette-navy) 66%, transparent); /* navy at 66%: dimmed backdrop behind the upload dialog */
+  --color-upload-symbol-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: upload dialog icon tile background */
+  --color-upload-symbol-border: color-mix(in srgb, var(--palette-navy) 15%, var(--palette-white)); /* navy at 15% over white: upload dialog icon tile border */
+  --color-upload-symbol-icon: color-mix(in srgb, var(--palette-navy) 66%, var(--palette-white)); /* navy at 66% over white: upload dialog icon */
+  --color-step: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload step labels; at least 4.5:1 on the dialog */
+  --color-step-current: var(--palette-navy); /* current upload step label (navy) */
+  --color-step-current-bar: var(--palette-navy); /* current upload step underline (navy: gold would be under 3:1 on the light dialog) */
+  --color-drop-zone-bg: color-mix(in srgb, var(--palette-navy) 5%, var(--palette-white)); /* navy at 5% over white: file drop zone background */
+  --color-drop-zone-border: color-mix(in srgb, var(--palette-navy) 30%, var(--palette-white)); /* navy at 30% over white: file drop zone dashed border */
+  --color-drop-zone-text: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: file drop zone text and icon; at least 4.5:1 on the drop zone, hovered or not */
+  --color-drop-zone-title: color-mix(in srgb, var(--palette-navy) 80%, var(--palette-white)); /* navy at 80% over white: file drop zone title */
+  --color-drop-zone-hint: color-mix(in srgb, var(--palette-navy) 68%, var(--palette-white)); /* navy at 68% over white: file drop zone hint; at least 4.5:1 on the drop zone, hovered or not */
+  --color-drop-zone-hover-bg: color-mix(in srgb, var(--palette-navy) 9%, var(--palette-white)); /* navy at 9% over white: file drop zone hover/dragging background */
+  --color-drop-zone-hover-border: color-mix(in srgb, var(--palette-navy) 56%, var(--palette-white)); /* navy at 56% over white: file drop zone hover/dragging border */
+  --color-upload-footer-text: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload dialog footer note; at least 4.5:1 on the dialog */
   --color-error-bg: #fff4e9; /* upload error box background */
   --color-error-border: #e5c7b1; /* upload error box border */
   --color-error-text: #a05225; /* upload error box text */
-  --color-review-divider: #e7e9df; /* divider between upload review rows */
-  --color-status-ready: #80975d; /* "ready" status dot in upload review */
+  --color-review-divider: color-mix(in srgb, var(--palette-navy) 10%, var(--palette-white)); /* navy at 10% over white: divider between upload review rows */
+  --color-status-ready: var(--palette-navy); /* "ready" status dot in upload review (navy; "flagged" stays amber) */
   --color-status-flagged: #cc964c; /* "flagged" status dot in upload review */
-  --color-review-note: #707564; /* upload review footnote; darkened from #7c826f (same hue) to reach 4.5:1 */
+  --color-review-note: color-mix(in srgb, var(--palette-navy) 63%, var(--palette-white)); /* navy at 63% over white: upload review footnote; at least 4.5:1 on the dialog */
 
   /* Map (MapLibre reads these through themeColor() in theme.ts) */
   --color-utility-desc: #60a5fa; /* Dominion Energy SC projects on the map, legend and sidebar swatches */
   --color-utility-gpc: #f87171; /* Georgia Power projects on the map, legend and sidebar swatches */
-  --color-utility-other: #a3be8c; /* projects of any other utility (e.g. uploaded proposals) */
+  --color-utility-other: #22d3ee; /* projects of any other utility (e.g. uploaded proposals), cyan: not green, and apart from the blue, red, amber and violet lines */
   --color-overlap: #f59e0b; /* dashed overlap connectors and their legend swatch */
   --color-overlap-selected: #c4b5fd; /* the selected overlap connector and its legend swatch */
   --color-point-stroke: #ffffff; /* outline of confirmed single-point projects */

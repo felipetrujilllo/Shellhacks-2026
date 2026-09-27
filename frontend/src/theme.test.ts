@@ -281,6 +281,54 @@ describe('contrast (WCAG AA)', () => {
       }
     }
   })
+  it('keeps the other-utility line, the overlap and the selected overlap at least 3:1 against navy, the sidebar grey and the dark map', () => {
+    // --color-halo-dark stands in for the dark basemap; the satellite basemap is covered by the
+    // light/dark halo casing under every line (mapStyle.ts).
+    for (const line of ['--color-utility-other', '--color-overlap', '--color-overlap-selected']) {
+      for (const bg of ['--palette-navy', '--color-sidebar-bg', '--color-map-bg', '--color-halo-dark']) {
+        expect(contrast(resolveToken(line), resolveToken(bg)), `${line} on ${bg}`).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+})
+
+describe('no green (#43)', () => {
+  it('removes the old green theme values from theme.css and workspace.css', () => {
+    for (const [file, css] of [['theme.css', themeCss], ['workspace.css', workspaceCss]]) {
+      for (const green of OLD_GREENS) expect(css.toLowerCase(), `${file} still has ${green}`).not.toContain(green)
+    }
+  })
+
+  it('classifies greens by hue and saturation, letting neutral greys, the golds and navy through', () => {
+    // The old greens, including the greenish greys and near-whites of the light theme.
+    for (const green of [...OLD_GREENS, '#7b8c44', '#6a6e66', '#232722', '#f5f5f0', '#f9faf5', '#a3be8c', '#111b16']) {
+      expect(isGreen(parseColor(green)), green).toBe(true)
+    }
+    for (const other of ['#FFC928', '#F4A900', '#0B1F3A', '#47494d', '#111', '#1c1d20', '#cc964c', '#22d3ee', '#ffffff', '#000a']) {
+      expect(isGreen(parseColor(other)), other).toBe(false)
+    }
+  })
+
+  it('leaves no token with a green hue, map tokens included', () => {
+    const greens = [...themeTokens().keys()].filter((name) => isGreen(resolveToken(name)))
+    expect(greens).toEqual(GREEN_EXCEPTIONS)
+  })
+
+  it('points the primary accent at the logo gold and the top bar at navy', () => {
+    const tokens = themeTokens()
+    expect(tokens.get('--color-accent')?.value).toBe('var(--palette-gold)')
+    expectColor(resolveToken('--color-accent'), parseColor('#FFC928'))
+    // The header only: the sidebar card is the documented grey exception (#42), tested above.
+    expect(tokens.get('--color-header-bg')?.value).toBe('var(--palette-navy)')
+    expectColor(resolveToken('--color-header-bg'), parseColor('#0B1F3A'))
+  })
+
+  it('builds the light theme\'s neutral surfaces and greys from navy mixed with white', () => {
+    const light = ['--color-surface', '--color-muted', '--color-rule', '--color-panel-bg', '--color-panel-heading', '--color-panel-meta', '--color-step', '--color-drop-zone-bg', '--color-drop-zone-text', '--color-focus-ring']
+    for (const name of light) {
+      expect(themeTokens().get(name)?.value, name).toMatch(/^color-mix\(in srgb, var\(--palette-navy\) [\d.]+%, var\(--palette-white\)\)$/)
+    }
+  })
 })
 
 const BASE_PALETTE = {
@@ -288,6 +336,29 @@ const BASE_PALETTE = {
   '--palette-gold-dark': '#F4A900',
   '--palette-navy': '#0B1F3A',
   '--palette-white': '#FFFFFF',
+}
+
+// The green theme this palette replaced (#43): none of these may come back.
+const OLD_GREENS = ['#d6ed8a', '#8fa36b', '#3f5a1d', '#273018', '#1d2614', '#20251f']
+
+// Tokens allowed to stay green. Empty on purpose: add a token here only with a comment saying why.
+const GREEN_EXCEPTIONS: string[] = []
+
+/**
+ * Green = HSL hue in [55°, 170°] with saturation above 3%. The hue band leaves out the golds
+ * (~42-45°), the orange warnings (≤35°) and the cyan other-utility line (~189°). The 3% floor lets
+ * true neutral greys (0%) through but catches the greenish greys the old theme used for text and
+ * light surfaces (3.8-7%); a floor of 8-10% would let those back in unnoticed. Alpha is ignored.
+ */
+function isGreen({ r, g, b }: Rgba): boolean {
+  const [max, min] = [Math.max(r, g, b) / 255, Math.min(r, g, b) / 255]
+  const delta = max - min
+  if (delta === 0) return false
+  const saturation = delta / (1 - Math.abs(max + min - 1))
+  const [R, G, B] = [r / 255, g / 255, b / 255]
+  const sector = max === R ? ((G - B) / delta + 6) % 6 : max === G ? (B - R) / delta + 2 : (R - G) / delta + 4
+  const hue = sector * 60
+  return hue >= 55 && hue <= 170 && saturation > 0.03
 }
 
 // Semantic tokens that name a palette color directly.
@@ -299,6 +370,19 @@ const PALETTE_ROLES: Record<string, string> = {
   '--color-header-bg': '--palette-navy',
   '--color-accent-ink': '--palette-navy',
   '--color-primary-button-text': '--palette-navy',
+  // #43: the former greens that now name a palette color directly.
+  '--color-text': '--palette-navy',
+  '--color-link': '--palette-navy',
+  '--color-savings': '--palette-navy',
+  '--color-checkbox': '--palette-navy',
+  '--color-tab-underline': '--palette-navy',
+  '--color-step-current': '--palette-navy',
+  '--color-step-current-bar': '--palette-navy',
+  '--color-status-ready': '--palette-navy',
+  '--color-sidebar-option-bg': '--palette-navy',
+  '--color-toggle-border': '--palette-navy',
+  '--color-source-dot': '--palette-gold',
+  '--color-why-border': '--palette-gold',
   '--color-header-text': '--palette-white',
   '--color-secondary-button-bg': '--palette-white',
   '--color-card-hover-bg': '--palette-white',
@@ -356,6 +440,36 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   { name: 'sidebar search focus border vs the card', fg: '--color-accent-border', bg: [SIDEBAR], min: 3 },
   { name: 'sidebar search focus border vs the search field', fg: '--color-accent-border', bg: [SIDEBAR, '--color-sidebar-search-bg'], min: 3 },
   { name: 'selected sidebar card border', fg: '--color-accent-border', bg: [SIDEBAR, '--color-sidebar-card-bg'], min: 3 },
+  // #43: combinations the green-to-navy swap changed. The sidebar's focus outline is gold (pair above).
+  { name: 'focus outline on the selection panel and upload dialog', fg: '--color-focus-ring', bg: ['--color-panel-bg'], min: 3 },
+  { name: 'focus outline on the navy top bar', fg: '--color-focus-ring', bg: ['--color-header-bg'], min: 3 },
+  { name: 'focus outline on the light surface', fg: '--color-focus-ring', bg: ['--color-surface'], min: 3 },
+  { name: 'focus outline on the status notice', fg: '--color-focus-ring', bg: ['--color-notice-bg'], min: 3 },
+  { name: 'focus outline on the upload problem notice', fg: '--color-focus-ring', bg: ['--color-upload-problem-bg'], min: 3 },
+  { name: 'focus outline over the map', fg: '--color-focus-ring', bg: ['--color-map-bg'], min: 3 },
+  { name: 'sidebar toggle focus outline over the map', fg: '--color-toggle-focus-ring', bg: ['--color-map-bg'], min: 3 },
+  { name: 'text links on the upload dialog', fg: '--color-link', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'savings figure in the overlap detail', fg: '--color-savings', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'selection panel emphasized meta value', fg: '--color-panel-meta-strong', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'current upload step label', fg: '--color-step-current', bg: ['--color-panel-bg'], min: 4.5 },
+  { name: 'current upload step underline', fg: '--color-step-current-bar', bg: ['--color-panel-bg'], min: 3 },
+  { name: 'upload error text', fg: '--color-error-text', bg: ['--color-error-bg'], min: 4.5 },
+  { name: 'overlap detail "why" text', fg: '--color-why-text', bg: ['--color-why-bg'], min: 4.5 },
+  { name: 'status notice text', fg: '--color-notice-text', bg: ['--color-notice-bg'], min: 4.5 },
+  { name: 'drop zone title', fg: '--color-drop-zone-title', bg: ['--color-drop-zone-bg'], min: 4.5 },
+  { name: 'drop zone title while hovered/dragging', fg: '--color-drop-zone-title', bg: ['--color-drop-zone-hover-bg'], min: 4.5 },
+  { name: 'drop zone border while hovered/dragging', fg: '--color-drop-zone-hover-border', bg: ['--color-panel-bg'], min: 3 },
+  { name: 'map context chip text on the dark map', fg: '--color-map-context-text', bg: ['--color-map-bg', '--color-map-context-bg'], min: 4.5 },
+  { name: 'map context chip muted text on the dark map', fg: '--color-map-context-muted', bg: ['--color-map-bg', '--color-map-context-bg'], min: 4.5 },
+  // --color-halo-light (#ffffff) stands in for the light basemaps showing through the chip.
+  { name: 'map context chip text on a light map', fg: '--color-map-context-text', bg: ['--color-halo-light', '--color-map-context-bg'], min: 4.5 },
+  { name: 'map context chip muted text on a light map', fg: '--color-map-context-muted', bg: ['--color-halo-light', '--color-map-context-bg'], min: 4.5 },
+  { name: 'data source dot on the map context chip', fg: '--color-source-dot', bg: ['--color-map-bg', '--color-map-context-bg'], min: 3 },
+  { name: 'data source dot in the sidebar footer', fg: '--color-source-dot', bg: [SIDEBAR], min: 3 },
+  { name: 'upload dialog icon on its tile', fg: '--color-upload-symbol-icon', bg: ['--color-panel-bg', '--color-upload-symbol-bg'], min: 3 },
+  { name: 'close icon on a hovered icon button', fg: '--color-muted', bg: ['--color-panel-bg', '--color-icon-button-hover'], min: 3 },
+  { name: '"ready" status dot in upload review', fg: '--color-status-ready', bg: ['--color-panel-bg'], min: 3 },
+  { name: 'text on a hovered secondary button', fg: '--color-text', bg: ['--color-secondary-button-hover'], min: 4.5 },
 ]
 
 type Rgba = { r: number; g: number; b: number; a: number } // channels 0-255, alpha 0-1
