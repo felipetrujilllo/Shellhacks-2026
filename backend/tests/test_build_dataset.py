@@ -11,6 +11,7 @@ import builtins
 import csv
 import socket
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -203,15 +204,72 @@ def test_cli_writes_the_csv_and_prints_included_and_excluded_counts(
     dataset, tmp_path, monkeypatch, capsys
 ):
     out = tmp_path / "projects.csv"
-    monkeypatch.setattr(sys, "argv", ["build_dataset", "--out", str(out)])
+    report = tmp_path / "coverage.md"
+    monkeypatch.setattr(sys, "argv", ["build_dataset", "--out", str(out),
+                                   "--coverage-out", str(report)])
     bd.main()
     printed = capsys.readouterr().out
     total = len(dataset.rows) + len(dataset.excluded)
-    assert f"wrote {len(dataset.rows)} of {total} projects" in printed
-    assert f"excluded {len(dataset.excluded)} unlocated projects" in printed
-    for project in dataset.excluded:
-        assert f"{project.project_id} [{project.reason}]" in printed
+    by_utility = Counter(row["utility"] for row in dataset.rows)
+    by_confidence = Counter(row["location_confidence"] for row in dataset.rows)
+    reasons = Counter(project.reason for project in dataset.excluded)
+    expected = [
+        f"wrote {len(dataset.rows)} of {total} projects to {out}",
+        f"  included by utility: {dict(sorted(by_utility.items()))}",
+        f"  included by confidence: {dict(sorted(by_confidence.items()))}",
+        f"excluded {len(dataset.excluded)} unlocated projects: {dict(sorted(reasons.items()))}",
+        *(
+            f"  {project.project_id} [{project.reason}] {project.project_name} -- "
+            f"{project.detail}"
+            for project in dataset.excluded
+        ),
+    ]
+    assert printed.splitlines() == expected
     assert out.read_bytes() == PROJECTS_CSV.read_bytes()
+    assert report.read_text(encoding="utf-8") == bd.summarize(
+        bd.read_csv(bd.DESC_CSV) + bd.read_csv(bd.GPC_CSV), dataset
+    ).markdown()
+
+
+def test_coverage_counts_and_exclusions_match_source_csvs(inputs, dataset):
+    coverage = bd.summarize(inputs, dataset)
+    markdown = coverage.markdown()
+    by_utility = {entry.utility: entry for entry in coverage.utilities}
+    assert {
+        utility: (entry.parsed, entry.located, entry.confirmed, entry.low)
+        for utility, entry in by_utility.items()
+    } == {DESC: (44, 28, 4, 24), GPC: (208, 87, 35, 52)}
+
+    for utility, entry in by_utility.items():
+        assert entry.parsed == sum(row["utility"] == utility for row in inputs)
+        assert entry.located == sum(row["utility"] == utility for row in dataset.rows)
+        assert entry.confirmed == sum(
+            row["utility"] == utility and row["location_confidence"] == "confirmed"
+            for row in dataset.rows
+        )
+        assert entry.low == sum(
+            row["utility"] == utility and row["location_confidence"] == "low"
+            for row in dataset.rows
+        )
+        assert entry.located + len(entry.excluded) == entry.parsed
+        for project in entry.excluded:
+            assert (
+                f"| `{bd._cell(project.project_id)}` | `{project.reason}` | "
+                f"{bd._cell(project.project_name)} | {bd._cell(project.detail)} |"
+            ) in markdown
+
+
+def test_committed_coverage_is_current(inputs, dataset):
+    fresh = bd.summarize(inputs, dataset).markdown()
+    assert bd.COVERAGE_MD.read_text(encoding="utf-8") == fresh
+
+
+def test_cli_uses_default_coverage_path(inputs, dataset, tmp_path, monkeypatch):
+    report = tmp_path / "coverage.md"
+    monkeypatch.setattr(bd, "COVERAGE_MD", report)
+    monkeypatch.setattr(sys, "argv", ["build_dataset", "--out", str(tmp_path / "projects.csv")])
+    bd.main()
+    assert report.read_text(encoding="utf-8") == bd.summarize(inputs, dataset).markdown()
 
 
 # --- Project-level confidence -------------------------------------------------------------------

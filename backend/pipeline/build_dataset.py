@@ -26,7 +26,8 @@ A name OSM spells differently (THURMOND DAM vs "Thurmond Substation") is not han
 in `endpoints.ENDPOINT_OVERRIDES`, like any other irregular project name.
 
 `build_dataset` is pure (rows, cache records and overrides in, rows out); only `main` touches
-files.
+files. `summarize` turns a built dataset into the `Coverage` the CLI both prints and renders to
+`docs/coverage.md`, so the report can never disagree with the printed summary.
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ DESC_CSV = SEED_DIR / "desc_projects.csv"
 GPC_CSV = SEED_DIR / "gpc_projects.csv"
 LOCATION_OVERRIDES_CSV = SEED_DIR / "location_overrides.csv"
 OUT_CSV = SEED_DIR / "projects.csv"
+COVERAGE_MD = Path(__file__).parents[2] / "docs" / "coverage.md"
 
 UTILITIES = (parse_desc.UTILITY, parse_gpc.UTILITY)
 
@@ -130,6 +132,15 @@ NEAREST_MIN_RATIO = 3.0
 
 ProjectConfidence = Literal["confirmed", "low"]
 ExclusionReason = Literal["no_endpoints", "ambiguous", "unlocated", "wrong_state"]
+
+# One line per ExclusionReason, for readers of docs/coverage.md. The order is the report's.
+REASON_MEANINGS: dict[str, str] = {
+    "no_endpoints": "the project name holds no station name to look up at all",
+    "ambiguous": "an endpoint's name fits several far-apart OSM substations, so none can be picked",
+    "unlocated": "no OSM substation (and no manual override) matches any endpoint of the project",
+    "wrong_state": "the only match lands more than "
+                   f"{BORDER_MARGIN_MI:g} mi inside the other utility's state",
+}
 
 
 class DatasetError(ValueError):
@@ -446,6 +457,173 @@ def build_dataset(
     return Dataset(included, excluded)
 
 
+# --- Coverage: the one summary of a build, printed and written to docs/coverage.md ---------------
+
+
+@dataclass(frozen=True)
+class UtilityCoverage:
+    """How one utility's parsed projects came out: located (by confidence), or excluded."""
+
+    utility: str
+    parsed: int  # rows in that utility's parser CSV
+    confirmed: int
+    low: int
+    excluded: tuple[ExcludedProject, ...]  # input (source document) order
+
+    @property
+    def located(self) -> int:
+        return self.confirmed + self.low
+
+
+@dataclass(frozen=True)
+class Coverage:
+    """A built dataset plus its per-utility split: the CLI's printed summary and the report."""
+
+    dataset: Dataset
+    utilities: tuple[UtilityCoverage, ...]  # by utility name
+
+    @property
+    def parsed(self) -> int:
+        return len(self.dataset.rows) + len(self.dataset.excluded)
+
+    @property
+    def located(self) -> int:
+        return len(self.dataset.rows)
+
+    def summary_lines(self, out: Path) -> list[str]:
+        """The summary the CLI prints, one line per element. Wording is load-bearing: teammates
+        read it after every build, so it stays as it is."""
+        dataset = self.dataset
+        by_utility = Counter(row["utility"] for row in dataset.rows)
+        by_confidence = Counter(row["location_confidence"] for row in dataset.rows)
+        reasons = Counter(project.reason for project in dataset.excluded)
+        return [
+            f"wrote {len(dataset.rows)} of {self.parsed} projects to {out}",
+            f"  included by utility: {dict(sorted(by_utility.items()))}",
+            f"  included by confidence: {dict(sorted(by_confidence.items()))}",
+            f"excluded {len(dataset.excluded)} unlocated projects: {dict(sorted(reasons.items()))}",
+            *(
+                f"  {project.project_id} [{project.reason}] {project.project_name} -- "
+                f"{project.detail}"
+                for project in dataset.excluded
+            ),
+        ]
+
+    def markdown(self) -> str:
+        """docs/coverage.md: the same counts as a report a judge can read, plus every exclusion.
+
+        Deterministic by construction — no timestamps, utilities by name, reasons in
+        REASON_MEANINGS order, projects in source-document order — so the committed file only
+        changes when the data does.
+        """
+        reasons = Counter(project.reason for project in self.dataset.excluded)
+        lines = [
+            "# Coverage and confidence",
+            "",
+            "Which projects from the two utilities' published plans are on the map, and how well",
+            "each one is located. Generated from the committed sources by",
+            "`python -m pipeline.build_dataset`, which writes both this report and",
+            "`data/seed/projects.csv`, so the two cannot disagree.",
+            "",
+            f"**{self.located} of {self.parsed} parsed projects are located** and load into the",
+            f"database. The other {len(self.dataset.excluded)} are listed in full below, each with",
+            "the endpoint that could not be placed — a project with no located endpoint has no",
+            "center, so it is left out rather than guessed at.",
+            "",
+            "## Per utility",
+            "",
+            "| Utility | Parsed | Located | Confirmed | Low | Excluded |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+        for utility in self.utilities:
+            lines.append(
+                f"| {_cell(utility.utility)} | {utility.parsed} | {utility.located} | "
+                f"{utility.confirmed} | {utility.low} | {len(utility.excluded)} |"
+            )
+        lines += [
+            f"| **Total** | **{self.parsed}** | **{self.located}** | "
+            f"**{sum(u.confirmed for u in self.utilities)}** | "
+            f"**{sum(u.low for u in self.utilities)}** | "
+            f"**{len(self.dataset.excluded)}** |",
+            "",
+            "- **Parsed** — projects read out of the utility's own plan document into",
+            "  `data/seed/desc_projects.csv` / `gpc_projects.csv`.",
+            "- **Located** — projects with a center, written to `data/seed/projects.csv`:",
+            "  Parsed = Located + Excluded, per utility and overall.",
+            "- **Confirmed** — every endpoint in the project's name is a unique, exact-name match",
+            "  on an operator-tagged OpenStreetMap substation.",
+            "- **Low** — the project has a center, but at least one endpoint is placed less",
+            "  certainly: an OSM record with no `operator` tag, a hand-entered coordinate from",
+            "  `data/seed/location_overrides.csv`, the same-named candidate nearest the line's",
+            "  other end, or an endpoint that could not be placed at all (the center then rests",
+            "  on the other end). `low` does not mean the project is in the wrong place; it means",
+            "  the match is not self-evident.",
+            "- **Excluded** — no endpoint could be placed, so there is nothing to map.",
+            "",
+            "## Why projects are excluded",
+            "",
+            "| Reason | Count | What it means |",
+            "| --- | --- | --- |",
+        ]
+        for reason, meaning in REASON_MEANINGS.items():
+            if reasons[reason]:
+                lines.append(f"| `{reason}` | {reasons[reason]} | {_cell(meaning)} |")
+        lines += ["", "## Excluded projects"]
+        for utility in self.utilities:
+            lines += [
+                "",
+                f"### {utility.utility} — {len(utility.excluded)} of {utility.parsed}",
+                "",
+                "| Project ID | Reason | Project | Endpoints tried |",
+                "| --- | --- | --- | --- |",
+            ]
+            for project in utility.excluded:
+                lines.append(
+                    f"| `{_cell(project.project_id)}` | `{project.reason}` | "
+                    f"{_cell(project.project_name)} | {_cell(project.detail)} |"
+                )
+        return "\n".join(lines) + "\n"
+
+
+def _cell(text: str) -> str:
+    """One markdown table cell: a pipe or newline in a project name must not break the row."""
+    return text.replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
+
+
+def summarize(project_rows: Iterable[Mapping[str, str]], dataset: Dataset) -> Coverage:
+    """Split a built dataset by utility. `project_rows` are the same rows `build_dataset` got:
+    the parsed counts come from them, not from the located output.
+    """
+    rows = list(project_rows)
+    utility_of = {row["project_id"].strip(): row["utility"] for row in rows}
+    parsed = Counter(row["utility"] for row in rows)
+    confirmed: Counter[str] = Counter()
+    low: Counter[str] = Counter()
+    excluded: dict[str, list[ExcludedProject]] = {utility: [] for utility in parsed}
+    for row in dataset.rows:
+        (confirmed if row["location_confidence"] == "confirmed" else low)[row["utility"]] += 1
+    for project in dataset.excluded:
+        utility = utility_of.get(project.project_id)
+        if utility is None:  # a dataset built from other rows: the report would be a fiction
+            raise DatasetError(
+                f"{project.project_id}: excluded project is not in the given project rows"
+            )
+        excluded[utility].append(project)
+    return Coverage(
+        dataset=dataset,
+        utilities=tuple(
+            UtilityCoverage(
+                utility=utility,
+                parsed=parsed[utility],
+                confirmed=confirmed[utility],
+                low=low[utility],
+                excluded=tuple(excluded[utility]),
+            )
+            for utility in sorted(parsed)
+        ),
+    )
+
+
 # --- CLI: the only part that touches files ------------------------------------------------------
 
 
@@ -473,33 +651,28 @@ def write_csv(rows: Sequence[Mapping[str, str]], path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build data/seed/projects.csv.")
+    parser = argparse.ArgumentParser(description="Build projects.csv and its coverage report.")
     parser.add_argument("--desc", type=Path, default=DESC_CSV, help="parse_desc output CSV")
     parser.add_argument("--gpc", type=Path, default=GPC_CSV, help="parse_gpc output CSV")
     parser.add_argument("--overrides", type=Path, default=LOCATION_OVERRIDES_CSV,
                         help="manual endpoint coordinates CSV")
     parser.add_argument("--out", type=Path, default=OUT_CSV, help="projects CSV to write")
+    parser.add_argument("--coverage-out", type=Path, default=COVERAGE_MD,
+                        help="coverage markdown to write")
     args = parser.parse_args()
 
     overrides = read_location_overrides(args.overrides)
-    dataset = build_dataset(read_csv(args.desc) + read_csv(args.gpc), read_caches(), overrides)
+    project_rows = read_csv(args.desc) + read_csv(args.gpc)
+    dataset = build_dataset(project_rows, read_caches(), overrides)
     unused = unused_location_overrides(dataset.rows, overrides)
     if unused:
         names = ", ".join(f"{o.endpoint!r} ({o.utility})" for o in unused)
         raise DatasetError(f"{args.overrides}: override(s) match no project endpoint: {names}")
+    coverage = summarize(project_rows, dataset)
     write_csv(dataset.rows, args.out)
-
-    total = len(dataset.rows) + len(dataset.excluded)
-    print(f"wrote {len(dataset.rows)} of {total} projects to {args.out}")
-    by_utility = Counter(row["utility"] for row in dataset.rows)
-    by_confidence = Counter(row["location_confidence"] for row in dataset.rows)
-    print(f"  included by utility: {dict(sorted(by_utility.items()))}")
-    print(f"  included by confidence: {dict(sorted(by_confidence.items()))}")
-    reasons = Counter(project.reason for project in dataset.excluded)
-    print(f"excluded {len(dataset.excluded)} unlocated projects: {dict(sorted(reasons.items()))}")
-    for project in dataset.excluded:
-        print(f"  {project.project_id} [{project.reason}] {project.project_name} -- "
-              f"{project.detail}")
+    args.coverage_out.write_text(coverage.markdown(), encoding="utf-8")
+    for line in coverage.summary_lines(args.out):
+        print(line)
 
 
 if __name__ == "__main__":
