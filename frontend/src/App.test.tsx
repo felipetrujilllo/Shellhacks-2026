@@ -834,8 +834,37 @@ describe('App', () => {
       const group = await headline()
       expect(within(group).getByText('$2.2M')).toBeInTheDocument() // 709,900 + 1,200,000 + 300,000
       expect(group).toHaveAttribute('title', '$2,209,900 estimated across 3 pairs')
-      expect(group).toHaveTextContent('est. savings · 3 pairs shown')
+      expect(group).toHaveTextContent('Savings across 3 pairs shown · 0 not estimated')
       expect(within(group).getByText('0 not estimated')).toBeInTheDocument()
+    })
+
+    it('shows Projects, Utilities, Nearby pairs and est. savings in one row, with the savings detail line under it (#55)', async () => {
+      const { projects, overlaps } = withThirdUtility()
+      published = { projects, overlaps }
+      await renderApp()
+      const group = await headline()
+
+      // One row: the four stats are sibling cells of the same container, in this order, each a number over its label.
+      const row = group.parentElement!
+      const cells = Array.from(row.children)
+      expect(cells).toHaveLength(4)
+      expect(cells.map(c => [c.querySelector('strong')?.textContent, c.querySelector(':scope > span')?.textContent])).toEqual([
+        ['03', 'Projects'], ['03', 'Utilities'], ['04', 'Nearby pairs'], ['$1.5M', 'est. savings'],
+      ])
+      expect(cells[3]).toBe(group)
+      // The detail line lives in the savings group, as one line with the pluralised pair count.
+      const detail = within(group).getByText(/^Savings across/)
+      expect(detail).toHaveTextContent(/^Savings across 4 pairs shown · 2 not estimated$/)
+      expect(within(detail).getByText('2 not estimated')).toBeInTheDocument()
+      // The title is one line now.
+      expect(screen.getByRole('heading', { level: 2, name: 'Regional plans. Shared opportunities.' })).toBeInTheDocument()
+    })
+
+    it('uses the singular "pair" in the savings detail line for one pair', async () => {
+      published.overlaps = makeOverlaps(1).map(o => ({ ...o, est_savings_usd: null }))
+      await renderApp()
+      const group = await headline()
+      expect(within(group).getByText(/^Savings across/)).toHaveTextContent(/^Savings across 1 pair shown · 1 not estimated$/)
     })
 
     it('excludes null savings from the total and counts them as not estimated', async () => {
