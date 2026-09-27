@@ -26,6 +26,8 @@ type Tab = 'opportunities' | 'projects' | 'imports'
 
 const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err)
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+/** How long a success notice stays on the map before closing itself (#58). Upload problems stay until dismissed. */
+const NOTICE_MS = 6000
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -49,7 +51,15 @@ function App() {
   const [hidden, setHidden] = useState<string[]>([])
   // The map's minimum-match slider (#54): 0 ("All") shows everything, exactly as before it existed.
   const [minMatch, setMinMatch] = useState(DEFAULT_MIN_MATCH)
-  const [notice, setNotice] = useState('')
+  // An object, not the bare text, so a new notice with the same text is still a new value and restarts the timer.
+  const [notice, setNotice] = useState<{ text: string } | null>(null)
+  const showNotice = (text: string) => setNotice({ text })
+  // Each notice closes itself after NOTICE_MS; closing it sooner (X) or unmounting clears the timer.
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [notice])
   // The sidebar starts closed so the map fills the screen; the top bar's menu button toggles it.
   const [sidebarOpen, setSidebarOpen] = useState(false)
   // Light or dark (#45): main.tsx applied the initial one to <html> before this first render.
@@ -118,7 +128,7 @@ function App() {
     // Show every layer and match again, so the new pairs can't hide behind a filter.
     setBatches(current => [...current, batch]); setHidden([]); setMinMatch(DEFAULT_MIN_MATCH); setQuery('')
     setTab('opportunities')
-    setNotice(`${plural(added.length, 'proposal')} from ${batch.filename} added. ${keptNote(kept)} Comparisons updated.`)
+    showNotice(`${plural(added.length, 'proposal')} from ${batch.filename} added. ${keptNote(kept)} Comparisons updated.`)
   }
   /** Replaces this browser's uploads (the user removed some), then refreshes the comparisons. */
   async function keepUploads(next: Project[], done: string) {
@@ -126,9 +136,9 @@ function App() {
     setUploadFiles(saveUploadFiles(next, uploadFiles)) // drops the removed uploads' file names
     setUploads(next); setPersisted(kept); setUploadProblem('')
     try {
-      showWorkspace(await fetchWorkspace(next)); setNotice(done)
+      showWorkspace(await fetchWorkspace(next)); showNotice(done)
     } catch (err) {
-      setNotice(''); setUploadProblem(`${done} But the map could not refresh (${errorMessage(err)}). Reload the page.`)
+      setNotice(null); setUploadProblem(`${done} But the map could not refresh (${errorMessage(err)}). Reload the page.`)
     }
   }
   function clearUploads() {
@@ -188,7 +198,7 @@ function App() {
           <ProjectMap projects={matched.projects} overlaps={matched.overlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focused} theme={theme} minMatch={minMatch} onMinMatchChange={setMinMatch} />
           <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{matched.projects.length} mapped projects</span></div>
           {uploadProblem && <div role="alert" className="workspace-notice upload-problem"><span>{uploadProblem}</span><button className="text-link" onClick={clearUploads}>Clear my uploads</button><button onClick={() => setUploadProblem('')} aria-label="Dismiss upload problem"><Icon name="close" size={14} /></button></div>}
-          {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}
+          {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice.text}</span><button onClick={() => setNotice(null)} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}
           {selected && <div className="selection-panel"><OverlapDetail overlap={selected} onClose={() => setSelectedId(null)} /></div>}
           {!selected && focused && <div className="selection-panel"><div className="selection-heading"><span>PROJECT DETAILS</span><button className="icon-button" aria-label="Close details" onClick={() => setFocusedProject(null)}><Icon name="close" size={16} /></button></div>
             <h3>{focused.project_name}</h3>

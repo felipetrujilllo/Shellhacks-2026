@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 import { fetchWorkspace } from './api'
@@ -1060,6 +1060,106 @@ describe('App', () => {
       expect(within(after).getByText('$1.1M')).toBeInTheDocument() // 500,000 × 2 + 100,000
       expect(after).toHaveTextContent('7 pairs shown')
       expect(within(after).getByText('4 not estimated')).toBeInTheDocument()
+    })
+  })
+
+  describe('success notice auto-close (#58)', () => {
+    // The app renders on real timers so findBy* works; fake timers start once it is ready, before the
+    // first notice, so every notice timer is a fake one. Afterwards, act() flushes the mocked fetch.
+    afterEach(() => { vi.useRealTimers() })
+    const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms) })
+    /** Lets file.text() and the mocked fetch resolve and React render, without moving the fake clock. */
+    const settle = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve() })
+    const notice = () => screen.queryByRole('status')
+    const addedText = /1 proposal from savannah-water\.csv added\./
+
+    async function renderWithFakeTimers() {
+      const result = await renderApp()
+      vi.useFakeTimers()
+      return result
+    }
+    /** Adds a one-row savannah-water.csv: every call yields the same notice text, whatever the project name. */
+    async function importFile(projectName = 'Water main replacement') {
+      const csv = 'utility,project_name,lat_center,lon_center,in_service_date,est_cost_usd\n' +
+        `Savannah Water,${projectName},32.352116,-81.175112,2026-06-01,2000000\n`
+      fireEvent.click(screen.getByRole('button', { name: 'Upload projects' }))
+      fireEvent.change(screen.getByLabelText('Project CSV'), { target: { files: [new File([csv], 'savannah-water.csv', { type: 'text/csv' })] } })
+      await settle()
+      fireEvent.click(screen.getByRole('button', { name: /Add 1 project & compare/ }))
+      await settle()
+      expect(screen.getByRole('status')).toHaveTextContent(addedText)
+    }
+
+    it('is still visible at 5.9 s and gone at 6.1 s', async () => {
+      await renderWithFakeTimers()
+      await importFile()
+
+      advance(5900)
+      expect(notice()).toHaveTextContent(addedText)
+      advance(200)
+      expect(notice()).not.toBeInTheDocument()
+    })
+
+    it('restarts the 6 seconds for a new notice', async () => {
+      await renderWithFakeTimers()
+      await importFile() // notice A at t=0
+
+      advance(4000)
+      fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Savannah Water uploads' }))
+      await settle() // notice B at t=4 s
+      expect(notice()).toHaveTextContent("Savannah Water's uploads were removed from this browser.")
+
+      advance(5900) // t=9.9 s: A's 6 s have passed, B's have not
+      expect(notice()).toHaveTextContent("Savannah Water's uploads were removed from this browser.")
+      advance(200) // t=10.1 s
+      expect(notice()).not.toBeInTheDocument()
+    })
+
+    it('restarts the 6 seconds for a new notice with the same text', async () => {
+      await renderWithFakeTimers()
+      await importFile() // "1 proposal from savannah-water.csv added. ..." at t=0
+      const first = screen.getByRole('status').textContent
+
+      advance(4000)
+      await importFile('Second water main') // the same text again at t=4 s
+      expect(sentUploads(2)).toHaveLength(2)
+      expect(screen.getByRole('status').textContent).toBe(first)
+
+      advance(5900) // t=9.9 s
+      expect(notice()).toHaveTextContent(addedText)
+      advance(200) // t=10.1 s
+      expect(notice()).not.toBeInTheDocument()
+    })
+
+    it('the X still dismisses it immediately, and clears its timer', async () => {
+      await renderWithFakeTimers()
+      await importFile()
+      expect(vi.getTimerCount()).toBe(1)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+      expect(notice()).not.toBeInTheDocument()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('clears its timer when the app unmounts', async () => {
+      const { unmount } = await renderWithFakeTimers()
+      await importFile()
+      expect(vi.getTimerCount()).toBe(1)
+
+      unmount()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('does not auto-close the upload-problem alert', async () => {
+      storage.setItem(UPLOADS_STORAGE_KEY, '{not json')
+      renderClosedApp()
+      expect(await screen.findByRole('alert')).toHaveTextContent(UNREADABLE_UPLOADS)
+
+      vi.useFakeTimers()
+      advance(60_000)
+      expect(screen.getByRole('alert')).toHaveTextContent(UNREADABLE_UPLOADS)
+      expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Clear my uploads' })).toBeInTheDocument()
     })
   })
 })
