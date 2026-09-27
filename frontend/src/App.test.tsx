@@ -139,6 +139,14 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
   })
 
+  it('shows the Relay logo next to the heading, decorative so the name is read once', () => {
+    renderClosedApp()
+    const heading = screen.getByRole('heading', { level: 1, name: 'Relay' })
+    const logo = heading.parentElement?.querySelector('img')
+    expect(logo).toHaveAttribute('src', '/relay-icon.svg')
+    expect(logo).toHaveAttribute('alt', '')
+  })
+
   it('renders one list item per overlap (6) from the API, rank 1 first, next to the map', async () => {
     await renderApp()
 

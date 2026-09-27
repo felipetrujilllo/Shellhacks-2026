@@ -74,7 +74,7 @@ function App() {
   return (
     <main className="workspace">
       <header className="workspace-header">
-        <div className="brand"><span className="brand-symbol"><Icon name="grid" size={19} /></span><h1>Relay</h1></div>
+        <div className="brand"><span className="brand-symbol"><img src="/relay-icon.svg" alt="" width={28} height={28} /></span><h1>Relay</h1></div>
         <span className="header-divider" />
         <div className="workspace-title"><span>Planning workspace</span><small>Regional coordination</small></div>
         <div className="header-actions"><span className="local-badge"><i /> Shared workspace</span><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> Upload projects</button></div>
