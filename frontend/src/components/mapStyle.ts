@@ -36,6 +36,13 @@ export const LOW_CONFIDENCE_DASH: [number, number] = [0.1, 2]
 const LOW_CONFIDENCE_CASING_OPACITY = 0.35
 const LOW_CONFIDENCE_POINT_FILL_OPACITY = 0.2
 const DIMMED_OPACITY = 0.25
+// When a pair is selected, the other projects step back but must stay visible. Multiplying the
+// dimming into the low-confidence fade (0.6 x 0.25) left low-confidence points and dotted lines at
+// 5-15% opacity, i.e. gone. Dimmed points and low-confidence lines use these levels instead.
+const DIMMED_POINT_STROKE_OPACITY = 0.5
+const DIMMED_POINT_FILL_OPACITY = 0.35
+const DIMMED_LOW_POINT_FILL_OPACITY = 0.15
+const DIMMED_LOW_LINE_OPACITY = 0.4
 const POINT_RADIUS = 6
 const LOW_POINT_STROKE_WIDTH = 2
 /** Width of the dark ring outside a low-confidence point's utility-colored stroke, on the light basemap. */
@@ -65,6 +72,19 @@ export const utilityColorExpression = [
 /** Multiply `opacity` for low-confidence features by `lowFactor`. */
 function withConfidence(opacity: ExpressionSpecification | number, lowFactor: number): ExpressionSpecification {
   return ['*', opacity, ['case', IS_LOW, lowFactor, 1]]
+}
+
+/**
+ * Opacity that is `normal` for projects in the selected pair (and for everything when nothing is
+ * selected) and a fixed `dimmed` level for the others. Unlike multiplying the dimming in, a faint
+ * normal level (low confidence) can't be dimmed into invisibility.
+ */
+function dimTo(
+  selectedPair: readonly string[] | null,
+  normal: ExpressionSpecification | number,
+  dimmed: ExpressionSpecification | number,
+): ExpressionSpecification | number {
+  return selectedPair ? ['case', ['in', ['get', 'project_id'], ['literal', [...selectedPair]]], normal, dimmed] : normal
 }
 
 /**
@@ -108,7 +128,7 @@ export function projectLayers(selectedPair: readonly string[] | null, haloColor:
     paint: {
       'line-color': utilityColorExpression,
       'line-width': PROJECT_LINE_WIDTH,
-      'line-opacity': withConfidence(selection, LOW_CONFIDENCE_OPACITY),
+      'line-opacity': dimTo(selectedPair, LOW_CONFIDENCE_OPACITY, DIMMED_LOW_LINE_OPACITY),
       'line-dasharray': LOW_CONFIDENCE_DASH,
     },
     layout: { 'line-cap': 'round' },
@@ -125,7 +145,7 @@ export function projectLayers(selectedPair: readonly string[] | null, haloColor:
       'circle-opacity': 0,
       'circle-stroke-color': pointStrokeColor,
       'circle-stroke-width': LOW_POINT_RING_WIDTH,
-      'circle-stroke-opacity': selection,
+      'circle-stroke-opacity': dimTo(selectedPair, 1, DIMMED_POINT_STROKE_OPACITY),
     },
     layout: { visibility: pointStrokeColor === HALO_COLOR_DARK ? 'visible' : 'none' },
   }
@@ -136,10 +156,14 @@ export function projectLayers(selectedPair: readonly string[] | null, haloColor:
     paint: {
       'circle-color': utilityColorExpression,
       'circle-radius': POINT_RADIUS,
-      'circle-opacity': withConfidence(selection, LOW_CONFIDENCE_POINT_FILL_OPACITY),
+      'circle-opacity': dimTo(
+        selectedPair,
+        ['case', IS_LOW, LOW_CONFIDENCE_POINT_FILL_OPACITY, 1],
+        ['case', IS_LOW, DIMMED_LOW_POINT_FILL_OPACITY, DIMMED_POINT_FILL_OPACITY],
+      ),
       'circle-stroke-color': ['case', IS_LOW, utilityColorExpression, pointStrokeColor],
       'circle-stroke-width': ['case', IS_LOW, LOW_POINT_STROKE_WIDTH, 1.5],
-      'circle-stroke-opacity': withConfidence(selection, LOW_CONFIDENCE_OPACITY),
+      'circle-stroke-opacity': dimTo(selectedPair, ['case', IS_LOW, LOW_CONFIDENCE_OPACITY, 1], DIMMED_POINT_STROKE_OPACITY),
     },
   }
   return { casing, lines, lowLines, lowPointRing, points }

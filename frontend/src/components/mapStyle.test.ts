@@ -15,7 +15,7 @@ import { OTHER_UTILITY_COLOR, UTILITY_COLORS, utilityColor } from '../colors'
 import { projectsToGeoJSON } from '../geo'
 import type { LocationConfidence, Project } from '../types'
 import { BASEMAPS, type BasemapId } from './basemaps'
-import { LOW_CONFIDENCE_DASH, OVERLAP_DASH, POINT_STROKE_COLORS, projectLayers, utilityColorExpression } from './mapStyle'
+import { HALO_COLOR_DARK, LOW_CONFIDENCE_DASH, OVERLAP_DASH, POINT_STROKE_COLORS, projectLayers, utilityColorExpression } from './mapStyle'
 
 type Feature = ReturnType<typeof projectsToGeoJSON>['features'][number]
 type LayerType = 'line' | 'circle'
@@ -225,6 +225,47 @@ describe('projectLayers: point outline per basemap (#47)', () => {
       layers: [casing, lines, lowLines, lowPointRing, points].map((l) => ({ ...l, source: 'projects' }) as LayerSpecification),
     }
     expect(validateStyleMin(style)).toEqual([])
+  })
+})
+
+describe('projectLayers: dimmed projects stay visible when a pair is selected', () => {
+  // Regression: dimming used to multiply into the low-confidence fade, so with a pair selected the
+  // other low-confidence points dropped to 5% fill / 15% outline, i.e. vanished on the dark map
+  // and left only the #47 ring (an empty circle) on the light one.
+  const confirmedPoint = featureOf(project('POINT_OK', 'confirmed', { lat_b: null, lon_b: null }))
+  const lowPoint = featureOf(project('POINT_LOW', 'low', { lat_b: null, lon_b: null }))
+  const lowLine = featureOf(project('LINE_LOW', 'low'))
+  const PAIR = ['SOME_A', 'SOME_B'] // neither project above is in it
+
+  it.each(['dark', 'light', 'satellite'] as const)('%s: dimmed points keep a visible outline and fill', (id) => {
+    const layers = projectLayers(PAIR, HALO_COLOR_DARK, POINT_STROKE_COLORS[BASEMAPS[id].pointStroke])
+    for (const f of [confirmedPoint, lowPoint]) {
+      expect(paint(layers.points, 'circle-stroke-opacity', f) as number, f.properties.project_id).toBeGreaterThanOrEqual(0.4)
+    }
+    expect(paint(layers.points, 'circle-opacity', confirmedPoint) as number).toBeGreaterThanOrEqual(0.3)
+    expect(paint(layers.points, 'circle-opacity', lowPoint) as number).toBeGreaterThanOrEqual(0.1)
+    // Still stepped back, and low confidence still reads fainter than confirmed.
+    const normal = projectLayers(null, HALO_COLOR_DARK, POINT_STROKE_COLORS[BASEMAPS[id].pointStroke])
+    expect(paint(layers.points, 'circle-opacity', confirmedPoint) as number).toBeLessThan(paint(normal.points, 'circle-opacity', confirmedPoint) as number)
+    expect(paint(layers.points, 'circle-opacity', lowPoint) as number).toBeLessThan(paint(layers.points, 'circle-opacity', confirmedPoint) as number)
+  })
+
+  it('keeps the light-map ring of a dimmed low-confidence point at a visible level', () => {
+    const { lowPointRing } = projectLayers(PAIR, HALO_COLOR_DARK, POINT_STROKE_COLORS.dark)
+    expect(paint(lowPointRing, 'circle-stroke-opacity', lowPoint) as number).toBeGreaterThanOrEqual(0.4)
+  })
+
+  it('keeps dimmed low-confidence lines visible', () => {
+    const { lowLines } = projectLayers(PAIR, '#ffffff')
+    expect(paint(lowLines, 'line-opacity', lowLine) as number).toBeGreaterThanOrEqual(0.35)
+  })
+
+  it('leaves projects in the selected pair at full strength', () => {
+    const layers = projectLayers(['POINT_LOW', 'POINT_OK'], HALO_COLOR_DARK, POINT_STROKE_COLORS.dark)
+    expect(paint(layers.points, 'circle-stroke-opacity', confirmedPoint)).toBe(1)
+    expect(paint(layers.points, 'circle-opacity', confirmedPoint)).toBe(1)
+    expect(paint(layers.points, 'circle-stroke-opacity', lowPoint)).toBe(0.6)
+    expect(paint(layers.lowPointRing, 'circle-stroke-opacity', lowPoint)).toBe(1)
   })
 })
 
