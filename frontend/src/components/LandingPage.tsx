@@ -59,8 +59,7 @@ export default function LandingPage({ mapHref = MAP_HREF }: { mapHref?: string }
 
         <header className="landing-nav">
           <a className="landing-brand" href="#top">
-            <img className="landing-logo" src="/relay-icon.svg" alt="" width="40" height="40" />
-            <span className="landing-wordmark">RELAY</span>
+            <img className="landing-logo" src="/relay-logo.svg" alt="Relay" width="162" height="36" />
           </a>
           <nav aria-label="Primary" className="landing-nav-links">
             <ul>

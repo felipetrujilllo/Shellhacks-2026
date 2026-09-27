@@ -235,12 +235,15 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
   })
 
-  it('shows the Relay logo next to the heading, decorative so the name is read once', () => {
+  it('shows the Relay wordmark logo as the heading, so its alt text is the name read once', () => {
     renderClosedApp()
+    // The traced wordmark (gold R + ELAY) replaced the square icon + typed "Relay": the image IS the name now,
+    // so it carries alt="Relay" inside the h1 instead of being decorative next to text.
     const heading = screen.getByRole('heading', { level: 1, name: 'Relay' })
-    const logo = heading.parentElement?.querySelector('img')
-    expect(logo).toHaveAttribute('src', '/relay-icon.svg')
-    expect(logo).toHaveAttribute('alt', '')
+    const logo = heading.querySelector('img')
+    expect(logo).toHaveAttribute('src', '/relay-logo.svg')
+    expect(logo).toHaveAttribute('alt', 'Relay')
+    expect(heading.textContent).toBe('')
   })
 
   describe('top bar', () => {
@@ -257,10 +260,11 @@ describe('App', () => {
       expect(within(left as HTMLElement).getByRole('button', { name: 'Open menu' })).toBe(left.firstElementChild)
 
       expect(within(center as HTMLElement).getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
-      expect(center.querySelector('img')).toHaveAttribute('src', '/relay-icon.svg')
-      // The logo comes before the wordmark.
+      // The wordmark logo is the heading itself (no separate icon + text any more).
       const img = center.querySelector('img')!
-      expect(img.compareDocumentPosition(within(center as HTMLElement).getByRole('heading', { level: 1 })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(img).toHaveAttribute('src', '/relay-logo.svg')
+      expect(within(center as HTMLElement).getByRole('heading', { level: 1 })).toContainElement(img)
+      expect(center.querySelectorAll('img')).toHaveLength(1)
 
       expect(within(right as HTMLElement).getByRole('button', { name: 'Upload projects' })).toBeEnabled()
       expect(within(center as HTMLElement).queryByRole('button')).not.toBeInTheDocument()

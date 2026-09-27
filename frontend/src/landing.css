@@ -38,8 +38,7 @@
 /* Top nav, transparent over the hero. */
 .landing-nav { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 0; }
 .landing-brand { display:flex; align-items:center; gap:12px; color:var(--color-header-text); text-decoration:none; }
-.landing-logo { width:40px; height:40px; }
-.landing-wordmark { font-weight:700; font-size:20px; letter-spacing:.22em; }
+.landing-logo { height:36px; width:auto; display:block; }
 .landing-nav-links ul { display:flex; align-items:center; gap:36px; list-style:none; margin:0; padding:0; }
 .landing-nav-anchor a { color:color-mix(in srgb, var(--color-header-text) 88%, transparent); text-decoration:none; font-size:15px; font-weight:500; transition:color .15s; }
 .landing-nav-anchor a:hover { color:var(--color-header-text); }
@@ -74,7 +73,6 @@
   .landing-hero { padding-bottom:32px; }
   .landing-hero-shade { background:linear-gradient(0deg, color-mix(in srgb, var(--palette-navy) 94%, transparent) 0%, color-mix(in srgb, var(--palette-navy) 80%, transparent) 55%, color-mix(in srgb, var(--palette-navy) 55%, transparent) 100%); }
   .landing-nav-anchor { display:none; }
-  .landing-wordmark { font-size:17px; }
   .landing-hero-copy { padding:32px 0 40px; }
   .landing-subline { font-size:17px; }
   .landing-features { grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }

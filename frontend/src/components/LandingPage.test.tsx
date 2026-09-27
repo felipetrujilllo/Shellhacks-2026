@@ -64,10 +64,12 @@ describe('LandingPage', () => {
     for (const title of FEATURE_TITLES) expect(within(product).getByRole('heading', { name: title })).toBeInTheDocument()
   })
 
-  it('shows the logo and the RELAY wordmark, and hides the illustration from assistive tech', () => {
+  it('shows the Relay wordmark logo, and hides the illustration from assistive tech', () => {
     const { container } = render(<LandingPage />)
-    const brand = screen.getByRole('link', { name: 'RELAY' })
-    expect(brand.querySelector('img')).toHaveAttribute('src', '/relay-icon.svg')
+    // The traced wordmark image (gold R + ELAY) is the whole brand link now; its alt text names it.
+    const brand = screen.getByRole('link', { name: 'Relay' })
+    expect(brand.querySelector('img')).toHaveAttribute('src', '/relay-logo.svg')
+    expect(brand.querySelectorAll('img')).toHaveLength(1)
     const art = container.querySelector('svg.landing-hero-art')
     expect(art).not.toBeNull()
     expect(art).toHaveAttribute('aria-hidden', 'true')
@@ -116,5 +118,22 @@ describe('landing page motion', () => {
     expect(css).toMatch(/animation:landing-pulse 4s linear infinite/)
     expect(css).toMatch(/15%, 100% \{ stroke-dashoffset:-100; \}/)
     expect(PULSE_SPAN_SECONDS).toBeCloseTo(0.15 * 4, 5)
+  })
+})
+
+describe('brand assets', () => {
+  const PUBLIC = resolve(SRC, '..', 'public')
+  it('uses the square gold R mark as the favicon and ships the full wordmark; the old icon is gone', () => {
+    const indexHtml = readFileSync(resolve(SRC, '..', 'index.html'), 'utf8')
+    expect(indexHtml).toMatch(/<link rel="icon" type="image\/svg\+xml" href="\/relay-mark\.svg" \/>/)
+    const logo = readFileSync(resolve(PUBLIC, 'relay-logo.svg'), 'utf8')
+    const mark = readFileSync(resolve(PUBLIC, 'relay-mark.svg'), 'utf8')
+    expect(logo).toMatch(/viewBox="0 0 1407 313"/)
+    // The mark is the logo's gold R path, unchanged, in a square frame.
+    const goldPath = (svg: string) => svg.match(/<path d="([^"]+)" fill="#FFC928"/)![1]
+    expect(goldPath(mark)).toBe(goldPath(logo))
+    const [, , w, h] = mark.match(/viewBox="([^"]+)"/)![1].split(' ').map(Number)
+    expect(w).toBe(h)
+    expect(() => readFileSync(resolve(PUBLIC, 'relay-icon.svg'), 'utf8')).toThrow()
   })
 })

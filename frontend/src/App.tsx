@@ -157,7 +157,7 @@ function App() {
             icon-only menu button, right above the sidebar it opens (disabled until the data, and so the sidebar, exists).
             Right: Upload projects. The theme is picked in the map's Dark/Light/Satellite control. */}
         <div className="header-side"><button type="button" className="sidebar-toggle" disabled={state.status !== 'ready'} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'} aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => setSidebarOpen(open => !open)}><Icon name={sidebarOpen ? 'close' : 'menu'} size={20} /></button></div>
-        <div className="brand"><span className="brand-symbol"><img src="/relay-icon.svg" alt="" width={28} height={28} /></span><h1>Relay</h1></div>
+        <div className="brand"><h1 className="brand-logo"><img src="/relay-logo.svg" alt="Relay" width={126} height={28} /></h1></div>
         <div className="header-side header-actions"><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
       </header>
       {state.status === 'loading' && <p className="workspace-message">Loading projects…</p>}
