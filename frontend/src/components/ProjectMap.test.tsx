@@ -177,3 +177,39 @@ describe('ProjectMap point outline follows the basemap (#47)', () => {
     expect(confirmedPointStroke()).toBe(colorOf(HALO_COLOR_DARK))
   })
 })
+
+describe('ProjectMap minimum-match slider (#54)', () => {
+  const props = { projects: [], overlaps: [], selectedId: null, onSelect: () => {}, focusedProject: null, theme: 'dark' as Theme }
+  const slider = () => screen.getByRole('slider', { name: 'Minimum match' })
+
+  it('renders the slider, controlled by the minMatch it is given, and reports moves through onMinMatchChange', () => {
+    const onMinMatchChange = vi.fn()
+    const { rerender } = render(<ProjectMap {...props} minMatch={0.5} onMinMatchChange={onMinMatchChange} />)
+    expect(slider()).toHaveValue('50')
+    expect(screen.getByText('≥ 50% match')).toBeInTheDocument()
+    fireEvent.input(slider(), { target: { value: '60' } })
+    expect(onMinMatchChange).toHaveBeenCalledWith(0.6)
+    rerender(<ProjectMap {...props} minMatch={0} onMinMatchChange={onMinMatchChange} />)
+    expect(slider()).toHaveValue('0')
+    expect(screen.getByText('All')).toBeInTheDocument()
+  })
+
+  it('puts the slider in its own floating control on the map, after the map (so above it) and outside the top-left toolbar', () => {
+    render(<ProjectMap {...props} minMatch={0} onMinMatchChange={() => {}} />)
+    const control = slider().closest('.match-slider') as HTMLElement
+    expect(control).toHaveClass('map-control')
+    const toolbar = screen.getByRole('group', { name: 'Basemap' }).parentElement!
+    expect(toolbar).toHaveClass('map-toolbar')
+    expect(toolbar).not.toContainElement(control)
+    // A sibling of the toolbar, in the map's own box, after the MapLibre map (where the zoom buttons live).
+    const map = screen.getByTestId('maplibre')
+    expect(control.parentElement).toBe(toolbar.parentElement)
+    expect(control.parentElement).toBe(map.parentElement)
+    expect(map.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows no slider when nothing controls it', () => {
+    render(<ProjectMap {...props} />)
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+  })
+})

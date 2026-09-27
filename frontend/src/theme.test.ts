@@ -1004,6 +1004,12 @@ const CONTRAST_PAIRS: { name: string; fg: string; bg: string[]; min: number }[] 
   // #47: the ring around the utility swatch dots on the selection/detail panel, light in both themes.
   // The sidebar card's ring is transparent in the dark theme by design: see 'utility swatch rings (#47)'.
   { name: 'utility swatch ring on the selection/detail panel', fg: '--color-panel-swatch-ring', bg: ['--color-panel-bg'], min: 3 },
+  // #54: the minimum-match slider on the map (workspace.css .match-slider), a translucent navy chip like the map
+  // context chip, over a dark map or a light one (--color-halo-light stands in for Positron). The thumb and the
+  // active part of the track are the gold accent; the value label reuses the chip text (pairs above).
+  { name: 'minimum-match slider thumb and active track on a dark map', fg: '--color-accent', bg: ['--color-map-bg', '--color-map-context-bg'], min: 3 },
+  { name: 'minimum-match slider thumb and active track on a light map', fg: '--color-accent', bg: ['--color-halo-light', '--color-map-context-bg'], min: 3 },
+  { name: 'focus outline on the minimum-match slider over a light map', fg: '--color-focus-ring', bg: ['--color-halo-light', '--color-map-context-bg'], min: 3 },
 ]
 
 type Rgba = { r: number; g: number; b: number; a: number } // channels 0-255, alpha 0-1

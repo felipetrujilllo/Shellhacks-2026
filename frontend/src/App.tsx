@@ -8,6 +8,7 @@ import UploadProjects from './components/UploadProjects'
 import Icon from './components/Icon'
 import { formatPairs, formatScorePct, formatUsd, formatUsdCompact } from './format'
 import { MAX_UPLOADED_PROJECTS, SUBMITTED_OVERLAP_PREFIX, SUBMITTED_PROJECT_PREFIX, type ImportBatch } from './importProjects'
+import { DEFAULT_MIN_MATCH, filterByMinMatch, matchLabel } from './matchFilter'
 import { summarizeSavings } from './savings'
 import { tierLabel } from './tiers'
 import { useTheme } from './theme'
@@ -43,6 +44,8 @@ function App() {
   // Why this browser's uploads are not on the map (refused by the server, unreadable, ...).
   const [uploadProblem, setUploadProblem] = useState('')
   const [hidden, setHidden] = useState<string[]>([])
+  // The map's minimum-match slider (#54): 0 ("All") shows everything, exactly as before it existed.
+  const [minMatch, setMinMatch] = useState(DEFAULT_MIN_MATCH)
   const [notice, setNotice] = useState('')
   // The sidebar starts closed so the map fills the screen; the top bar's menu button toggles it.
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -77,11 +80,18 @@ function App() {
   const utilities = [...new Set(projects.map(p => p.utility))]
   const visibleProjects = useMemo(() => projects.filter(p => !hidden.includes(p.utility)), [projects, hidden])
   const visibleOverlaps = useMemo(() => overlaps.filter(o => !hidden.includes(o.project_a.utility) && !hidden.includes(o.project_b.utility)), [overlaps, hidden])
-  const savings = useMemo(() => summarizeSavings(visibleOverlaps), [visibleOverlaps])
-  const selected = visibleOverlaps.find(o => o.overlap_id === selectedId)
+  // Then the minimum match (#54): everything below reads `matched`, so the map and the sidebar always agree.
+  // At "All" these are the visible arrays themselves.
+  const matched = useMemo(() => filterByMinMatch(visibleProjects, visibleOverlaps, minMatch), [visibleProjects, visibleOverlaps, minMatch])
+  const savings = useMemo(() => summarizeSavings(matched.overlaps), [matched])
+  // Both derived from what is shown, so a pair or project the filters hide closes its detail panel.
+  const selected = matched.overlaps.find(o => o.overlap_id === selectedId)
+  const focused = focusedProject && matched.projects.some(p => p.project_id === focusedProject.project_id) ? focusedProject : null
+  // Nothing reaches the minimum, though the utility layers show some pairs: say so, not "no matching pairs".
+  const belowMinMatch = minMatch !== DEFAULT_MIN_MATCH && visibleOverlaps.length > 0 && matched.overlaps.length === 0
   const search = query.toLowerCase().trim()
-  const filteredProjects = visibleProjects.filter(p => `${p.project_name} ${p.utility}`.toLowerCase().includes(search))
-  const filteredOverlaps = visibleOverlaps.filter(o => `${o.project_a.project_name} ${o.project_b.project_name} ${o.project_a.utility} ${o.project_b.utility}`.toLowerCase().includes(search))
+  const filteredProjects = matched.projects.filter(p => `${p.project_name} ${p.utility}`.toLowerCase().includes(search))
+  const filteredOverlaps = matched.overlaps.filter(o => `${o.project_a.project_name} ${o.project_b.project_name} ${o.project_a.utility} ${o.project_b.utility}`.toLowerCase().includes(search))
   const sortedOverlaps = sortOverlaps(filteredOverlaps, sortKey)
   function select(id: string) { setSelectedId(id); setFocusedProject(null) }
   function toggleUtility(utility: string) {
@@ -100,7 +110,8 @@ function App() {
     const workspace = await fetchWorkspace(next)
     const kept = saveUploads(next)
     showWorkspace(workspace); setUploads(next); setPersisted(kept); setUploadProblem('')
-    setBatches(current => [...current, batch]); setHidden([]); setQuery('')
+    // Show every layer and match again, so the new pairs can't hide behind a filter.
+    setBatches(current => [...current, batch]); setHidden([]); setMinMatch(DEFAULT_MIN_MATCH); setQuery('')
     setTab('opportunities')
     setNotice(`${plural(added.length, 'proposal')} from ${batch.filename} added. ${keptNote(kept)} Comparisons updated.`)
   }
@@ -156,22 +167,22 @@ function App() {
               <div className="opportunity-tier"><span className="tier-tag">{tierLabel(o.tier)}</span></div>
               <div className="project-pair">{[o.project_a, o.project_b].map(p => <div key={p.project_id}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small></div></div>)}</div>
               <div className="opportunity-bottom"><span>{o.time_gap_days} days apart in service</span>{o.est_savings_usd === null ? <span>No estimate</span> : <span title={`${formatUsd(o.est_savings_usd)} est. savings`}>{formatUsdCompact(o.est_savings_usd)} est. savings</span>}{o.overlap_id.startsWith(SUBMITTED_OVERLAP_PREFIX) && <span className="new-tag">Uploaded</span>}</div>
-            </button></li>)}</ol>{!filteredOverlaps.length && <div className="empty-state"><Icon name="search" size={24} /><strong>No matching pairs</strong><p>Try another search or turn on more utility layers. Projects must be within 25 miles to appear here.</p></div>}</>}
-            {tab === 'projects' && <><div className="list-caption"><span>{filteredProjects.length} projects</span><span>All participating utilities</span></div>{filteredProjects.map(p => <button className={`project-row ${focusedProject?.project_id === p.project_id ? 'active' : ''}`} key={p.project_id} onClick={() => { setFocusedProject(p); setSelectedId(null) }}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small><span>In service {p.in_service_date}</span></div><Icon name="arrow" size={14} /></button>)}{!filteredProjects.length && <p className="empty-state">No projects match your search.</p>}</>}
+            </button></li>)}</ol>{!filteredOverlaps.length && belowMinMatch && <div className="empty-state"><Icon name="search" size={24} /><strong>{`No pairs at ${matchLabel(minMatch)}; lower the minimum`}</strong><p>Drag the Minimum match slider on the map to the left to see more pairs.</p></div>}{!filteredOverlaps.length && !belowMinMatch && <div className="empty-state"><Icon name="search" size={24} /><strong>No matching pairs</strong><p>Try another search or turn on more utility layers. Projects must be within 25 miles to appear here.</p></div>}</>}
+            {tab === 'projects' && <><div className="list-caption"><span>{filteredProjects.length} projects</span><span>All participating utilities</span></div>{filteredProjects.map(p => <button className={`project-row ${focused?.project_id === p.project_id ? 'active' : ''}`} key={p.project_id} onClick={() => { setFocusedProject(p); setSelectedId(null) }}><i style={{ background: utilityColor(p.utility) }} /><div><strong>{p.project_name}</strong><small>{p.utility}</small><span>In service {p.in_service_date}</span></div><Icon name="arrow" size={14} /></button>)}{!filteredProjects.length && <p className="empty-state">{belowMinMatch ? `No projects in pairs at ${matchLabel(minMatch)}; lower the minimum.` : 'No projects match your search.'}</p>}</>}
             {tab === 'imports' && <>{!batches.length && !submitted.length ? <div className="empty-state upload-empty"><Icon name="upload" size={30} /><strong>Your plans belong here.</strong><p>Add a project spreadsheet to find nearby work across utilities.</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>Upload your first file <Icon name="arrow" size={16} /></button><small>CSV spreadsheets · only you can see them</small></div> : <>{batches.map(b => <div className="batch-card" key={b.id}><Icon name="file" /><strong>{b.filename}</strong><p>{b.rows.filter(r => r.project).length} mapped · {b.rows.filter(r => !r.project).length} flagged</p>{b.rows.filter(r => !r.project).map(r => <p className="flagged-reason" key={r.row}>Row {r.row}: {r.issues.join('; ')}</p>)}</div>)}{submittedUtilities.map(utility => <div className="batch-card" key={utility}><i style={{ background: utilityColor(utility) }} /><strong>{utility}</strong><p>{submitted.filter(p => p.utility === utility).length} uploaded projects</p><button className="text-link" aria-label={`Remove ${utility} uploads`} onClick={() => removeUtility(utility)}><Icon name="close" size={14} /> Remove</button></div>)}</>}{uploads.length > 0 && <button className="secondary-button clear-uploads" onClick={clearUploads}>Clear my uploads</button>}<p className="session-note">{persisted ? 'Your uploads stay in this browser, so they are still here after a refresh. Only you can see them.' : 'This browser is not saving site data, so your uploads last until you refresh. Only you can see them.'} Published utility plans are unchanged.</p></>}
           </div>
           <footer className="sidebar-footer"><span className="source-dot" /> {submitted.length ? 'Published plans + your uploads' : 'Published utility plans'}<span>{submitted.length ? 'PRIVATE' : 'SC / GA'}</span></footer>
         </div></aside>
         <section className="workspace-map" aria-label="Project map">
-          <ProjectMap projects={visibleProjects} overlaps={visibleOverlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focusedProject} theme={theme} />
-          <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{visibleProjects.length} mapped projects</span></div>
+          <ProjectMap projects={matched.projects} overlaps={matched.overlaps} selectedId={selected?.overlap_id ?? null} onSelect={select} focusedProject={focused} theme={theme} minMatch={minMatch} onMinMatchChange={setMinMatch} />
+          <div className="map-context"><span className="source-dot" /><strong>Project coverage</strong><span>{matched.projects.length} mapped projects</span></div>
           {uploadProblem && <div role="alert" className="workspace-notice upload-problem"><span>{uploadProblem}</span><button className="text-link" onClick={clearUploads}>Clear my uploads</button><button onClick={() => setUploadProblem('')} aria-label="Dismiss upload problem"><Icon name="close" size={14} /></button></div>}
           {notice && <div role="status" className="workspace-notice"><Icon name="check" size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notification"><Icon name="close" size={14} /></button></div>}
           {selected && <div className="selection-panel"><OverlapDetail overlap={selected} onClose={() => setSelectedId(null)} /></div>}
-          {!selected && focusedProject && <div className="selection-panel"><div className="selection-heading"><span>PROJECT DETAILS</span><button className="icon-button" aria-label="Close details" onClick={() => setFocusedProject(null)}><Icon name="close" size={16} /></button></div>
-            <h3>{focusedProject.project_name}</h3>
-            <div className="selection-project"><i style={{ background: utilityColor(focusedProject.utility) }} /><div><strong>{focusedProject.project_name}</strong><small>{focusedProject.utility}</small><span>In service <b>{focusedProject.in_service_date}</b></span></div></div>
-            <div className="selection-footnote">{focusedProject.location_confidence === 'low' ? 'Location supplied or unverified. Confirm coordinates before planning.' : 'Location confirmed in the source dataset.'}</div>
+          {!selected && focused && <div className="selection-panel"><div className="selection-heading"><span>PROJECT DETAILS</span><button className="icon-button" aria-label="Close details" onClick={() => setFocusedProject(null)}><Icon name="close" size={16} /></button></div>
+            <h3>{focused.project_name}</h3>
+            <div className="selection-project"><i style={{ background: utilityColor(focused.utility) }} /><div><strong>{focused.project_name}</strong><small>{focused.utility}</small><span>In service <b>{focused.in_service_date}</b></span></div></div>
+            <div className="selection-footnote">{focused.location_confidence === 'low' ? 'Location supplied or unverified. Confirm coordinates before planning.' : 'Location confirmed in the source dataset.'}</div>
           </div>}
         </section>
       </div>}

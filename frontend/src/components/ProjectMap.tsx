@@ -13,9 +13,11 @@ import Map, {
 import { setWorkerUrl, type ExpressionSpecification } from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { overlapsToGeoJSON, projectsToGeoJSON } from '../geo'
+import { DEFAULT_MIN_MATCH } from '../matchFilter'
 import type { Theme } from '../theme'
 import type { Overlap, Project } from '../types'
 import BasemapToggle from './BasemapToggle'
+import MatchSlider from './MatchSlider'
 import MapLegend from './MapLegend'
 import { BASEMAPS, DEFAULT_BASEMAP, basemapOptions, dataBounds, themedBasemap, type BasemapId } from './basemaps'
 import {
@@ -54,9 +56,15 @@ interface ProjectMapProps {
   focusedProject?: Project | null
   /** The app's theme: picks the vector basemap (Dark Matter or Positron). */
   theme: Theme
+  /**
+   * The minimum-match slider (#54), controlled by App, which has already filtered `projects` and
+   * `overlaps` by it. The slider shows when onMinMatchChange is given.
+   */
+  minMatch?: number
+  onMinMatchChange?: (min: number) => void
 }
 
-export default function ProjectMap({ projects, overlaps, selectedId, onSelect, focusedProject, theme }: ProjectMapProps) {
+export default function ProjectMap({ projects, overlaps, selectedId, onSelect, focusedProject, theme, minMatch = DEFAULT_MIN_MATCH, onMinMatchChange }: ProjectMapProps) {
   const mapRef = useRef<MapRef>(null)
   // The user's pick; what the map shows follows the theme too. A new mapStyle keeps the project
   // and overlap layers: react-map-gl re-adds the <Source>/<Layer> children after a style change.
@@ -181,6 +189,8 @@ export default function ProjectMap({ projects, overlaps, selectedId, onSelect, f
         </button>
         <MapLegend />
       </div>
+      {/* Top right, just left of the zoom buttons (NavigationControl); workspace.css .match-slider places it. */}
+      {onMinMatchChange && <MatchSlider value={minMatch} onChange={onMinMatchChange} />}
       {hoveredProject && (
         <div role="tooltip" className="map-panel pointer-events-none absolute bottom-24 left-4 right-4 max-w-sm border border-white/15 bg-slate-950/95 text-slate-100">
           <p className="mb-1 text-xs text-sky-300">{hoveredProject.utility}</p>
