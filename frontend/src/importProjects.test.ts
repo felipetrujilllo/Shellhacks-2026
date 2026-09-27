@@ -15,7 +15,13 @@ describe('CSV project review', () => {
   it('maps the template with endpoints and marks supplied locations unverified', () => {
     const [row] = reviewCsv(CSV_TEMPLATE, 'batch', [])
     expect(row.issues).toEqual([])
-    expect(row.project).toMatchObject({ project_id: 'batch:1', lat_center: 32.34, lon_a: -81.18, est_cost_usd: 2500000, location_confidence: 'low' })
+    expect(row.project).toMatchObject({ project_id: 'batch-1', lat_center: 32.34, lon_a: -81.18, est_cost_usd: 2500000, location_confidence: 'low' })
+  })
+  it('gives every mapped row an id the server accepts and serves as SUB-<id> (UPLOAD_ID_PATTERN)', () => {
+    const batch = crypto.randomUUID() // what the upload dialog uses
+    const rows = reviewCsv(`${header}\nU,A,32,-81,2027-01-01\nU,B,32,-81,2027-01-01`, batch, [])
+    expect(rows.map(r => r.project!.project_id)).toEqual([`${batch}-1`, `${batch}-2`])
+    rows.forEach(r => expect(r.project!.project_id).toMatch(/^[A-Za-z0-9_-]{1,64}$/))
   })
   it('retains bad rows for review without mapping them', () => {
     const rows = reviewCsv(`${header}\nNew Utility,Missing location,,-81,2027-02-30\nNew Utility,Valid,32,-81,2027-06-01`, 'batch', [])
@@ -47,7 +53,7 @@ describe('CSV project review', () => {
   })
 })
 
-// Pairs for uploaded projects are computed by the server now (backend/app/submissions.py,
+// Pairs for uploaded projects are computed by the server (POST /workspace, backend/app/submissions.py,
 // tested in backend/tests/test_submissions.py), with the same engine as the published pairs.
 describe('sponsor seed file', () => {
   // Read with node:fs like test/apiExamples.ts, since data/ is outside the Vite root.

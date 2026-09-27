@@ -124,8 +124,10 @@ def _get_list(client: httpx.Client, path: str) -> list[dict]:
 def check_api(client: httpx.Client, expected: ExpectedData) -> str:
     """Compare `client`'s API with `expected`; return a PASS summary or raise SmokeFailure.
 
-    Uploaded projects (POST /submissions) and their pairs are not from the CSV and survive
-    every reload, so they are left out of the comparison and only counted in the summary.
+    GET /projects and /overlaps serve only the published plans now (uploads stay in each
+    visitor's browser, POST /workspace). A deployed API still on the old shared-uploads code
+    served uploads (SUB- ids) there too; those are not from the CSV, so they are left out of the
+    comparison and only counted in the summary.
     """
     served_projects = _get_list(client, "/projects")
     served_overlaps = _get_list(client, "/overlaps")

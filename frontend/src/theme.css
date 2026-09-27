@@ -115,6 +115,9 @@
   --color-map-context-divider: #ffffff20; /* divider inside the map context chip */
   --color-notice-bg: #e7eed9; /* status notice background */
   --color-notice-text: #354328; /* status notice text */
+  --color-upload-problem-bg: #f4e2d4; /* notice background when saved uploads could not be added */
+  --color-upload-problem-text: #5b3419; /* notice text when saved uploads could not be added */
+  --color-upload-problem-link: #7a3f14; /* Clear my uploads link inside that notice */
   --color-floating-shadow: #0003; /* drop shadow of the notice and selection panel */
   --color-panel-bg: #f9faf5; /* selection panel and upload dialog background */
   --color-panel-border: #d7dbce; /* selection panel border */

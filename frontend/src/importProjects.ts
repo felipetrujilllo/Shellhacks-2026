@@ -1,8 +1,11 @@
 import type { Project } from './types'
 
-// Ids the server gives uploaded projects and their pairs (backend/app/submissions.py).
+// Ids the server serves uploaded projects and their pairs under (backend/app/submissions.py).
 export const SUBMITTED_PROJECT_PREFIX = 'SUB-'
 export const SUBMITTED_OVERLAP_PREFIX = 'SUB:'
+
+// The most uploads one browser keeps and sends: MAX_SUBMISSION_PROJECTS in backend/app/schemas.py.
+export const MAX_UPLOADED_PROJECTS = 1000
 
 export interface ImportRow { row: number; name: string; issues: string[]; project: Project | null }
 export interface ImportBatch { id: string; filename: string; rows: ImportRow[] }
@@ -38,7 +41,7 @@ export function parseCsv(text: string): string[][] {
 export function reviewCsv(text: string, batchId: string, existing: Project[]): ImportRow[] {
   const [rawHeaders, ...rows] = parseCsv(text)
   if (!rawHeaders || !rows.length) throw new Error('This file has no project rows.')
-  if (rows.length > 1000) throw new Error('Use a file with 1,000 projects or fewer.')
+  if (rows.length > MAX_UPLOADED_PROJECTS) throw new Error('Use a file with 1,000 projects or fewer.')
   const headers = rawHeaders.map(h => h.toLowerCase())
   if (new Set(headers).size !== headers.length) throw new Error('Column names must be unique.')
   const required = ['utility', 'project_name', 'lat_center', 'lon_center', 'in_service_date']
@@ -72,9 +75,11 @@ export function reviewCsv(text: string, batchId: string, existing: Project[]): I
     if (!issues.length) keys.add(key)
     return { row: i + 2, name: raw.project_name || `Row ${i + 2}`, issues,
       project: issues.length ? null : {
-        // project_id is only the client's reference: POST /submissions assigns the real one.
+        // The upload's id for good: this browser keeps it and POST /workspace serves the
+        // project as SUB-<id>, so selection survives a reload. Only [A-Za-z0-9_-], at most 64
+        // characters (UPLOAD_ID_PATTERN in backend/app/schemas.py); a UUID batch id fits.
         // The API requires a state and the template has no state column.
-        project_id: `${batchId}:${i + 1}`, utility: raw.utility, state: raw.state || 'Unknown',
+        project_id: `${batchId}-${i + 1}`, utility: raw.utility, state: raw.state || 'Unknown',
         project_name: raw.project_name, lat_center: lat!, lon_center: lon!,
         name_a: raw.name_a || null, lat_a: latA, lon_a: lonA,
         name_b: raw.name_b || null, lat_b: latB, lon_b: lonB,

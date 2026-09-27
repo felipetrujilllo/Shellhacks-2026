@@ -1,14 +1,14 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
-import { fetchOverlaps, fetchProjects, submitProjects } from './api'
+import { fetchWorkspace } from './api'
 import { apiExample, expectProject } from './test/apiExamples'
 import { makeOverlaps } from './test/overlapFixtures'
+import type { Overlap, Project, Workspace } from './types'
+import { UNREADABLE_UPLOADS, UPLOADS_STORAGE_KEY } from './uploadCache'
 
 vi.mock('./api', () => ({
-  fetchProjects: vi.fn(),
-  fetchOverlaps: vi.fn(),
-  submitProjects: vi.fn(),
+  fetchWorkspace: vi.fn(),
 }))
 
 // jsdom has no WebGL: replace the MapLibre map with a stub that exposes what it was given.
@@ -50,23 +50,75 @@ const UPLOAD_CSV = 'utility,project_name,lat_center,lon_center,in_service_date,e
   'Savannah Water,Water main replacement,32.352116,-81.175112,2026-06-01,2000000\n' +
   'Savannah Water,Bad row,abc,-81.1,2026-06-01,\n'
 
-/** What the server holds once UPLOAD_CSV's valid row is saved: the project, and its pair ranked first. */
-function savedUpload() {
-  const gpc = projectsExample().find(p => p.project_id === 'GPC_2')!
-  const stored = { ...gpc, project_id: 'SUB-abc-1', utility: 'Savannah Water', state: 'Unknown',
-    project_name: 'Water main replacement', name_a: null, lat_a: null, lon_a: null, name_b: null,
-    lat_b: null, lon_b: null, est_cost_usd: 2000000, location_confidence: 'low' as const }
-  const pair = { ...makeOverlaps(1)[0], overlap_id: 'SUB:GPC_2|SUB-abc-1', rank: 1, score: 1,
-    distance_mi: 0, time_gap_days: 0, project_a: gpc, project_b: stored, est_savings_usd: 100000 }
-  return { stored, pair }
+const uploadFile = () => new File([UPLOAD_CSV], 'savannah-water.csv', { type: 'text/csv' })
+
+// What the fake server publishes; a test may replace either list before rendering.
+let published: { projects: Project[]; overlaps: Overlap[] }
+
+/**
+ * POST /workspace in miniature (the real one: backend/app/routes.py): the published plans plus
+ * each upload served as SUB-<client id> with 'low' confidence, and paired with GPC_2 at 0 mi,
+ * ranked above the published pairs. Stateless, like the server: only what is sent comes back.
+ */
+function fakeWorkspace(uploads: Project[]): Workspace {
+  const gpc = published.projects.find(p => p.project_id === 'GPC_2')!
+  const served = uploads.map(u => ({ ...u, project_id: `SUB-${u.project_id}`, location_confidence: 'low' as const }))
+  const pairs = served.map((p, i) => ({ ...makeOverlaps(1)[0], overlap_id: `SUB:GPC_2|${p.project_id}`, rank: i + 1,
+    score: 1, distance_mi: 0, time_gap_days: 0, project_a: gpc, project_b: p,
+    est_savings_usd: p.est_cost_usd === null ? null : p.est_cost_usd / 20 }))
+  return { projects: [...published.projects, ...served],
+    overlaps: [...pairs, ...published.overlaps.map(o => ({ ...o, rank: o.rank + pairs.length }))] }
+}
+
+/** An upload as this browser keeps it (client id, as reviewCsv builds it). */
+function clientUpload(overrides: Partial<Project> = {}): Project {
+  return { project_id: 'b1-1', utility: 'Savannah Water', state: 'Unknown', project_name: 'Water main replacement',
+    name_a: null, lat_a: null, lon_a: null, name_b: null, lat_b: null, lon_b: null,
+    lat_center: 32.352116, lon_center: -81.175112, in_service_date: '2026-06-01', est_cost_usd: 2000000,
+    location_confidence: 'low', ...overrides }
+}
+
+/** A fresh in-memory localStorage: one per test, so no test sees another's uploads. */
+function memoryStorage(): Storage {
+  const data = new Map<string, string>()
+  return {
+    get length() { return data.size },
+    clear: () => data.clear(),
+    getItem: (key: string) => data.get(key) ?? null,
+    key: (i: number) => [...data.keys()][i] ?? null,
+    removeItem: (key: string) => { data.delete(key) },
+    setItem: (key: string, value: string) => { data.set(key, String(value)) },
+  }
+}
+
+/** A browser that refuses site data (private window, blocked storage): every call throws. */
+function blockedStorage(): Storage {
+  const refuse = () => { throw new DOMException('The operation is insecure.', 'SecurityError') }
+  return { get length() { return refuse() }, clear: refuse, getItem: refuse, key: refuse, removeItem: refuse, setItem: refuse }
+}
+
+let storage: Storage
+const savedUploads = () => {
+  const raw = storage.getItem(UPLOADS_STORAGE_KEY)
+  return raw === null ? null : JSON.parse(raw) as Project[]
+}
+const sentUploads = (call: number) => vi.mocked(fetchWorkspace).mock.calls[call][0]
+
+/** Picks UPLOAD_CSV in the dialog and adds its one valid row. */
+async function importUpload() {
+  await chooseUpload(uploadFile())
+  fireEvent.click(await screen.findByRole('button', { name: /Add 1 project & compare/ }))
+  await screen.findByRole('status')
 }
 
 describe('App', () => {
   beforeEach(() => {
-    vi.mocked(fetchProjects).mockReset().mockResolvedValue(projectsExample())
-    vi.mocked(fetchOverlaps).mockReset().mockResolvedValue(makeOverlaps(6))
-    vi.mocked(submitProjects).mockReset()
+    published = { projects: projectsExample(), overlaps: makeOverlaps(6) }
+    vi.mocked(fetchWorkspace).mockReset().mockImplementation(async uploads => fakeWorkspace(uploads))
+    storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
   })
+  afterEach(() => { vi.unstubAllGlobals() })
 
   describe('sidebar toggle', () => {
     it('starts closed, so the map is the only thing on screen', async () => {
@@ -202,7 +254,7 @@ describe('App', () => {
   it('shows each opportunity card\'s score as a whole-number percentage', async () => {
     // Descending, as the API ranks them (the list re-sorts by score, so rank order = score order).
     const scores = [1, 0.8311, 0.7055, 0.5, 0.25, 0]
-    vi.mocked(fetchOverlaps).mockResolvedValue(makeOverlaps(6).map((o, i) => ({ ...o, score: scores[i] })))
+    published.overlaps = makeOverlaps(6).map((o, i) => ({ ...o, score: scores[i] }))
     await renderApp()
 
     const items = within(await screen.findByRole('list', { name: /coordination opportunities/i })).getAllByRole('button')
@@ -243,12 +295,12 @@ describe('App', () => {
   })
 
   it('shows a visible error alert with the message when the API call fails', async () => {
-    vi.mocked(fetchOverlaps).mockRejectedValue(new Error('GET http://api/overlaps failed with status 500'))
+    vi.mocked(fetchWorkspace).mockRejectedValue(new Error('POST http://api/workspace failed with status 500'))
     renderClosedApp() // no data, so no map and no menu button to open
 
     const alert = await screen.findByRole('alert')
     expect(alert).toBeVisible()
-    expect(alert).toHaveTextContent('GET http://api/overlaps failed with status 500')
+    expect(alert).toHaveTextContent('POST http://api/workspace failed with status 500')
     expect(screen.queryByTestId('project-map')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Upload projects' })).toBeDisabled()
     expect(screen.queryByRole('list', { name: /coordination opportunities/i })).not.toBeInTheDocument()
@@ -274,25 +326,23 @@ describe('App', () => {
     expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
   })
 
-  it('uploads a CSV, saves only the valid rows for everyone, and shows the server\'s ranked pairs', async () => {
-    const { stored, pair } = savedUpload()
+  it('uploads a CSV, sends only the valid rows with this browser\'s uploads, and shows the server\'s ranked pairs', async () => {
     await renderApp()
-    await chooseUpload(new File([UPLOAD_CSV], 'savannah-water.csv', { type: 'text/csv' }))
+    await chooseUpload(uploadFile())
     const add = await screen.findByRole('button', { name: /Add 1 project & compare/ })
     expect(screen.getByText('lat_center is invalid')).toBeInTheDocument()
-
-    // From here on the server holds the upload, so a reload returns it.
-    vi.mocked(submitProjects).mockResolvedValue([stored])
-    vi.mocked(fetchProjects).mockResolvedValue([...projectsExample(), stored])
-    vi.mocked(fetchOverlaps).mockResolvedValue([pair, ...makeOverlaps(6).map(o => ({ ...o, rank: o.rank + 1 }))])
     fireEvent.click(add)
 
-    expect(await screen.findByRole('status')).toHaveTextContent('1 proposal from savannah-water.csv saved for everyone. Comparisons updated.')
-    expect(submitProjects).toHaveBeenCalledTimes(1)
-    const [[sent]] = vi.mocked(submitProjects).mock.calls
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '1 proposal from savannah-water.csv added. They stay in this browser and only you can see them. Comparisons updated.')
+    expect(fetchWorkspace).toHaveBeenCalledTimes(2) // the load (no uploads yet), then the upload
+    expect(sentUploads(0)).toEqual([])
+    const sent = sentUploads(1)
     expect(sent).toHaveLength(1)
     expect(sent[0]).toMatchObject({ utility: 'Savannah Water', project_name: 'Water main replacement', state: 'Unknown',
       lat_center: 32.352116, lon_center: -81.175112, in_service_date: '2026-06-01', est_cost_usd: 2000000 })
+    // The id the server serves as SUB-<id>: must fit its UPLOAD_ID_PATTERN (backend/app/schemas.py).
+    expect(sent[0].project_id).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     expect(screen.getByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
@@ -305,34 +355,205 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
     expect(screen.getByText('1 mapped · 1 flagged')).toBeInTheDocument()
     expect(screen.getByText('1 uploaded projects')).toBeInTheDocument()
-    // Saved for everyone, so there is no per-tab "remove" any more.
-    expect(screen.queryByRole('button', { name: 'Remove upload' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Savannah Water uploads' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Clear my uploads' })).toBeInTheDocument()
+  })
+
+  it('keeps the accepted uploads in this browser\'s storage, under one versioned key', async () => {
+    await renderApp()
+    expect(savedUploads()).toBeNull()
+    await importUpload()
+
+    expect(UPLOADS_STORAGE_KEY).toBe('relay.uploads.v1')
+    expect(savedUploads()).toEqual(sentUploads(1))
+    expect(savedUploads()![0]).toMatchObject({ utility: 'Savannah Water', project_name: 'Water main replacement' })
+  })
+
+  it('adds a second file to the uploads already in this browser', async () => {
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload({ project_id: 'old-1', project_name: 'Older line' })]))
+    await renderApp()
+    await importUpload()
+
+    expect(sentUploads(1).map(u => u.project_name)).toEqual(['Older line', 'Water main replacement'])
+    expect(savedUploads()!.map(u => u.project_name)).toEqual(['Older line', 'Water main replacement'])
+    expect(screen.getByTestId('project-map')).toHaveTextContent('4 projects, 8 overlaps')
+  })
+
+  it('re-sends the saved uploads on reload and shows them again, under the same ids', async () => {
+    const first = await renderApp()
+    await importUpload()
+    const kept = savedUploads()!
+    fireEvent.click(screen.getByRole('button', { name: /Water main replacement/ }))
+    const selectedBefore = screen.getByTestId('project-map').textContent
+    first.unmount()
+    vi.mocked(fetchWorkspace).mockClear()
+
+    await renderApp()
+    expect(await screen.findByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
+    expect(fetchWorkspace).toHaveBeenCalledTimes(1)
+    expect(sentUploads(0)).toEqual(kept)
+    const items = within(screen.getByRole('list', { name: /coordination opportunities/i })).getAllByRole('button')
+    expect(items[0]).toHaveTextContent('Water main replacement')
+    expect(within(items[0]).getByText('Uploaded')).toBeInTheDocument()
+    // Same client id -> same served pair id, so selecting it again selects the same pair.
+    fireEvent.click(items[0])
+    expect(screen.getByTestId('project-map').textContent).toBe(selectedBefore)
+    expect(selectedBefore).toContain(`selected SUB:GPC_2|SUB-${kept[0].project_id}`)
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    expect(screen.getByText('1 uploaded projects')).toBeInTheDocument()
+  })
+
+  it('shows another browser (empty storage) none of these uploads', async () => {
+    // This browser has an upload...
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload()]))
+    // ...but a teammate's browser has its own, empty storage.
+    vi.stubGlobal('localStorage', memoryStorage())
+    await renderApp()
+
+    expect(await screen.findByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+    expect(fetchWorkspace).toHaveBeenCalledTimes(1)
+    expect(sentUploads(0)).toEqual([])
+    expect(screen.queryByText('Uploaded')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    expect(screen.getByText('Your plans belong here.')).toBeInTheDocument()
+    expect(screen.queryByText(/uploaded projects/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear my uploads' })).not.toBeInTheDocument()
+  })
+
+  it('"Clear my uploads" empties this browser\'s storage and the view', async () => {
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload()]))
+    await renderApp()
+    expect(await screen.findByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
+
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear my uploads' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Your uploads were removed from this browser.')
+    expect(storage.getItem(UPLOADS_STORAGE_KEY)).toBeNull()
+    expect(sentUploads(1)).toEqual([])
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+    expect(screen.getByText('Your plans belong here.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear my uploads' })).not.toBeInTheDocument()
+  })
+
+  it('removes one utility\'s uploads and keeps the others', async () => {
+    const other = clientUpload({ project_id: 'b2-1', utility: 'Tidewater Grid Co.', project_name: 'River crossing' })
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload(), other]))
+    await renderApp()
+    expect(await screen.findByTestId('project-map')).toHaveTextContent('4 projects, 8 overlaps')
+
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Savannah Water uploads' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent("Savannah Water's uploads were removed from this browser.")
+    expect(savedUploads()).toEqual([other])
+    expect(sentUploads(1)).toEqual([other])
+    expect(screen.getByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
+    expect(screen.queryByRole('button', { name: 'Remove Savannah Water uploads' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Tidewater Grid Co. uploads' })).toBeInTheDocument()
+  })
+
+  it('keeps working when the browser refuses storage: uploads last until a refresh', async () => {
+    vi.stubGlobal('localStorage', blockedStorage())
+    await renderApp()
+    expect(await screen.findByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+    expect(sentUploads(0)).toEqual([])
+
+    await importUpload()
+    expect(screen.getByRole('status')).toHaveTextContent('This browser is not saving site data, so they last until you refresh.')
+    expect(screen.getByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    expect(screen.getByText(/This browser is not saving site data, so your uploads last until you refresh\./)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear my uploads' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Your uploads were removed from this browser.')
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+  })
+
+  it('shows the published plans and a specific message when the server refuses the saved uploads', async () => {
+    const reason = "project 1 ('Water main replacement' by 'Savannah Water') already exists"
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload()]))
+    vi.mocked(fetchWorkspace).mockImplementation(async uploads => {
+      if (uploads.length) throw new Error(reason)
+      return fakeWorkspace(uploads)
+    })
+    renderClosedApp() // visible without opening the sidebar
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(`Your saved uploads could not be added: ${reason}`)
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+    expect(sentUploads(0)).toEqual([clientUpload()])
+    expect(sentUploads(1)).toEqual([])
+    expect(savedUploads()).toEqual([clientUpload()]) // nothing deleted behind the user's back
+
+    fireEvent.click(within(alert).getByRole('button', { name: 'Clear my uploads' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Your uploads were removed from this browser.')
+    expect(storage.getItem(UPLOADS_STORAGE_KEY)).toBeNull()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('reports unreadable saved uploads instead of crashing, and can clear them', async () => {
+    storage.setItem(UPLOADS_STORAGE_KEY, '{not json')
+    renderClosedApp()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(UNREADABLE_UPLOADS)
+    expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
+    expect(sentUploads(0)).toEqual([])
+    fireEvent.click(within(alert).getByRole('button', { name: 'Clear my uploads' }))
+    await screen.findByRole('status')
+    expect(storage.getItem(UPLOADS_STORAGE_KEY)).toBeNull()
   })
 
   it('keeps the dialog open with the server\'s reason when an upload is refused, and changes nothing', async () => {
     await renderApp()
-    await chooseUpload(new File([UPLOAD_CSV], 'savannah-water.csv', { type: 'text/csv' }))
-    vi.mocked(submitProjects).mockRejectedValue(new Error("project 1 ('Water main replacement' by 'Savannah Water') already exists"))
+    await chooseUpload(uploadFile())
+    vi.mocked(fetchWorkspace).mockRejectedValue(new Error("project 1 ('Water main replacement' by 'Savannah Water') already exists"))
     fireEvent.click(await screen.findByRole('button', { name: /Add 1 project & compare/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
     expect(screen.getByRole('button', { name: /Add 1 project & compare/ })).toBeEnabled()
-    expect(fetchOverlaps).toHaveBeenCalledTimes(1) // the initial load only: no refresh
+    expect(fetchWorkspace).toHaveBeenCalledTimes(2) // the load, then the refused upload
+    expect(storage.getItem(UPLOADS_STORAGE_KEY)).toBeNull()
     expect(screen.getByTestId('project-map')).toHaveTextContent('2 projects, 6 overlaps')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  it('shows projects other people uploaded earlier as soon as the workspace loads', async () => {
-    const { stored, pair } = savedUpload()
-    vi.mocked(fetchProjects).mockResolvedValue([...projectsExample(), stored])
-    vi.mocked(fetchOverlaps).mockResolvedValue([pair, ...makeOverlaps(6).map(o => ({ ...o, rank: o.rank + 1 }))])
+  it('refuses an upload that would take this browser past 1,000 projects, without asking the server', async () => {
+    const full = Array.from({ length: 1000 }, (_, i) => clientUpload({ project_id: `f-${i}`, project_name: `Line ${i}` }))
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify(full))
+    vi.mocked(fetchWorkspace).mockImplementation(async () => fakeWorkspace([])) // keep the render small
     await renderApp()
+    await chooseUpload(uploadFile())
+    fireEvent.click(await screen.findByRole('button', { name: /Add 1 project & compare/ }))
 
-    expect(await screen.findByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
-    expect(screen.getByText('Published plans + uploaded proposals')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('This browser keeps up to 1,000 uploaded projects and already has 1000.')
+    expect(fetchWorkspace).toHaveBeenCalledTimes(1)
+    expect(savedUploads()).toHaveLength(1000)
+  })
+
+  it('says uploads are private to this browser, never shared with everyone', async () => {
+    storage.setItem(UPLOADS_STORAGE_KEY, JSON.stringify([clientUpload()]))
+    await renderApp()
+    await screen.findByTestId('project-map')
+
+    expect(screen.queryByText('Shared workspace')).not.toBeInTheDocument()
+    expect(screen.getByText('PRIVATE')).toBeInTheDocument()
+    expect(screen.getByText('Published plans + your uploads')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
-    expect(screen.getByText('1 uploaded projects')).toBeInTheDocument()
-    expect(screen.queryByText('Your plans belong here.')).not.toBeInTheDocument()
+    expect(screen.getByText(/Your uploads stay in this browser, so they are still here after a refresh\. Only you can see them\./)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Upload projects' }))
+    expect(screen.getByText('Kept in this browser. Only you see these projects.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/everyone|shared workspace/i)
+    expect(screen.queryByText('SHARED')).not.toBeInTheDocument() // the old footer tag
+  })
+
+  it('says uploads are private in the empty Uploads tab too', async () => {
+    await renderApp()
+    await screen.findByTestId('project-map')
+    fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
+    expect(screen.getByText('CSV spreadsheets · only you can see them')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/everyone/i)
   })
 
   it('rejects a non-CSV upload with an alert and adds nothing', async () => {
@@ -364,7 +585,7 @@ describe('App', () => {
     const cardNames = (items: HTMLElement[]) => items.map(item => within(item).getByText(/^SC line \d$/).textContent)
     const sortSelect = () => screen.getByRole('combobox', { name: 'Sort by' })
 
-    beforeEach(() => { vi.mocked(fetchOverlaps).mockResolvedValue(sortFixture()) })
+    beforeEach(() => { published.overlaps = sortFixture() })
 
     it('renders a "Sort by" control with exactly the four options, defaulting to Score', async () => {
       await renderApp()
@@ -416,7 +637,7 @@ describe('App', () => {
       const overlaps = sortFixture().map((o, i) => ({
         ...o, project_b: { ...o.project_b, project_name: i % 2 === 0 ? `Match line ${i + 1}` : `Other line ${i + 1}` },
       }))
-      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      published.overlaps = overlaps
       await renderApp()
       await cards()
       fireEvent.change(screen.getByRole('textbox', { name: 'Search workspace' }), { target: { value: 'Match' } })
@@ -488,7 +709,7 @@ describe('App', () => {
 
     it('shows the total of known est_savings_usd and the pair count', async () => {
       const overlaps = makeOverlaps(3).map((o, i) => ({ ...o, est_savings_usd: [709900, 1200000, 300000][i] }))
-      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      published.overlaps = overlaps
       await renderApp()
 
       const group = await headline()
@@ -500,8 +721,7 @@ describe('App', () => {
 
     it('excludes null savings from the total and counts them as not estimated', async () => {
       const { projects, overlaps } = withThirdUtility()
-      vi.mocked(fetchProjects).mockResolvedValue(projects)
-      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      published = { projects, overlaps }
       await renderApp()
 
       const group = await headline()
@@ -513,8 +733,7 @@ describe('App', () => {
 
     it('recomputes the total and counts when a utility layer is hidden and shown again', async () => {
       const { projects, overlaps } = withThirdUtility()
-      vi.mocked(fetchProjects).mockResolvedValue(projects)
-      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+      published = { projects, overlaps }
       await renderApp()
       const group = await headline()
 
@@ -535,19 +754,15 @@ describe('App', () => {
       expect(within(group).getByText('2 not estimated')).toBeInTheDocument()
     })
 
-    it('adds the savings the server estimates for an uploaded pair once it is saved', async () => {
-      const overlaps = makeOverlaps(6).map((o, i) => ({ ...o, est_savings_usd: i < 2 ? 500000 : null }))
-      vi.mocked(fetchOverlaps).mockResolvedValue(overlaps)
+    it('adds the savings the server estimates for an uploaded pair once it is added', async () => {
+      published.overlaps = makeOverlaps(6).map((o, i) => ({ ...o, est_savings_usd: i < 2 ? 500000 : null }))
       await renderApp()
       const group = await headline()
       expect(within(group).getByText('$1M')).toBeInTheDocument()
       expect(within(group).getByText('4 not estimated')).toBeInTheDocument()
 
-      const { stored, pair } = savedUpload()
-      await chooseUpload(new File([UPLOAD_CSV], 'savannah-water.csv', { type: 'text/csv' }))
-      vi.mocked(submitProjects).mockResolvedValue([stored])
-      vi.mocked(fetchProjects).mockResolvedValue([...projectsExample(), stored])
-      vi.mocked(fetchOverlaps).mockResolvedValue([pair, ...overlaps.map(o => ({ ...o, rank: o.rank + 1 }))])
+      // The fake server estimates the uploaded pair at 5% of its $2M cost: 100,000.
+      await chooseUpload(uploadFile())
       fireEvent.click(await screen.findByRole('button', { name: /Add 1 project & compare/ }))
       await screen.findByRole('status')
 

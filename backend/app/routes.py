@@ -6,8 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.repository import Repository
-from app.schemas import ErrorDetail, Health, Overlap, Project, Submission
+from app.repository import Repository, ranked_overlaps
+from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace, WorkspaceRequest
 from app.submissions import SubmissionConflict, prepare_submission
 
 router = APIRouter()
@@ -50,16 +50,21 @@ def get_overlap(overlap_id: str, repository: RepositoryDep) -> Overlap:
 
 
 @router.post(
-    "/submissions",
-    status_code=201,
-    response_model=list[Project],
+    "/workspace",
+    response_model=Workspace,
     responses={409: {"model": ErrorDetail}},
 )
-def submit_projects(submission: Submission, repository: RepositoryDep) -> list[Project]:
-    """Store an upload for everyone; its pairs appear in /overlaps from the next request."""
+def build_workspace(body: WorkspaceRequest, repository: RepositoryDep) -> Workspace:
+    """The published plans plus the caller's own uploads, ranked together. Stores nothing:
+
+    the uploads live in the caller's browser, which sends them again on every page load.
+    """
+    published, stored = repository.published_plans()
     try:
-        projects = prepare_submission(submission.projects, repository.list_projects())
-        repository.add_submission(projects)
+        uploaded = prepare_submission(body.projects, published)
     except SubmissionConflict as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
-    return projects
+    return Workspace(
+        projects=[*sorted(published, key=lambda p: p.project_id), *uploaded],
+        overlaps=ranked_overlaps(stored, published, uploaded),
+    )

@@ -18,7 +18,7 @@ One utility's planned transmission project — one row of `data/seed/projects_se
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `project_id` | string | unique; `SUB-<batch>-<n>` for an uploaded project |
+| `project_id` | string | unique; `SUB-<client id>` for an uploaded project (`POST /workspace` only) |
 | `utility` | string | e.g. `Dominion Energy South Carolina`, `Georgia Power` |
 | `state` | string | `SC`, `GA` |
 | `project_name` | string | |
@@ -35,7 +35,7 @@ One flagged cross-utility pair (project centers < 25 mi apart).
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order); `SUB:<project_id_a>\|<project_id_b>` for a pair involving an uploaded project |
+| `overlap_id` | string | `OVL_1..OVL_N`, numbered by ascending distance (engine order); `SUB:<project_id_a>\|<project_id_b>` for a pair involving an uploaded project (`POST /workspace` only) |
 | `rank` | integer ≥ 1 | position by descending `score`; 1 = best opportunity |
 | `score` | number 0–1 | `0.6·(1 − distance/25) + 0.4·(1 − min(gap, 1825)/1825)` (`pipeline/overlap.py`) |
 | `distance_mi` | number 0–25 | haversine between centers, R = 3958.8 mi, 2 decimals |
@@ -53,7 +53,7 @@ for every year between in-service dates.
 ## Endpoints
 
 **Database unavailable.** When the database cannot be reached (down, restarting, a network
-blip), `GET /projects`, `GET /overlaps`, `GET /overlaps/{overlap_id}` and `POST /submissions`
+blip), `GET /projects`, `GET /overlaps`, `GET /overlaps/{overlap_id}` and `POST /workspace`
 return **503** within the connect timeout (5 s), with this body; the cause is only logged
 server-side:
 
@@ -74,8 +74,8 @@ Liveness check: never touches the database, so it stays **200** while the databa
 
 ### `GET /projects`
 
-Every project, for the map layers: the published plans plus every uploaded project
-(`POST /submissions`). Response: `Project[]`.
+Every **published** project, for the map layers. Uploaded projects are never here: they live in
+the uploader's browser and are scored through `POST /workspace`. Response: `Project[]`.
 
 <!-- example: projects -->
 ```json
@@ -87,11 +87,9 @@ Every project, for the map layers: the published plans plus every uploaded proje
 
 ### `GET /overlaps`
 
-Every flagged pair, **ranked: `rank` 1 first** (descending `score`). Response: `Overlap[]`.
-
-Published pairs come from the `project_overlaps` table the batch load writes. Pairs involving an
-uploaded project are computed on each request by the same engine (`pipeline/overlap.py`) and
-ranked in the same list, so an upload can take rank 1.
+Every flagged pair between published projects, **ranked: `rank` 1 first** (descending
+`score`), from the `project_overlaps` table the batch load writes. Response: `Overlap[]`.
+Pairs involving an upload are only in the `POST /workspace` response.
 
 <!-- example: overlaps -->
 ```json
@@ -113,7 +111,7 @@ ranked in the same list, so an upload can take rank 1.
 
 ### `GET /overlaps/{overlap_id}`
 
-One pair, for the detail panel. Response: `Overlap`.
+One published pair, for the detail panel. Response: `Overlap`. A `SUB:` pair is never found here (404).
 
 <!-- example: overlap -->
 ```json
@@ -135,49 +133,74 @@ Unknown `overlap_id` → **404** with FastAPI's default error body:
 Database unreachable → **503** `{"detail": "database unavailable"}` (see the top of
 [Endpoints](#endpoints)), here as on `/projects` and `/overlaps`.
 
-### `POST /submissions`
+### `POST /workspace`
 
-A utility uploads its planned projects so **everyone** sees them and their nearby pairs (the
-upload dialog sends the rows of a CSV). Body: `{"projects": Project[]}`, 1–1000 projects,
-each validated like a published one. Stored in `submitted_projects` (`backend/db/submissions.sql`),
-which the published-plans reload never touches.
+The published plans **plus the caller's own uploads**, scored and ranked together. Nothing is
+stored: each visitor's uploads live in their own browser (`localStorage` key
+`relay.uploads.v1`, see `frontend/src/uploadCache.ts`), which sends them with every page load and
+every new upload. Nobody else ever sees them; clearing the browser's site data loses them.
 
-The server, not the client, decides:
-- `project_id` is replaced with `SUB-<batch>-<n>` (the client's value is just its own reference);
-- `location_confidence` is always `low`: the coordinates are the submitter's, not matched to OSM;
-- a `utility` equal to an existing one ignoring case and spacing takes the existing spelling.
+Body: `{"projects": Project[]}`, **0–1000** projects (empty is fine: the published plans alone),
+each validated like a published one, except `project_id`:
 
-<!-- example: submission -->
+- `project_id` is the id the browser gave the upload once, when it was imported, and keeps for
+  good: 1–64 characters from `A–Z a–z 0–9 _ -` (anything else is a 422). It is served as
+  `SUB-<project_id>`, so the same uploads get the same ids (and pair ids) on every call.
+- `location_confidence` is always served as `low`: the coordinates are the uploader's, not
+  matched to OSM;
+- a `utility` equal to a published one ignoring case and spacing takes the published spelling.
+
+<!-- example: workspace_request -->
 ```json
 {"projects": [
-  {"project_id": "row-2", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"}
+  {"project_id": "3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"}
 ]}
 ```
 
-**201** with the stored projects, in upload order:
+**200** with `projects` = every published project (as `GET /projects`) followed by the uploads
+in the order sent, and `overlaps` = the published pairs plus every pair involving an upload
+(`SUB:<project_id_a>|<project_id_b>`, computed by the same engine, `pipeline/overlap.py`),
+ranked in one list exactly like `GET /overlaps`, so an upload can take rank 1. Abridged here to
+one project of each kind and the upload's pair:
 
-<!-- example: submitted -->
+<!-- example: workspace -->
 ```json
-[
-  {"project_id": "SUB-3f9a1c2e-1", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"}
-]
+{
+  "projects": [
+    {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
+    {"project_id": "SUB-3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"}
+  ],
+  "overlaps": [
+    {
+      "overlap_id": "SUB:GPC_2|SUB-3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "rank": 1, "score": 0.9549, "distance_mi": 1.04, "time_gap_days": 92,
+      "project_a": {"project_id": "GPC_2", "utility": "Georgia Power", "state": "GA", "project_name": "SAV: MCINTOSH - PURRYSBURG 230KV REACTORS", "name_a": "MCINTOSH", "lat_a": 32.352116, "lon_a": -81.175112, "name_b": "PURRYSBURG", "lat_b": null, "lon_b": null, "lat_center": 32.352116, "lon_center": -81.175112, "in_service_date": "2026-06-01", "est_cost_usd": null, "location_confidence": "confirmed"},
+      "project_b": {"project_id": "SUB-3f9a1c2e-5b7d-4e8f-9a0b-1c2d3e4f5a6b-1", "utility": "Tidewater Grid Co.", "state": "SC", "project_name": "Savannah River crossing", "name_a": null, "lat_a": null, "lon_a": null, "name_b": null, "lat_b": null, "lon_b": null, "lat_center": 32.36, "lon_center": -81.16, "in_service_date": "2026-09-01", "est_cost_usd": 2500000, "location_confidence": "low"},
+      "est_savings_usd": 101033, "savings_basis": "Assumed shared mobilization of 5% of the Tidewater Grid Co. project's $2,500,000 cost, x0.96 for 1.04 mi apart and x0.84 for 92 days between in-service dates. No figure for the Georgia Power project (cost redacted in Georgia Power IRP)."
+    }
+  ]
+}
 ```
 
-A utility + project name (ignoring case) that already exists, or appears twice in the upload →
-**409**, and nothing from the upload is stored:
+A utility + project name (ignoring case) that is already published or appears twice in the
+uploads, or a `project_id` used twice → **409** with a readable reason:
 
 <!-- example: conflict -->
 ```json
 {"detail": "project 1 ('Savannah River crossing' by 'Tidewater Grid Co.') already exists"}
 ```
 
-An invalid body (no projects, more than 1000, a bad coordinate or date, ...) → **422** with
-FastAPI's validation error body, and nothing is stored.
+An invalid body (more than 1000 projects, a bad `project_id`, coordinate or date, ...) →
+**422** with FastAPI's validation error body.
+
+**Old shared uploads.** Before this endpoint, `POST /submissions` stored uploads for everyone
+in a `submitted_projects` table. That endpoint is gone and **no code reads the table any
+more**; it is left untouched in the demo database (its rows are hidden, not deleted, and its
+DDL is in git history as `backend/db/submissions.sql`).
 
 ## Repository functions
 
-What the route handlers call (`backend/app/repository.py`). Each returns validated models;
-the routes stay thin.
+What the route handlers call (`backend/app/repository.py`). Read-only; each returns
+validated models, and the routes stay thin.
 
 ```python
 def list_projects() -> list[Project]: ...
@@ -185,6 +208,6 @@ def list_overlaps() -> list[Overlap]:  # ranked, rank 1 first
     ...
 def get_overlap(overlap_id: str) -> Overlap | None:  # None -> route returns 404
     ...
-def add_submission(projects: list[Project]) -> None:  # all or nothing; SubmissionConflict -> 409
-    ...
+def published_plans() -> PublishedPlans:  # projects + stored engine pairs, one snapshot,
+    ...                                        # scored with the caller's uploads by POST /workspace
 ```

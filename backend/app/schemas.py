@@ -89,18 +89,39 @@ class Overlap(BaseModel):
     savings_basis: str = Field(min_length=1)
 
 
-# The frontend's upload limit too (frontend/src/importProjects.ts).
+# The frontend's upload limit too (frontend/src/importProjects.ts): the most projects one
+# browser keeps and sends.
 MAX_SUBMISSION_PROJECTS = 1000
 
+# The id the browser gives an upload once, at import time (frontend/src/importProjects.ts). It
+# becomes part of the served ids SUB-<id> and SUB:<a>|<b>, so no '|' and nothing unbounded.
+UPLOAD_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
-class Submission(BaseModel):
-    """Body of POST /submissions: one upload of projects from a utility.
 
-    Each project's `project_id` is only the client's reference; the server replaces it
-    (app/submissions.py). Everything else is validated exactly like a published project.
+class UploadedProject(Project):
+    """A project the browser uploaded: a Project whose id is the browser's own stable id."""
+
+    project_id: str = Field(pattern=UPLOAD_ID_PATTERN)
+
+
+class WorkspaceRequest(BaseModel):
+    """Body of POST /workspace: this browser's uploads, which the server never stores.
+
+    Empty is fine (a visitor with no uploads gets the published plans). Everything but the
+    id is validated exactly like a published project (app/submissions.py does the rest).
     """
 
-    projects: list[Project] = Field(min_length=1, max_length=MAX_SUBMISSION_PROJECTS)
+    projects: list[UploadedProject] = Field(max_length=MAX_SUBMISSION_PROJECTS)
+
+
+class Workspace(BaseModel):
+    """Response of POST /workspace: the published plans plus the caller's uploads.
+
+    `overlaps` is ranked like GET /overlaps, with the uploaded pairs (SUB:<a>|<b>) mixed in.
+    """
+
+    projects: list[Project]
+    overlaps: list[Overlap]
 
 
 class Health(BaseModel):

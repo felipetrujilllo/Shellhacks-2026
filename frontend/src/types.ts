@@ -39,6 +39,13 @@ export interface Overlap {
   savings_basis: string
 }
 
+/** Response of POST /workspace: the published plans plus this browser's uploads, ranked together. */
+export interface Workspace {
+  projects: Project[]
+  /** Ranked: rank 1 first, uploaded pairs (`SUB:` ids) mixed in. */
+  overlaps: Overlap[]
+}
+
 export interface Health {
   status: string
 }

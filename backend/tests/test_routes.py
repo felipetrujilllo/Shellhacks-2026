@@ -12,9 +12,9 @@ from pydantic import TypeAdapter
 
 from app.config import Settings
 from app.main import create_app
-from app.repository import CONNECT_TIMEOUT_S, build_overlap
+from app.repository import CONNECT_TIMEOUT_S, PublishedPlans, build_overlap
 from app.routes import get_repository
-from app.schemas import ErrorDetail, Health, Overlap, Project
+from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace
 from pipeline.overlap import Overlap as EngineOverlap
 from pipeline.overlap import opportunity_score, rank_by_score
 
@@ -34,13 +34,9 @@ def fixture_projects() -> list[Project]:
     return [Project.model_validate(row) for row in read_csv("starter_projects.csv")]
 
 
-def fixture_overlaps(projects: list[Project] | None = None) -> list[Overlap]:
-    """The sponsor's six pairs, ranked by the engine's rule — as the real repository would.
-
-    Built with the repository's own `build_overlap`, so savings come from the real estimator.
-    """
-    by_id = {p.project_id: p for p in (projects or fixture_projects())}
-    engine_rows = [
+def fixture_engine_overlaps() -> list[EngineOverlap]:
+    """The sponsor's six pairs as project_overlaps stores them (unranked)."""
+    return [
         EngineOverlap(
             overlap_id=row["overlap_id"],
             project_id_a=row["project_id_a"],
@@ -51,9 +47,17 @@ def fixture_overlaps(projects: list[Project] | None = None) -> list[Overlap]:
         )
         for row in read_csv("starter_overlaps.csv")
     ]
+
+
+def fixture_overlaps(projects: list[Project] | None = None) -> list[Overlap]:
+    """The sponsor's six pairs, ranked by the engine's rule — as the real repository would.
+
+    Built with the repository's own `build_overlap`, so savings come from the real estimator.
+    """
+    by_id = {p.project_id: p for p in (projects or fixture_projects())}
     return [
         build_overlap(o, rank, by_id)
-        for rank, o in enumerate(rank_by_score(engine_rows), start=1)
+        for rank, o in enumerate(rank_by_score(fixture_engine_overlaps()), start=1)
     ]
 
 
@@ -66,10 +70,9 @@ class FixtureRepository:
             for p in fixture_projects()
         ]
         self.overlaps = list(reversed(fixture_overlaps(self.projects)))
-        self.submitted: list[Project] = []
 
     def list_projects(self) -> list[Project]:
-        return [*self.projects, *self.submitted]
+        return self.projects
 
     def list_overlaps(self) -> list[Overlap]:
         return self.overlaps
@@ -77,8 +80,8 @@ class FixtureRepository:
     def get_overlap(self, overlap_id: str) -> Overlap | None:
         return next((o for o in self.overlaps if o.overlap_id == overlap_id), None)
 
-    def add_submission(self, projects: list[Project]) -> None:
-        self.submitted.extend(projects)
+    def published_plans(self) -> PublishedPlans:
+        return PublishedPlans(list(reversed(self.projects)), fixture_engine_overlaps())
 
 
 @pytest.fixture
@@ -236,80 +239,160 @@ def test_get_overlap_with_a_known_cost_carries_the_estimate(costed_client):
     )
 
 
-# --- POST /submissions --------------------------------------------------------------------
+# --- POST /workspace ----------------------------------------------------------------------
 
 
 def upload_row(**overrides) -> dict:
-    """One row as the frontend's upload dialog sends it (docs/api.md)."""
+    """One upload as the browser keeps and sends it: on GPC_2's center and in-service date."""
     return {
-        "project_id": "client-ref-1",
+        "project_id": "b1-1",
         "utility": "Tidewater Grid Co.",
         "state": "SC",
         "project_name": "Savannah River crossing",
         "lat_center": 32.352116,
         "lon_center": -81.175112,
         "in_service_date": "2026-06-01",
-        "est_cost_usd": 2500000,
+        "est_cost_usd": 2000000,
         **overrides,
     }
 
 
-def test_a_submission_is_stored_and_returned_with_server_ids(client, repository):
-    rows = [upload_row(), upload_row(project_id="client-ref-2", project_name="Second line")]
-    response = client.post("/submissions", json={"projects": rows})
-
-    assert response.status_code == 201
-    stored = TypeAdapter(list[Project]).validate_python(response.json())
-    assert [p.project_name for p in stored] == ["Savannah River crossing", "Second line"]
-    assert all(p.project_id.startswith("SUB-") for p in stored)
-    assert all(p.location_confidence == "low" for p in stored)
-    assert repository.submitted == stored
+def post_workspace(client: TestClient, *rows: dict):
+    return client.post("/workspace", json={"projects": list(rows)})
 
 
-def test_submitted_projects_are_served_to_everyone_by_get_projects(client):
-    [stored] = client.post("/submissions", json={"projects": [upload_row()]}).json()
+def test_an_empty_workspace_is_exactly_the_published_data(client):
+    response = post_workspace(client)
 
-    ids = [p["project_id"] for p in client.get("/projects").json()]
-    assert stored["project_id"] in ids
-    assert len(ids) == 11
-
-
-def test_a_project_that_already_exists_is_a_409_and_nothing_is_stored(client, repository):
-    duplicate = upload_row(
-        project_id="client-ref-2",
-        utility="georgia power",
-        project_name=repository.projects[5].project_name,
+    assert response.status_code == 200
+    workspace = Workspace.model_validate(response.json())
+    assert workspace.projects == TypeAdapter(list[Project]).validate_python(
+        client.get("/projects").json()
     )
-    response = client.post("/submissions", json={"projects": [upload_row(), duplicate]})
+    assert workspace.overlaps == TypeAdapter(list[Overlap]).validate_python(
+        client.get("/overlaps").json()
+    )
+    assert len(workspace.projects) == 10 and len(workspace.overlaps) == 6
+
+
+def test_a_workspace_is_the_published_data_plus_the_uploads_with_their_pairs_ranked(client):
+    second = upload_row(project_id="b1-2", project_name="Far line", lat_center=33.5186,
+                        lon_center=-86.8104)  # Birmingham, AL: near nothing
+    response = post_workspace(client, upload_row(), second)
+
+    assert response.status_code == 200
+    workspace = Workspace.model_validate(response.json())
+    ids = [p.project_id for p in workspace.projects]
+    assert ids[:10] == sorted(p.project_id for p in fixture_projects())
+    assert ids[10:] == ["SUB-b1-1", "SUB-b1-2"]
+    assert all(p.location_confidence == "low" for p in workspace.projects[10:])
+
+    ranked = workspace.overlaps
+    assert [o.rank for o in ranked] == list(range(1, len(ranked) + 1))
+    assert [o.score for o in ranked] == sorted((o.score for o in ranked), reverse=True)
+    # Sitting on GPC_2: a 0 mi, 0 day pair, so it takes rank 1 above every published pair.
+    top = ranked[0]
+    assert top.overlap_id == "SUB:GPC_2|SUB-b1-1"
+    assert (top.distance_mi, top.time_gap_days, top.score) == (0.0, 0, 1.0)
+    assert top.est_savings_usd == 100_000  # 5% of $2M, nothing discounted
+    # DESC_3 is 5.65 mi from GPC_2, so also from the upload; still ranked among the rest.
+    assert "SUB:DESC_3|SUB-b1-1" in {o.overlap_id for o in ranked}
+    assert {f"OVL_{n}" for n in range(1, 7)} <= {o.overlap_id for o in ranked}
+    assert not any("SUB-b1-2" in o.overlap_id for o in ranked)
+
+
+def test_the_same_workspace_request_gets_the_same_ids_every_time(client):
+    first = post_workspace(client, upload_row()).json()
+    second = post_workspace(client, upload_row()).json()
+
+    assert first == second
+    assert [o["overlap_id"] for o in first["overlaps"]][0] == "SUB:GPC_2|SUB-b1-1"
+
+
+def test_a_workspace_request_stores_nothing_for_anyone_else(client):
+    """Uploads live in the uploader's browser: GET /projects and /overlaps never see them."""
+    assert post_workspace(client, upload_row()).status_code == 200
+
+    assert len(client.get("/projects").json()) == 10
+    assert all(not p["project_id"].startswith("SUB-") for p in client.get("/projects").json())
+    assert {o["overlap_id"] for o in client.get("/overlaps").json()} == {
+        f"OVL_{n}" for n in range(1, 7)
+    }
+    assert client.get("/overlaps/SUB:GPC_2|SUB-b1-1").status_code == 404
+    # ...and a second visitor with no uploads gets exactly the published data.
+    assert len(post_workspace(client).json()["projects"]) == 10
+
+
+def test_an_upload_matching_a_published_project_is_a_409(client, repository):
+    duplicate = upload_row(
+        project_id="b1-2", utility="georgia power", project_name=repository.projects[5].project_name
+    )
+    response = post_workspace(client, upload_row(), duplicate)
 
     assert response.status_code == 409
     assert "already exists" in ErrorDetail.model_validate(response.json()).detail
-    assert repository.submitted == []
 
 
-def test_submitting_the_same_upload_twice_is_a_409_the_second_time(client, repository):
-    assert client.post("/submissions", json={"projects": [upload_row()]}).status_code == 201
-    assert client.post("/submissions", json={"projects": [upload_row()]}).status_code == 409
-    assert len(repository.submitted) == 1
+def test_the_same_project_twice_in_the_uploads_is_a_409(client):
+    twin = upload_row(project_id="b2-1", project_name=" savannah RIVER crossing")
+    response = post_workspace(client, upload_row(), twin)
+
+    assert response.status_code == 409
+    assert "appears twice" in ErrorDetail.model_validate(response.json()).detail
+
+
+def test_the_same_client_id_twice_is_a_409(client):
+    response = post_workspace(client, upload_row(), upload_row(project_name="Other line"))
+
+    assert response.status_code == 409
+    assert "reuses the id 'b1-1'" in ErrorDetail.model_validate(response.json()).detail
+
+
+def test_a_utility_spelled_like_a_published_one_takes_its_spelling(client):
+    far = upload_row(utility="  georgia POWER ", lat_center=33.5186, lon_center=-86.8104)
+    [uploaded] = post_workspace(client, far).json()["projects"][10:]
+
+    assert uploaded["utility"] == "Georgia Power"
 
 
 @pytest.mark.parametrize(
     "body",
     [
-        {"projects": []},
         {"projects": [upload_row()] * 1001},
+        {"projects": [upload_row(project_id="")]},
+        {"projects": [upload_row(project_id="a|b")]},
+        {"projects": [upload_row(project_id="b1:1")]},
+        {"projects": [upload_row(project_id="has space")]},
+        {"projects": [upload_row(project_id="x" * 65)]},
         {"projects": [upload_row(lat_center=91)]},
         {"projects": [upload_row(in_service_date="06/01/2026")]},
         {"projects": [upload_row(utility="")]},
         {"projects": [upload_row(est_cost_usd=-1)]},
+        {},
         [upload_row()],
     ],
-    ids=["empty", "over-1000", "bad-latitude", "non-iso-date", "no-utility", "negative-cost",
+    ids=["over-1000", "empty-id", "pipe-id", "colon-id", "space-id", "id-over-64",
+         "bad-latitude", "non-iso-date", "no-utility", "negative-cost", "no-projects-key",
          "bare-list"],
 )
-def test_an_invalid_submission_is_a_422_and_nothing_is_stored(client, repository, body):
-    assert client.post("/submissions", json=body).status_code == 422
-    assert repository.submitted == []
+def test_an_invalid_workspace_request_is_a_422(client, body):
+    assert client.post("/workspace", json=body).status_code == 422
+
+
+def test_the_upload_limit_is_exactly_1000(client):
+    rows = [
+        upload_row(project_id=f"b-{n}", project_name=f"Line {n}", lat_center=33.5186,
+                   lon_center=-86.8104)
+        for n in range(1000)
+    ]
+    response = post_workspace(client, *rows)
+
+    assert response.status_code == 200
+    assert len(response.json()["projects"]) == 1010
+
+
+def test_the_old_shared_upload_endpoint_is_gone(client):
+    assert client.post("/submissions", json={"projects": [upload_row()]}).status_code == 404
 
 
 # --- database unavailable -> 503 ----------------------------------------------------------
@@ -335,7 +418,7 @@ class RaisingRepository:
     def get_overlap(self, overlap_id: str) -> Overlap | None:
         raise self.error
 
-    def add_submission(self, projects: list[Project]) -> None:
+    def published_plans(self) -> PublishedPlans:
         raise self.error
 
 
@@ -357,10 +440,10 @@ def test_an_unreachable_database_is_a_503_with_a_clear_message(path):
     assert ErrorDetail.model_validate(response.json()).detail == "database unavailable"
 
 
-def test_a_submission_while_the_database_is_unreachable_is_a_503():
+def test_a_workspace_request_while_the_database_is_unreachable_is_a_503():
     client = raising_client(psycopg.OperationalError(DB_ERROR_MESSAGE))
 
-    response = client.post("/submissions", json={"projects": [upload_row()]})
+    response = client.post("/workspace", json={"projects": [upload_row()]})
 
     assert response.status_code == 503
     assert response.json() == DB_UNAVAILABLE_BODY
@@ -492,9 +575,9 @@ def test_cors_origin_comes_from_settings(repository):
     ).headers
 
 
-def test_cors_preflight_allows_posting_a_submission(client):
+def test_cors_preflight_allows_posting_the_workspace(client):
     response = client.options(
-        "/submissions",
+        "/workspace",
         headers={"Origin": FRONTEND_ORIGIN, "Access-Control-Request-Method": "POST"},
     )
 

@@ -5,12 +5,14 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from fastapi.testclient import TestClient
 from test_load import TEST_DATABASE_URL, requires_postgres
 
 from app import repository
-from app.repository import CONNECT_TIMEOUT_S, PostgresRepository
-from app.schemas import Project
-from app.submissions import SubmissionConflict, prepare_submission
+from app.config import Settings
+from app.main import create_app
+from app.repository import CONNECT_TIMEOUT_S, PROJECT_COLUMNS, PostgresRepository
+from app.schemas import Project, Workspace
 from pipeline.load import load, read_project_csv, to_engine_project
 from pipeline.overlap import Overlap as EngineOverlap
 from pipeline.overlap import detect_overlaps, opportunity_score, rank_by_score
@@ -33,7 +35,8 @@ def test_connect_uses_a_timeout_so_an_unreachable_db_fails_fast(monkeypatch):
 
 # --- Against a real database ----------------------------------------------------------------
 # These run only with TEST_DATABASE_URL pointing at a throwaway PostGIS: they reload the
-# projects tables and DROP submitted_projects. See tests/test_load.py for the docker command.
+# projects tables and create/DROP a legacy submitted_projects table. See tests/test_load.py
+# for the docker command.
 
 STARTER_CSV = Path(__file__).parent / "fixtures" / "starter_projects.csv"
 
@@ -49,21 +52,19 @@ def reload_starter() -> None:
     reload_csv(STARTER_CSV)
 
 
-def upload(**overrides) -> Project:
-    """A new utility's project sitting exactly on GPC_2's center and in-service date."""
-    return Project.model_validate(
-        {
-            "project_id": "client-ref",
-            "utility": "Tidewater Grid Co.",
-            "state": "SC",
-            "project_name": "Savannah River crossing",
-            "lat_center": 32.352116,
-            "lon_center": -81.175112,
-            "in_service_date": "2026-06-01",
-            "est_cost_usd": 2_000_000,
-            **overrides,
-        }
-    )
+def upload_row(**overrides) -> dict:
+    """An upload as the browser sends it: a new utility's project exactly on GPC_2."""
+    return {
+        "project_id": "b1-1",
+        "utility": "Tidewater Grid Co.",
+        "state": "SC",
+        "project_name": "Savannah River crossing",
+        "lat_center": 32.352116,
+        "lon_center": -81.175112,
+        "in_service_date": "2026-06-01",
+        "est_cost_usd": 2_000_000,
+        **overrides,
+    }
 
 
 def drop_submissions() -> None:
@@ -71,11 +72,50 @@ def drop_submissions() -> None:
         conn.execute("DROP TABLE IF EXISTS submitted_projects")
 
 
+def create_legacy_submissions() -> None:
+    """The old shared-uploads table as it still sits in the demo database, with one row.
+
+    Exactly the columns the old code read from it; the row is a new utility's project sitting
+    on GPC_2, so the old code would have served it and ranked its pair first.
+    """
+    with psycopg.connect(TEST_DATABASE_URL) as conn:
+        conn.execute(
+            f"CREATE TABLE submitted_projects AS SELECT {PROJECT_COLUMNS} FROM projects "
+            "WHERE false"
+        )
+        conn.execute(
+            f"INSERT INTO submitted_projects ({PROJECT_COLUMNS}) "
+            f"SELECT 'SUB-legacy-1', 'Tallapoosa Grid Partners', state, 'Legacy upload', "
+            "name_a, lat_a, lon_a, name_b, lat_b, lon_b, lat_center, lon_center, "
+            "in_service_date, est_cost_usd, 'low' FROM projects WHERE project_id = 'GPC_2'"
+        )
+
+
+def submissions_table_exists() -> bool:
+    with psycopg.connect(TEST_DATABASE_URL) as conn:
+        return conn.execute("SELECT to_regclass('submitted_projects')").fetchone()[0] is not None
+
+
+# Every table the API could conceivably write to, and how to count its rows.
+COUNTED_TABLES = ("projects", "project_overlaps", "submitted_projects")
+
+
+def database_snapshot() -> tuple[dict[str, int], list[str]]:
+    """Row count of each counted table, and every table name in the public schema."""
+    with psycopg.connect(TEST_DATABASE_URL) as conn:
+        counts = {t: conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+                  for t in COUNTED_TABLES}
+        tables = [row[0] for row in conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+        )]
+    return counts, tables
+
+
 @pytest.fixture
 def db():
-    """Starter table loaded, no submissions table yet: exactly the live DB before this change.
+    """Starter table loaded and no submitted_projects table.
 
-    Dropped again afterwards, so no other DB test (e.g. test_demo_data's counts) sees them.
+    Dropped again afterwards, so no other DB test (e.g. test_demo_data's counts) sees it.
     """
     reload_starter()
     drop_submissions()
@@ -83,15 +123,20 @@ def db():
     drop_submissions()
 
 
-def submit(repository: PostgresRepository, *projects: Project) -> list[Project]:
-    prepared = prepare_submission(projects, repository.list_projects())
-    repository.add_submission(prepared)
-    return prepared
+@pytest.fixture
+def legacy_db(db):
+    """The starter table plus the old shared-uploads table holding one teammate's upload."""
+    create_legacy_submissions()
+    return db
 
 
-def submissions_table_exists() -> bool:
-    with psycopg.connect(TEST_DATABASE_URL) as conn:
-        return conn.execute("SELECT to_regclass('submitted_projects')").fetchone()[0] is not None
+@pytest.fixture
+def api():
+    """The real API (real PostgresRepository) over the throwaway database."""
+    app = create_app(Settings(database_url=TEST_DATABASE_URL,
+                              frontend_origin="http://localhost:5173"))
+    with TestClient(app) as client:
+        yield client
 
 
 @requires_postgres
@@ -106,13 +151,42 @@ def test_reads_never_create_the_submissions_table(db):
     """smoke.py runs against the shared demo DB and promises to be read-only."""
     db.list_projects()
     db.list_overlaps()
+    db.published_plans()
     assert not submissions_table_exists()
 
 
 @requires_postgres
-def test_the_first_upload_creates_the_submissions_table(db):
-    submit(db, upload())
-    assert submissions_table_exists()
+def test_legacy_shared_uploads_are_never_served(legacy_db, api):
+    """Other people's old uploads stay in the table but no endpoint shows them any more."""
+    ids = [p.project_id for p in legacy_db.list_projects()]
+    assert len(ids) == 10 and "SUB-legacy-1" not in ids
+    assert [o.overlap_id for o in legacy_db.list_overlaps()] == [
+        o.overlap_id for o in rank_by_score(detect_overlaps(
+            to_engine_project(r) for r in read_project_csv(STARTER_CSV)
+        ))
+    ]
+    assert legacy_db.get_overlap("SUB:GPC_2|SUB-legacy-1") is None
+    assert "SUB-legacy-1" not in {p.project_id for p in legacy_db.published_plans().projects}
+
+    served = api.get("/projects").json()
+    assert len(served) == 10
+    assert not any(p["project_id"].startswith("SUB-") for p in served)
+    assert not any(o["overlap_id"].startswith("SUB:") for o in api.get("/overlaps").json())
+    assert api.get("/overlaps/SUB:GPC_2|SUB-legacy-1").status_code == 404
+    empty = Workspace.model_validate(api.post("/workspace", json={"projects": []}).json())
+    assert "SUB-legacy-1" not in {p.project_id for p in empty.projects}
+    assert "Tallapoosa Grid Partners" not in {p.utility for p in empty.projects}
+
+
+@requires_postgres
+def test_legacy_rows_are_left_in_place(legacy_db, api):
+    """Hidden, not deleted: the API never touches the old table."""
+    api.get("/projects")
+    api.get("/overlaps")
+    api.post("/workspace", json={"projects": [upload_row()]})
+    with psycopg.connect(TEST_DATABASE_URL) as conn:
+        rows = conn.execute("SELECT project_id FROM submitted_projects").fetchall()
+    assert rows == [("SUB-legacy-1",)]
 
 
 @requires_postgres
@@ -129,63 +203,58 @@ def test_published_ranking_matches_the_old_sql_row_number_order(db):
 
 
 @requires_postgres
-def test_a_submission_is_stored_and_served_by_a_fresh_repository(db):
-    [stored] = submit(db, upload())
-
-    # A new repository = another API instance, or the same one after a restart.
-    other = PostgresRepository(TEST_DATABASE_URL)
-    by_id = {p.project_id: p for p in other.list_projects()}
-    assert len(by_id) == 11
-    assert by_id[stored.project_id] == stored
+def test_published_plans_are_the_loaded_projects_and_their_stored_pairs(db):
+    projects, overlaps = db.published_plans()
+    assert sorted(projects, key=lambda p: p.project_id) == db.list_projects()
+    assert sorted(o.overlap_id for o in overlaps) == [f"OVL_{n}" for n in range(1, 7)]
 
 
 @requires_postgres
-def test_a_submission_adds_its_pairs_to_the_ranked_overlaps(db):
-    [stored] = submit(db, upload())
+def test_an_empty_workspace_is_exactly_the_published_data(db, api):
+    response = api.post("/workspace", json={"projects": []})
 
-    ranked = PostgresRepository(TEST_DATABASE_URL).list_overlaps()
-    assert ranked[0].overlap_id == f"SUB:GPC_2|{stored.project_id}"
+    assert response.status_code == 200
+    workspace = Workspace.model_validate(response.json())
+    assert workspace.projects == db.list_projects()
+    assert workspace.overlaps == db.list_overlaps()
+
+
+@requires_postgres
+def test_a_workspace_upload_adds_its_pairs_to_the_ranking(db, api):
+    response = api.post("/workspace", json={"projects": [upload_row()]})
+
+    assert response.status_code == 200
+    workspace = Workspace.model_validate(response.json())
+    assert [p.project_id for p in workspace.projects][-1] == "SUB-b1-1"
+    ranked = workspace.overlaps
+    assert ranked[0].overlap_id == "SUB:GPC_2|SUB-b1-1"
     assert (ranked[0].distance_mi, ranked[0].time_gap_days) == (0.0, 0)
     assert ranked[0].est_savings_usd == 100_000
     assert [o.rank for o in ranked] == list(range(1, len(ranked) + 1))
     assert {f"OVL_{n}" for n in range(1, 7)} <= {o.overlap_id for o in ranked}
+    # Deterministic: the same uploads give the same ids and ranks next time.
+    assert api.post("/workspace", json={"projects": [upload_row()]}).json() == response.json()
 
 
 @requires_postgres
-def test_a_submitted_pair_can_be_fetched_by_id(db):
-    [stored] = submit(db, upload())
-    overlap = db.get_overlap(f"SUB:GPC_2|{stored.project_id}")
-    assert overlap is not None and overlap.rank == 1
-    assert db.get_overlap("SUB:nope") is None
+def test_a_workspace_request_writes_nothing_to_the_database(legacy_db, api):
+    before = database_snapshot()
+
+    ok = api.post("/workspace", json={"projects": [upload_row(), upload_row(
+        project_id="b1-2", project_name="Second line")]})
+    conflict = api.post("/workspace", json={"projects": [upload_row(
+        utility="georgia power", project_name=legacy_db.list_projects()[5].project_name)]})
+
+    assert (ok.status_code, conflict.status_code) == (200, 409)
+    assert database_snapshot() == before
+    # A fresh repository (another API instance) still serves only the published plans.
+    assert len(PostgresRepository(TEST_DATABASE_URL).list_projects()) == 10
 
 
 @requires_postgres
-def test_reloading_the_published_plans_keeps_every_submission(db):
-    [stored] = submit(db, upload())
-    reload_starter()
-    assert stored.project_id in {p.project_id for p in db.list_projects()}
-    assert db.list_overlaps()[0].overlap_id == f"SUB:GPC_2|{stored.project_id}"
-
-
-@requires_postgres
-def test_the_database_refuses_a_duplicate_that_slipped_past_the_api_check(db):
-    submit(db, upload())
-    # Prepared against a stale view (as if two uploads raced), so only the index can stop it.
-    [racer] = prepare_submission([upload(utility="TIDEWATER GRID CO.")], [])
-    with pytest.raises(SubmissionConflict):
-        db.add_submission([racer])
-    assert len(db.list_projects()) == 11
-
-
-@requires_postgres
-def test_a_refused_row_rolls_back_the_whole_upload(db):
-    submit(db, upload())
-    batch = prepare_submission(
-        [upload(project_name="New line"), upload(project_name="savannah river crossing")], []
-    )
-    with pytest.raises(SubmissionConflict):
-        db.add_submission(batch)
-    assert "New line" not in {p.project_name for p in db.list_projects()}
+def test_a_workspace_request_never_creates_the_submissions_table(db, api):
+    assert api.post("/workspace", json={"projects": [upload_row()]}).status_code == 200
+    assert not submissions_table_exists()
 
 
 # --- Issue #34: the sponsor seed's 6 known overlaps, round-tripped through Postgres ----------
@@ -214,10 +283,10 @@ SEED_ENGINE_OVERLAPS = detect_overlaps(to_engine_project(r) for r in SEED_ROWS)
 
 @pytest.fixture
 def seed_db():
-    """projects_seed.csv loaded and no submitted projects, so the published pairs are all.
+    """projects_seed.csv loaded and no legacy submitted_projects table.
 
-    A submission left by another test would add pairs and shift every rank, so the table is
-    dropped first, checked gone, and dropped again afterwards.
+    The API no longer reads that table, but it is dropped first, checked gone, and dropped
+    again afterwards, so these tests start from exactly the published load.
     """
     reload_csv(SEED_CSV)
     drop_submissions()

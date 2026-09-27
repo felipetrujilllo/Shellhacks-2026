@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.schemas import ErrorDetail, Health, Overlap, Project, Submission
+from app.schemas import ErrorDetail, Health, Overlap, Project, Workspace, WorkspaceRequest
 from pipeline.load import REQUIRED_COLUMNS
 from pipeline.overlap import haversine_miles, opportunity_score, time_gap_days
 from pipeline.savings import estimate_savings
@@ -24,8 +24,8 @@ EXAMPLE_MODELS = {
     "overlaps": list[Overlap],
     "overlap": Overlap,
     "not_found": ErrorDetail,
-    "submission": Submission,
-    "submitted": list[Project],
+    "workspace_request": WorkspaceRequest,
+    "workspace": Workspace,
     "conflict": ErrorDetail,
 }
 
@@ -165,12 +165,17 @@ def test_overlaps_example_is_ranked_rank_one_first():
     assert [o.score for o in overlaps] == sorted((o.score for o in overlaps), reverse=True)
 
 
-@pytest.mark.parametrize("tag", ["overlaps", "overlap"])
-def test_overlap_examples_agree_with_the_engine(tag):
+def overlap_examples(tag: str) -> list:
     examples = doc_examples()[tag]
-    for overlap in TypeAdapter(list[Overlap]).validate_python(
-        examples if isinstance(examples, list) else [examples]
-    ):
+    if tag == "workspace":
+        return examples["overlaps"]
+    return examples if isinstance(examples, list) else [examples]
+
+
+@pytest.mark.parametrize("tag", ["overlaps", "overlap", "workspace"])
+def test_overlap_examples_agree_with_the_engine(tag):
+    examples = overlap_examples(tag)
+    for overlap in TypeAdapter(list[Overlap]).validate_python(examples):
         a, b = overlap.project_a, overlap.project_b
         assert a.utility != b.utility
         distance = haversine_miles(a.lat_center, a.lon_center, b.lat_center, b.lon_center)
@@ -179,12 +184,10 @@ def test_overlap_examples_agree_with_the_engine(tag):
         assert opportunity_score(overlap.distance_mi, overlap.time_gap_days) == overlap.score
 
 
-@pytest.mark.parametrize("tag", ["overlaps", "overlap"])
+@pytest.mark.parametrize("tag", ["overlaps", "overlap", "workspace"])
 def test_overlap_example_savings_agree_with_the_estimator(tag):
-    examples = doc_examples()[tag]
-    for overlap in TypeAdapter(list[Overlap]).validate_python(
-        examples if isinstance(examples, list) else [examples]
-    ):
+    examples = overlap_examples(tag)
+    for overlap in TypeAdapter(list[Overlap]).validate_python(examples):
         a, b = overlap.project_a, overlap.project_b
         expected = estimate_savings(
             overlap, a.est_cost_usd, b.est_cost_usd, utility_a=a.utility, utility_b=b.utility
@@ -204,6 +207,10 @@ def test_overlap_example_savings_agree_with_the_estimator(tag):
         "def list_projects() -> list[Project]",
         "def list_overlaps() -> list[Overlap]",
         "def get_overlap(overlap_id: str) -> Overlap | None",
+        "def published_plans() -> PublishedPlans",
+        "POST /workspace",
+        "409",
+        "422",
     ],
 )
 def test_doc_covers_every_endpoint_and_repository_signature(text):

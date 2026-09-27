@@ -1,5 +1,5 @@
 // Typed fetchers for the GridWatch API (contract: docs/api.md).
-import type { Health, Overlap, Project } from './types'
+import type { Health, Overlap, Project, Workspace } from './types'
 
 /** Joins VITE_API_URL with an API path. Throws if VITE_API_URL is not configured. */
 export function apiUrl(path: string): string {
@@ -30,15 +30,16 @@ export const fetchOverlap = (overlapId: string): Promise<Overlap> =>
   getJson(`/overlaps/${encodeURIComponent(overlapId)}`)
 
 /**
- * POST /submissions: stores an upload for everyone. Resolves with the stored projects
- * (server ids, `low` confidence); rejects with the server's reason, e.g. a 409 duplicate.
+ * POST /workspace: the published plans plus `uploads` (this browser's own, possibly none),
+ * scored and ranked together. The server stores nothing. Rejects with the server's reason,
+ * e.g. a 409 when an upload repeats a published project.
  */
-export async function submitProjects(projects: Project[]): Promise<Project[]> {
-  const url = apiUrl('/submissions')
+export async function fetchWorkspace(uploads: Project[]): Promise<Workspace> {
+  const url = apiUrl('/workspace')
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projects }),
+    body: JSON.stringify({ projects: uploads }),
   })
   if (!res.ok) {
     // A 409 carries a readable `detail` string; a 422's is a list, so fall back to the status.
@@ -46,5 +47,5 @@ export async function submitProjects(projects: Project[]): Promise<Project[]> {
     const detail = (body as { detail?: unknown } | null)?.detail
     throw new Error(typeof detail === 'string' ? detail : `POST ${url} failed with status ${res.status} ${res.statusText}`.trimEnd())
   }
-  return (await res.json()) as Project[]
+  return (await res.json()) as Workspace
 }

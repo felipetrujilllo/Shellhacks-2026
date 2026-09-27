@@ -1,4 +1,4 @@
-"""Uploaded projects: preparing a submission, and the pairs it adds to the ranked list (no DB)."""
+"""Uploaded projects: preparing an upload, and the pairs it adds to the ranked list (no DB)."""
 
 import csv
 from pathlib import Path
@@ -52,17 +52,32 @@ def upload(**overrides) -> Project:
 # --- prepare_submission ---------------------------------------------------------------------
 
 
-def test_every_project_gets_a_server_id_replacing_the_clients():
+def test_every_project_is_served_as_sub_plus_the_id_the_browser_gave_it():
     prepared = prepare_submission(
-        [upload(), upload(project_name="Second line")], published(), batch_id="b1"
+        [upload(project_id="b1-1"), upload(project_id="b1-2", project_name="Second line")],
+        published(),
     )
     assert [p.project_id for p in prepared] == ["SUB-b1-1", "SUB-b1-2"]
 
 
-def test_two_uploads_never_share_an_id():
-    first = prepare_submission([upload()], published())
-    second = prepare_submission([upload(project_name="Other")], published())
-    assert first[0].project_id != second[0].project_id
+def test_the_same_upload_gets_the_same_ids_on_every_call():
+    """The browser re-sends its uploads on every load and keys the selection on these ids."""
+    sent = [upload(project_id="b1-1"), upload(project_id="b1-2", project_name="Second line")]
+    assert prepare_submission(sent, published()) == prepare_submission(sent, published())
+
+
+def test_two_uploads_with_different_client_ids_never_share_an_id():
+    [first, second] = prepare_submission(
+        [upload(project_id="a-1"), upload(project_id="b-1", project_name="Other")], published()
+    )
+    assert first.project_id != second.project_id
+
+
+def test_a_client_id_used_twice_in_one_upload_is_refused():
+    with pytest.raises(SubmissionConflict, match="reuses the id 'b1-1'"):
+        prepare_submission(
+            [upload(project_id="b1-1"), upload(project_id="b1-1", project_name="Other")], []
+        )
 
 
 def test_uploaded_locations_are_marked_low_confidence_even_if_the_client_says_confirmed():
@@ -108,7 +123,7 @@ def test_the_same_project_twice_in_one_upload_is_refused():
 
 
 def test_an_upload_on_top_of_a_published_project_is_flagged_at_zero_miles():
-    submitted = prepare_submission([upload()], published(), batch_id="b1")
+    submitted = prepare_submission([upload(project_id="b1-1")], published())
     found = submitted_overlaps(published(), submitted)
     pairs = {(o.project_id_a, o.project_id_b): o for o in found}
 
@@ -144,10 +159,9 @@ def test_an_upload_is_never_paired_with_its_own_utility_however_it_is_spelled():
 
 
 def test_two_uploads_from_different_utilities_pair_with_each_other():
-    submitted = [
-        *prepare_submission([upload()], [], batch_id="a"),
-        *prepare_submission([upload(utility="Palmetto Co-op")], [], batch_id="b"),
-    ]
+    submitted = prepare_submission(
+        [upload(project_id="a-1"), upload(project_id="b-1", utility="Palmetto Co-op")], []
+    )
     [pair] = submitted_overlaps([], submitted)
     assert (pair.project_id_a, pair.project_id_b) == ("SUB-a-1", "SUB-b-1")
 
@@ -165,7 +179,7 @@ def test_without_uploads_the_ranking_is_the_sponsors_six_ordered_by_score():
 
 
 def test_an_upload_right_on_a_published_project_ranks_first_and_keeps_every_published_pair():
-    submitted = prepare_submission([upload()], published(), batch_id="b1")
+    submitted = prepare_submission([upload(project_id="b1-1")], published())
     ranked = ranked_overlaps(stored_overlaps(), published(), submitted)
 
     assert ranked[0].overlap_id == "SUB:GPC_2|SUB-b1-1"
@@ -175,7 +189,7 @@ def test_an_upload_right_on_a_published_project_ranks_first_and_keeps_every_publ
 
 
 def test_an_uploaded_pair_with_a_cost_carries_a_savings_estimate():
-    submitted = prepare_submission([upload(est_cost_usd=2_000_000)], published(), batch_id="b1")
+    submitted = prepare_submission([upload(est_cost_usd=2_000_000)], published())
     top = ranked_overlaps(stored_overlaps(), published(), submitted)[0]
     # 5% of the known cost at 0 mi and a 0-day gap (pipeline/savings.py): nothing discounted.
     assert top.est_savings_usd == 100_000

@@ -68,7 +68,7 @@ export default function UploadProjects({ existing, onClose, onImport }: {
           <p className="review-note">Uploaded coordinates are marked unverified. Nearby projects are candidates for review, not confirmed shared construction.</p>
         </div>}
         {error && <p role="alert" className="upload-error">{error}</p>}
-        <footer className="upload-footer"><span><Icon name="layers" size={15} /> Saved to the shared workspace. Everyone sees these projects.</span>
+        <footer className="upload-footer"><span><Icon name="layers" size={15} /> Kept in this browser. Only you see these projects.</span>
           {batch && <button className="primary-button" disabled={!ready || busy} onClick={() => void save(batch)}>{busy ? 'Saving…' : <>Add {ready} project{ready !== 1 ? 's' : ''} & compare <Icon name="arrow" size={16} /></>}</button>}
         </footer>
       </div>
