@@ -52,9 +52,20 @@ for every year between in-service dates.
 
 ## Endpoints
 
+**Database unavailable.** When the database cannot be reached (down, restarting, a network
+blip), `GET /projects`, `GET /overlaps`, `GET /overlaps/{overlap_id}` and `POST /submissions`
+return **503** within the connect timeout (5 s), with this body; the cause is only logged
+server-side:
+
+```json
+{"detail": "database unavailable"}
+```
+
+Any other server error is still a **500**.
+
 ### `GET /health`
 
-Liveness check.
+Liveness check: never touches the database, so it stays **200** while the database is down.
 
 <!-- example: health -->
 ```json
@@ -120,6 +131,9 @@ Unknown `overlap_id` → **404** with FastAPI's default error body:
 ```json
 {"detail": "overlap OVL_99 not found"}
 ```
+
+Database unreachable → **503** `{"detail": "database unavailable"}` (see the top of
+[Endpoints](#endpoints)), here as on `/projects` and `/overlaps`.
 
 ### `POST /submissions`
 

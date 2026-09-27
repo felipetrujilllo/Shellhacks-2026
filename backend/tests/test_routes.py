@@ -1,15 +1,18 @@
 """The HTTP API against docs/api.md, with the repository swapped for fixture data (no DB)."""
 
 import csv
+import logging
+import time
 from pathlib import Path
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
 from app.config import Settings
 from app.main import create_app
-from app.repository import build_overlap
+from app.repository import CONNECT_TIMEOUT_S, build_overlap
 from app.routes import get_repository
 from app.schemas import ErrorDetail, Health, Overlap, Project
 from pipeline.overlap import Overlap as EngineOverlap
@@ -307,6 +310,140 @@ def test_submitting_the_same_upload_twice_is_a_409_the_second_time(client, repos
 def test_an_invalid_submission_is_a_422_and_nothing_is_stored(client, repository, body):
     assert client.post("/submissions", json=body).status_code == 422
     assert repository.submitted == []
+
+
+# --- database unavailable -> 503 ----------------------------------------------------------
+
+API_DOC = Path(__file__).parents[2] / "docs" / "api.md"
+DB_UNAVAILABLE_BODY = {"detail": "database unavailable"}
+DB_ERROR_MESSAGE = "connection to server at 10.0.0.9, port 5432 failed: password=hunter2"
+DB_ROUTES = ["/projects", "/overlaps", "/overlaps/OVL_2"]
+
+
+class RaisingRepository:
+    """Every call fails the way the real repository does when the database is unreachable."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def list_projects(self) -> list[Project]:
+        raise self.error
+
+    def list_overlaps(self) -> list[Overlap]:
+        raise self.error
+
+    def get_overlap(self, overlap_id: str) -> Overlap | None:
+        raise self.error
+
+    def add_submission(self, projects: list[Project]) -> None:
+        raise self.error
+
+
+def raising_client(error: Exception) -> TestClient:
+    app = create_app(SETTINGS)
+    app.dependency_overrides[get_repository] = lambda: RaisingRepository(error)
+    # Let an unhandled error become the 500 a real server sends, instead of re-raising it.
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize("path", DB_ROUTES)
+def test_an_unreachable_database_is_a_503_with_a_clear_message(path):
+    client = raising_client(psycopg.OperationalError(DB_ERROR_MESSAGE))
+
+    response = client.get(path)
+
+    assert response.status_code == 503
+    assert response.json() == DB_UNAVAILABLE_BODY
+    assert ErrorDetail.model_validate(response.json()).detail == "database unavailable"
+
+
+def test_a_submission_while_the_database_is_unreachable_is_a_503():
+    client = raising_client(psycopg.OperationalError(DB_ERROR_MESSAGE))
+
+    response = client.post("/submissions", json={"projects": [upload_row()]})
+
+    assert response.status_code == 503
+    assert response.json() == DB_UNAVAILABLE_BODY
+
+
+def test_the_503_logs_the_cause_but_never_sends_it_to_the_client(caplog):
+    client = raising_client(psycopg.OperationalError(DB_ERROR_MESSAGE))
+
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        response = client.get("/overlaps")
+
+    assert "hunter2" not in response.text and "10.0.0.9" not in response.text
+    assert any(
+        "database unavailable" in r.getMessage() and DB_ERROR_MESSAGE in r.getMessage()
+        and "/overlaps" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_health_stays_200_while_the_database_is_unreachable():
+    client = raising_client(psycopg.OperationalError(DB_ERROR_MESSAGE))
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.parametrize(
+    "error",
+    [RuntimeError("boom"), psycopg.errors.UndefinedTable('relation "projects" does not exist')],
+    ids=["non-db-error", "query-error"],
+)
+@pytest.mark.parametrize("path", DB_ROUTES)
+def test_other_errors_are_not_swallowed_and_stay_500(path, error):
+    response = raising_client(error).get(path)
+
+    assert response.status_code == 500
+    assert "database unavailable" not in response.text
+
+
+def test_other_errors_still_propagate_to_the_server():
+    app = create_app(SETTINGS)
+    app.dependency_overrides[get_repository] = lambda: RaisingRepository(RuntimeError("boom"))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        TestClient(app).get("/overlaps")
+
+
+def test_unknown_overlap_is_still_a_404_alongside_the_503_handler(client):
+    response = client.get("/overlaps/OVL_99")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "overlap OVL_99 not found"}
+
+
+def test_real_repository_on_a_closed_port_is_a_503_within_the_connect_timeout():
+    # Port 1 on loopback: nothing listens, and no traffic leaves the machine. On Windows a
+    # refused loopback connect is retried until psycopg's connect_timeout, so this can take
+    # the full CONNECT_TIMEOUT_S; the bound proves the request never hangs past it.
+    settings = Settings(
+        database_url="postgresql://gridwatch@127.0.0.1:1/never", frontend_origin=FRONTEND_ORIGIN
+    )
+    client = TestClient(create_app(settings))  # no override: the real PostgresRepository
+
+    started = time.monotonic()
+    response = client.get("/overlaps")
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 503
+    assert response.json() == DB_UNAVAILABLE_BODY
+    assert elapsed < CONNECT_TIMEOUT_S + 2
+
+
+def test_docs_document_the_503_body_for_every_db_route():
+    # The paragraph that promises the 503 (it opens with "Database unavailable").
+    doc = API_DOC.read_text(encoding="utf-8")
+    section = doc[doc.index("**Database unavailable.**"):doc.index("### `GET /health`")]
+
+    assert "**503**" in section
+    assert '{"detail": "database unavailable"}' in section
+    for route in ("`GET /projects`", "`GET /overlaps`", "`GET /overlaps/{overlap_id}`"):
+        assert route in section
 
 
 # --- CORS ---------------------------------------------------------------------------------
