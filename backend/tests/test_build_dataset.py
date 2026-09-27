@@ -825,3 +825,48 @@ def test_real_same_named_stations_are_resolved_only_when_one_is_clearly_the_end(
     # BURTON's other end, St Helena, is not in OSM: nothing to choose by, still excluded.
     excluded = {p.project_id: p.reason for p in dataset.excluded}
     assert excluded["6808 K"] == excluded["6808 L"] == "ambiguous"
+
+
+# --- The top-10 audit (#39, docs/data_audit.md) ---------------------------------------------
+
+# Where the audit confirmed each station of the top-10 live overlaps sits, with its evidence.
+AUDITED_STATIONS = {
+    "Jasper": (32.360699, -81.124152),  # OSM way/185380597 "Jasper Substation" (no operator)
+    "Okatie": (32.333758, -81.032495),  # location_overrides.csv; OSM way/1064022697, 230 kV
+    "Yemassee": (32.697426, -80.863793),  # OSM way/185317032, SCE&G
+    "Bluffton": (32.235027, -80.853384),  # OSM way/498967268, SCE&G
+    "MCINTOSH": (32.352116, -81.175112),  # OSM way/121624352, Georgia Power
+    "GOSHEN": (32.248701, -81.209472),  # OSM way/1008141064, the Savannah-area Goshen
+    "KRAFT": (32.148135, -81.145983),  # OSM way/121986375, Georgia Power
+    "DEPTFORD": (32.066828, -81.048384),  # OSM way/122007500, Georgia Power
+    "MAGNOLIA": (32.022687, -81.086181),  # OSM way/121857248, Georgia Power
+    "BOULEVARD": (32.041231, -81.144464),  # OSM way/381797798, Georgia Power
+    "EVANS PRIMARY": (33.543994, -82.168648),  # OSM way/52103255, Georgia Power
+    "THURMOND": (33.660127, -82.195931),  # OSM way/52102019, Georgia Power, at the dam
+}
+# Each audited project and the stations its center was confirmed from. One station: the other
+# end (PURRYSBURG, Hooks) is in no OSM cache, and the audit accepted the located end as center.
+AUDITED_TOP10_PROJECTS = {
+    "06367 D - G": ("Jasper", "Okatie"),
+    "0139 M,N": ("Jasper", "Yemassee"),  # center questioned in the audit; see the doc
+    "6808 S": ("Okatie", "Bluffton"),
+    "6810 A": ("THURMOND",),
+    "20277": ("MCINTOSH",),
+    "20065": ("GOSHEN", "MCINTOSH"),
+    "20785": ("GOSHEN", "KRAFT"),
+    "20067": ("DEPTFORD", "MAGNOLIA"),
+    "20066": ("BOULEVARD", "DEPTFORD"),
+    "20793": ("EVANS PRIMARY", "THURMOND"),
+    "20794": ("EVANS PRIMARY", "THURMOND"),
+}
+
+
+@pytest.mark.parametrize("project_id", sorted(AUDITED_TOP10_PROJECTS))
+def test_audited_top10_projects_stay_where_the_audit_confirmed_them(dataset, project_id):
+    """A matcher, cache or override change that moves one of these > 1 mi needs a re-audit."""
+    row = next((row for row in dataset.rows if row["project_id"] == project_id), None)
+    assert row is not None, f"audited project {project_id} is no longer in the dataset"
+    points = [AUDITED_STATIONS[name] for name in AUDITED_TOP10_PROJECTS[project_id]]
+    audited = points[0] if len(points) == 1 else project_center(*points[0], *points[1])
+    ours = (float(row["lat_center"]), float(row["lon_center"]))
+    assert haversine_miles(*ours, *audited) < 1.0, (project_id, ours, audited)
