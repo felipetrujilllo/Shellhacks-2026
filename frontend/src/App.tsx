@@ -74,10 +74,10 @@ function App() {
   return (
     <main className="workspace">
       <header className="workspace-header">
+        {/* Three columns (1fr auto 1fr) keep the brand centered whatever the sides hold. Left is reserved. */}
+        <div className="header-side" />
         <div className="brand"><span className="brand-symbol"><img src="/relay-icon.svg" alt="" width={28} height={28} /></span><h1>Relay</h1></div>
-        <span className="header-divider" />
-        <div className="workspace-title"><span>Planning workspace</span><small>Regional coordination</small></div>
-        <div className="header-actions"><span className="local-badge"><i /> Shared workspace</span><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> Upload projects</button></div>
+        <div className="header-side header-actions"><button className="primary-button" disabled={state.status !== 'ready'} onClick={() => setUploadOpen(true)}><Icon name="upload" size={16} /> <span className="header-button-label">Upload projects</span></button></div>
       </header>
       {state.status === 'loading' && <p className="workspace-message">Loading projects…</p>}
       {state.status === 'error' && <div role="alert" className="workspace-message">Could not load project data: {state.message}</div>}

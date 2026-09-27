@@ -147,6 +147,46 @@ describe('App', () => {
     expect(logo).toHaveAttribute('alt', '')
   })
 
+  describe('top bar', () => {
+    it('lays out three regions in order left / center / right, with the brand in the center', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      const regions = Array.from(screen.getByRole('banner').children)
+      expect(regions).toHaveLength(3)
+      const [left, center, right] = regions
+
+      // Left is reserved: an empty plain div, nothing focusable.
+      expect(left.tagName).toBe('DIV')
+      expect(left).toBeEmptyDOMElement()
+
+      expect(within(center as HTMLElement).getByRole('heading', { level: 1, name: 'Relay' })).toBeInTheDocument()
+      expect(center.querySelector('img')).toHaveAttribute('src', '/relay-icon.svg')
+      // The logo comes before the wordmark.
+      const img = center.querySelector('img')!
+      expect(img.compareDocumentPosition(within(center as HTMLElement).getByRole('heading', { level: 1 })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+      expect(within(right as HTMLElement).getByRole('button', { name: 'Upload projects' })).toBeEnabled()
+      expect(within(center as HTMLElement).queryByRole('button')).not.toBeInTheDocument()
+    })
+
+    it('keeps the upload button in the right region, disabled until the data is ready', async () => {
+      renderClosedApp()
+      const right = screen.getByRole('banner').children[2] as HTMLElement
+      expect(within(right).getByRole('button', { name: 'Upload projects' })).toBeDisabled()
+      await screen.findByTestId('project-map')
+      expect(within(right).getByRole('button', { name: 'Upload projects' })).toBeEnabled()
+    })
+
+    it('no longer shows the workspace title, subtitle or shared-workspace badge', async () => {
+      renderClosedApp()
+      await screen.findByTestId('project-map')
+      expect(screen.queryByText('Planning workspace')).not.toBeInTheDocument()
+      expect(screen.queryByText('Regional coordination')).not.toBeInTheDocument()
+      expect(screen.queryByText('Shared workspace')).not.toBeInTheDocument()
+      expect(screen.queryByText('Local session')).not.toBeInTheDocument()
+    })
+  })
+
   it('renders one list item per overlap (6) from the API, rank 1 first, next to the map', async () => {
     await renderApp()
 
@@ -289,7 +329,7 @@ describe('App', () => {
     await renderApp()
 
     expect(await screen.findByTestId('project-map')).toHaveTextContent('3 projects, 7 overlaps')
-    expect(screen.getByText('Shared workspace')).toBeInTheDocument()
+    expect(screen.getByText('Published plans + uploaded proposals')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: /Uploads/ }))
     expect(screen.getByText('1 uploaded projects')).toBeInTheDocument()
     expect(screen.queryByText('Your plans belong here.')).not.toBeInTheDocument()
